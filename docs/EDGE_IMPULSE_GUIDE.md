@@ -55,19 +55,45 @@ i_d,i_q,n,u_d,u_q
 1. Navigate to **Data acquisition** tab
 2. Click **Upload data**
 3. Upload `basic_*_edge_impulse_train.csv`
-   - Label: "Training"
-   - Category: "Training"
+   - **Label field:** Leave empty or use "training" (this is just a category label, not the regression targets)
+   - **Category:** Select "Training"
 4. Upload `basic_*_edge_impulse_validation.csv`
-   - Label: "Validation"
-   - Category: "Testing"
+   - **Label field:** Leave empty or use "validation"
+   - **Category:** Select "Testing"
 
-### 3. Configure Data
+**Important:** The "Label" field during upload is just for organizing samples. The actual regression targets (`u_d`, `u_q`) are configured later in Impulse Design.
 
-1. Go to **Data acquisition** → **Labeling queue**
-2. Verify data format:
-   - Features: `i_d`, `i_q`, `n`
-   - Labels: `u_d`, `u_q`
-3. Assign labels if needed
+### 3. Configure Regression Labels (CRITICAL STEP)
+
+**Where to set labels for regression:**
+
+For regression projects, Edge Impulse needs to know which columns are **inputs** (features) and which are **outputs** (targets/labels). This is configured in the **Impulse Design** section, NOT during upload.
+
+**Step-by-step:**
+
+1. **After uploading CSV files**, go to **Impulse design** tab
+2. Add processing block:
+   - Type: **Flatten** or **Raw Data**
+   - Window size: 1 (for instantaneous mapping)
+3. Add learning block:
+   - Type: **Regression**
+4. Click **Save Impulse**
+5. Go to **Flatten** (or Raw Data) tab
+6. Click **Generate features** - Edge Impulse will analyze your CSV
+7. **In the feature selection interface:**
+   - **Select as INPUT features:** `timestamp`, `i_d`, `i_q`, `n` (4 columns)
+   - **Select as OUTPUT labels:** `u_d`, `u_q` (2 columns)
+   - Edge Impulse should auto-detect these, but verify they're correct
+8. Go to **Regression** tab
+9. **Verify output configuration:**
+   - Should show 2 outputs: `u_d` and `u_q`
+   - If not, click **Edit** or **Configure** to manually select output columns
+
+**If automatic detection fails:**
+
+- Use **CSV Transformations** (if available in Data acquisition)
+- Or manually edit the impulse to specify input/output columns
+- Check Edge Impulse documentation for "CSV regression column mapping"
 
 ## Model Architecture
 
