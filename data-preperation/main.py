@@ -51,7 +51,7 @@ def merge_stack(files, time_col: str = "time", continuous: bool = True) -> pd.Da
         if time_col not in df.columns:
             raise ValueError(f"Column '{time_col}' not found in {f}")
 
-        # Zeit je Run auf 0 starten
+        # Normalize time to start at 0 for each run
         t0 = float(df[time_col].iloc[0])
         df[time_col] = df[time_col] - t0
 
@@ -67,7 +67,7 @@ def merge_stack(files, time_col: str = "time", continuous: bool = True) -> pd.Da
         stack_parts.append(df)
 
         if continuous:
-            # Offset fürs nächste File: letztes t + 1*dt (um Grenzduplikate zu vermeiden)
+            # Calculate offset for next run: last time + dt (avoid duplicate timestamps)
             t_offset = float(df[time_col].iloc[-1])
             if last_dt and last_dt > 0:
                 t_offset += last_dt
@@ -86,7 +86,7 @@ def save_outputs(panel: pd.DataFrame, stacked: pd.DataFrame, out_dir: str):
     stacked_path_csv = os.path.join(out_dir, "merged_stacked.csv")
     panel.to_csv(panel_path_csv, index=False)
     stacked.to_csv(stacked_path_csv, index=False)
-    # Optional: Parquet (falls PyArrow vorhanden)
+    # Save Parquet format if available
     try:
         panel.to_parquet(os.path.join(out_dir, "merged_panel.parquet"), index=False)
         stacked.to_parquet(os.path.join(out_dir, "merged_stacked.parquet"), index=False)
@@ -101,10 +101,12 @@ def main(input_dir: str,
          out_dir: str = None,
          mode: str = "both"):
     """
+    Merge simulation CSV files into unified formats.
+    
     Modes:
-      - "panel": behält Originalzeit + run_id je Run
-      - "stack": hängt Runs zeitlich hintereinander (eine Zeitserie)
-      - "both" : erzeugt beide Outputs
+      - "panel": Preserves original time + run_id per run
+      - "stack": Concatenates runs into continuous time series
+      - "both": Generates both output formats
     """
     if out_dir is None:
         out_dir = os.path.join(input_dir, "merged")
