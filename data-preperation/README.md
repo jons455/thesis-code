@@ -175,13 +175,13 @@ Input: 1000 CSV files
 **Windows Command Prompt:**
 ```cmd
 venv\Scripts\activate.bat
-python main.py data
+python merge_simulation_data.py data
 ```
 
 **Windows PowerShell:**
 ```powershell
 .\venv\Scripts\Activate.ps1
-python main.py data
+python merge_simulation_data.py data
 ```
 
 ### Quick Start (Windows)
@@ -239,32 +239,32 @@ pip install -r requirements.txt
 
 **Basic usage (both formats):**
 ```bash
-python main.py data
+python merge_simulation_data.py data
 ```
 
 **Generate only panel format:**
 ```bash
-python main.py data --mode panel
+python merge_simulation_data.py data --mode panel
 ```
 
 **Generate only stacked format:**
 ```bash
-python main.py data --mode stack
+python merge_simulation_data.py data --mode stack
 ```
 
 **Custom output directory:**
 ```bash
-python main.py data --out-dir output/
+python merge_simulation_data.py data --out-dir output/
 ```
 
 **Custom file pattern:**
 ```bash
-python main.py data --pattern "simulation_*.csv"
+python merge_simulation_data.py data --pattern "simulation_*.csv"
 ```
 
 **Custom time column name:**
 ```bash
-python main.py data --time-col timestamp
+python merge_simulation_data.py data --time-col timestamp
 ```
 
 ### Command-Line Arguments
@@ -368,7 +368,7 @@ Data-Pipeline/
 │       ├── merged_stacked.csv
 │       └── merged_stacked.parquet
 ├── venv/                    # Virtual environment
-├── main.py                  # Pipeline script
+├── merge_simulation_data.py  # Data merging script
 ├── requirements.txt         # Dependencies
 └── README.md               # This file
 ```

@@ -10,7 +10,7 @@ This guide describes the process of training neural networks to replicate the FO
 
 ```bash
 cd data-preparation
-python main.py data
+python merge_simulation_data.py data
 ```
 
 This generates:

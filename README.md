@@ -12,7 +12,7 @@ thesis-code/
 │   └── export/              # Generated simulation data (excluded from git)
 │
 ├── data-preparation/         # Data processing pipeline
-│   ├── main.py              # Data merging and preprocessing
+│   ├── merge_simulation_data.py  # Data merging and preprocessing
 │   ├── prepare_edge_impulse.py  # Edge Impulse data preparation
 │   ├── data_exploration.ipynb   # Data analysis notebook
 │   ├── requirements.txt     # Python dependencies
@@ -72,7 +72,7 @@ cd data-preparation
 pip install -r requirements.txt
 
 # Merge simulation data
-python main.py data
+python merge_simulation_data.py data
 
 # Prepare data for Edge Impulse
 python prepare_edge_impulse.py
