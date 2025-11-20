@@ -105,7 +105,7 @@ def downsample_data(df, factor=10, preserve_time=True):
     return df_downsampled
 
 
-def prepare_basic_data(df):
+def prepare_basic_data(df, keep_run_id=False):
     """
     Prepare basic instantaneous mapping data.
     
@@ -114,8 +114,11 @@ def prepare_basic_data(df):
     """
     print("\n=== Preparing Basic (Instantaneous) Mapping ===")
     
-    # Select only needed columns
-    df_model = df[['i_d', 'i_q', 'n', 'u_d', 'u_q']].copy()
+    # Select columns (keep run_id if needed for splitting)
+    if keep_run_id:
+        df_model = df[['run_id', 'i_d', 'i_q', 'n', 'u_d', 'u_q']].copy()
+    else:
+        df_model = df[['i_d', 'i_q', 'n', 'u_d', 'u_q']].copy()
     
     # Check for missing values
     missing = df_model.isnull().sum()
@@ -230,8 +233,12 @@ def split_by_runs(df, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
     return df_train, df_val, df_test
 
 
-def save_datasets(df_train, df_val, df_test, output_dir='edge_impulse_data', prefix=''):
-    """Save train/val/test datasets as CSV files."""
+def save_datasets(df_train, df_val, df_test, output_dir='edge_impulse_data', prefix='', add_timestamp=True):
+    """
+    Save train/val/test datasets as CSV files.
+    
+    Edge Impulse requires timestamp column for CSV uploads.
+    """
     output_path = Path(__file__).parent / output_dir
     output_path.mkdir(exist_ok=True)
     
@@ -241,13 +248,29 @@ def save_datasets(df_train, df_val, df_test, output_dir='edge_impulse_data', pre
     
     print(f"\n=== Saving Datasets to {output_path} ===")
     
-    df_train.to_csv(train_file, index=False)
+    # Add timestamp column for Edge Impulse compatibility
+    if add_timestamp:
+        # Create timestamp: milliseconds since start (0, 1, 2, ...)
+        # Edge Impulse expects timestamp in milliseconds
+        df_train_copy = df_train.copy()
+        df_val_copy = df_val.copy()
+        df_test_copy = df_test.copy()
+        
+        # Add timestamp column (in milliseconds, starting from 0)
+        df_train_copy.insert(0, 'timestamp', np.arange(len(df_train_copy)) * 1.0)  # 1 ms steps
+        df_val_copy.insert(0, 'timestamp', np.arange(len(df_val_copy)) * 1.0)
+        df_test_copy.insert(0, 'timestamp', np.arange(len(df_test_copy)) * 1.0)
+        
+        df_train_copy.to_csv(train_file, index=False)
+        df_val_copy.to_csv(val_file, index=False)
+        df_test_copy.to_csv(test_file, index=False)
+    else:
+        df_train.to_csv(train_file, index=False)
+        df_val.to_csv(val_file, index=False)
+        df_test.to_csv(test_file, index=False)
+    
     print(f"  ✓ Train: {train_file.name} ({train_file.stat().st_size / 1024 / 1024:.1f} MB)")
-    
-    df_val.to_csv(val_file, index=False)
     print(f"  ✓ Val:   {val_file.name} ({val_file.stat().st_size / 1024 / 1024:.1f} MB)")
-    
-    df_test.to_csv(test_file, index=False)
     print(f"  ✓ Test:  {test_file.name} ({test_file.stat().st_size / 1024 / 1024:.1f} MB)")
     
     return train_file, val_file, test_file
@@ -336,7 +359,7 @@ def main():
     print(f"OPTION 1: Basic Instantaneous Mapping @ {rate_label.upper()}")
     print("="*60)
     
-    df_basic = prepare_basic_data(df)
+    df_basic = prepare_basic_data(df, keep_run_id=True)
     df_train, df_val, df_test = split_by_runs(df_basic)
     save_datasets(df_train, df_val, df_test, prefix=f'basic_{rate_label}_')
     print_data_info(df_train, df_val, df_test)
@@ -395,5 +418,54 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    # Allow command-line argument for downsampling factor
+    if len(sys.argv) > 1:
+        try:
+            factor = int(sys.argv[1])
+            # Override main() to use this factor
+            print("="*60)
+            print("Edge Impulse Data Preparation for PMSM FOC Controller")
+            print("="*60)
+            df = load_data(use_parquet=True)
+            
+            if factor == 1:
+                downsample_factor = 1
+                rate_label = '10khz'
+            elif factor == 10:
+                downsample_factor = 10
+                rate_label = '1khz'
+            elif factor == 100:
+                downsample_factor = 100
+                rate_label = '100hz'
+            else:
+                downsample_factor = factor
+                rate_label = f'{10/factor:.0f}hz' if factor > 1 else '10khz'
+            
+            print(f"\nUsing downsampling factor: {downsample_factor} ({rate_label})")
+            
+            if downsample_factor > 1:
+                df = downsample_data(df, factor=downsample_factor, preserve_time=True)
+            
+            print("\n" + "="*60)
+            print(f"OPTION 1: Basic Instantaneous Mapping @ {rate_label.upper()}")
+            print("="*60)
+            
+            df_basic = prepare_basic_data(df, keep_run_id=True)
+            df_train, df_val, df_test = split_by_runs(df_basic)
+            save_datasets(df_train, df_val, df_test, prefix=f'basic_{rate_label}_')
+            print_data_info(df_train, df_val, df_test)
+            
+            print("\n" + "="*60)
+            print("Data Preparation Complete!")
+            print("="*60)
+            print(f"\nSampling Rate: {rate_label.upper()}")
+            print(f"Training file: basic_{rate_label}_edge_impulse_train.csv")
+            print(f"Validation file: basic_{rate_label}_edge_impulse_validation.csv")
+        except ValueError:
+            print(f"Invalid factor: {sys.argv[1]}. Must be an integer.")
+            sys.exit(1)
+    else:
+        main()
 

@@ -65,35 +65,52 @@ i_d,i_q,n,u_d,u_q
 
 ### 3. Configure Regression Labels (CRITICAL STEP)
 
-**Where to set labels for regression:**
+**Problem:** Edge Impulse may show only 1 output instead of 2. The Regression block may not be editable if labels weren't configured during upload.
 
-For regression projects, Edge Impulse needs to know which columns are **inputs** (features) and which are **outputs** (targets/labels). This is configured in the **Impulse Design** section, NOT during upload.
+**Solution: Use CSV Transformations during upload (RECOMMENDED)**
+
+**IMPORTANT:** Labels must be defined **during CSV upload**, not after. If you've already uploaded files, delete them and re-upload with transformations.
 
 **Step-by-step:**
 
-1. **After uploading CSV files**, go to **Impulse design** tab
-2. Add processing block:
-   - Type: **Flatten** or **Raw Data**
-   - Window size: 1 (for instantaneous mapping)
-3. Add learning block:
-   - Type: **Regression**
-4. Click **Save Impulse**
-5. Go to **Flatten** (or Raw Data) tab
-6. Click **Generate features** - Edge Impulse will analyze your CSV
-7. **In the feature selection interface:**
-   - **Select as INPUT features:** `timestamp`, `i_d`, `i_q`, `n` (4 columns)
-   - **Select as OUTPUT labels:** `u_d`, `u_q` (2 columns)
-   - Edge Impulse should auto-detect these, but verify they're correct
-8. Go to **Regression** tab
-9. **Verify output configuration:**
-   - Should show 2 outputs: `u_d` and `u_q`
-   - If not, click **Edit** or **Configure** to manually select output columns
+1. **Delete existing uploads (if any):**
+   - Go to **Data acquisition** tab
+   - Click three dots next to each CSV file → **Delete**
 
-**If automatic detection fails:**
+2. **Upload with CSV Transformations:**
+   - Click **"Upload data"**
+   - Select your CSV file (`basic_*_edge_impulse_train.csv`)
+   - **Click "Use CSV Transformations"** or **"Transform CSV"** button (appears after file selection)
+   - In the transformation wizard:
+     - **Features (Inputs):** Select `timestamp`, `i_d`, `i_q`, `n`
+     - **Labels (Outputs):** Select `u_d`, `u_q`
+   - Click **"Apply transformation"** or **"Import"**
+   - Repeat for validation and test files
 
-- Use **CSV Transformations** (if available in Data acquisition)
-- Or manually edit the impulse to specify input/output columns
-- Check Edge Impulse documentation for "CSV regression column mapping"
+3. **Verify in Impulse Design:**
+   - Go to **Impulse design** tab
+   - **Flatten block:** Should show only `i_d`, `i_q`, `n` as inputs
+   - **Regression block:** Should show **"2" outputs** (not "1")
+   - If still showing "1", see troubleshooting below
+
+**Alternative: If CSV Transformations button is not visible:**
+
+1. **During upload:**
+   - **Label field:** Leave empty or enter "regression"
+   - **Category:** Select "Training" / "Testing"
+   
+2. **After upload:**
+   - Go to **Data acquisition** → Click on your uploaded file
+   - Click three dots → **"Edit labels"** or **"Configure"**
+   - Select `u_d` and `u_q` as **Label columns**
+   - Go back to **Impulse design** → Should now show 2 outputs
+
+**Troubleshooting:**
+
+- **Regression block still shows "1 output":**
+  - Delete all uploaded files and re-upload with CSV Transformations
+  - Ensure `u_d` and `u_q` columns contain numeric values (no NaN, no text)
+  - Check that CSV file has correct column headers: `timestamp,i_d,i_q,n,u_d,u_q`
 
 ## Model Architecture
 
