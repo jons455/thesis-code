@@ -20,7 +20,8 @@ thesis-code/
 │
 └── docs/                     # Documentation
     ├── DATA_GENERATION.md   # MATLAB simulation documentation
-    └── TRAINING_GUIDE.md     # Neural network training guide
+    ├── TRAINING_GUIDE.md     # Neural network training guide
+    └── EDGE_IMPULSE_GUIDE.md # Edge Impulse platform guide
 ```
 
 ## Overview
@@ -79,7 +80,8 @@ python prepare_edge_impulse.py
 
 ### 3. Neural Network Training
 
-See `docs/TRAINING_GUIDE.md` for detailed instructions on training ANN and SNN models.
+- **General training guide:** See `docs/TRAINING_GUIDE.md`
+- **Edge Impulse platform:** See `docs/EDGE_IMPULSE_GUIDE.md` for step-by-step instructions
 
 ## Data Format
 
