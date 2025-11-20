@@ -380,22 +380,18 @@ def main():
         print("      (Run script again with factor=10)")
     
     print("\nNext Steps:")
-    print("1. Go to Edge Impulse Studio: https://studio.edgeimpulse.com/")
-    print("2. Create a new 'Regression' project")
-    print(f"3. Upload 'basic_{rate_label}_edge_impulse_train.csv' as Training data")
-    print(f"4. Upload 'basic_{rate_label}_edge_impulse_validation.csv' as Testing data")
-    print("5. Follow the EDGE_IMPULSE_TRAINING_GUIDE.md for detailed instructions")
+    print("1. Upload generated CSV files to your training platform")
+    print(f"2. Training file: basic_{rate_label}_edge_impulse_train.csv")
+    print(f"3. Validation file: basic_{rate_label}_edge_impulse_validation.csv")
+    print("4. See docs/TRAINING_GUIDE.md for model architecture recommendations")
     print("\nRecommended model architecture:")
     print("  Input: [i_d, i_q, n] (3 features)")
     print("  Hidden: 64 → 32 → 16 neurons (ReLU)")
     print("  Output: [u_d, u_q] (2 outputs, Linear)")
     
     if downsample_factor == 10:
-        print("\n💡 SNN Training Tip:")
-        print("   After ANN training, convert to SNN using SNN_CONVERSION_GUIDE.md")
-        print("   The 1 kHz rate gives SNN enough time (1 ms) for inference")
-    
-    print("\nHappy training! 🚀")
+        print("\nNote: 1 kHz sampling rate recommended for SNN training")
+        print("      (provides sufficient time for spiking neural network inference)")
 
 
 if __name__ == "__main__":

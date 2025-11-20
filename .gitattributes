@@ -1,0 +1,11 @@
+# Ensure consistent line endings
+*.py text eol=lf
+*.md text eol=lf
+*.m text eol=lf
+*.csv text eol=lf
+*.txt text eol=lf
+
+# MATLAB files
+*.slx binary
+*.mat binary
+
