@@ -4,6 +4,9 @@ Edge Impulse Data Preparation Script
 
 This script prepares the PMSM FOC controller data for Edge Impulse training.
 
+Original data: 10 kHz sampling rate (100 μs between samples)
+This script supports downsampling for SNN training (e.g., 10 kHz → 1 kHz).
+
 Usage:
     python prepare_edge_impulse.py
 
@@ -11,6 +14,12 @@ Output:
     - edge_impulse_train.csv (70% of data)
     - edge_impulse_validation.csv (15% of data) 
     - edge_impulse_test.csv (15% of data)
+    
+Downsampling options:
+    - 10 kHz (original): factor=1
+    - 1 kHz: factor=10 (recommended for SNN)
+    - 100 Hz: factor=100
+    - Custom: any factor
 """
 
 import pandas as pd
@@ -34,6 +43,66 @@ def load_data(use_parquet=True):
     
     print(f"Loaded {len(df):,} samples")
     return df
+
+
+def downsample_data(df, factor=10, preserve_time=True):
+    """
+    Downsample data by taking every Nth sample.
+    
+    Original data: 10 kHz (100 μs between samples)
+    After downsampling: 10 kHz / factor
+    
+    Args:
+        df: DataFrame with 'run_id' and 'time' columns
+        factor: Downsampling factor (1=no downsampling, 10=10kHz→1kHz)
+        preserve_time: If True, keep original time column; if False, recalculate
+    
+    Returns:
+        Downsampled DataFrame
+    """
+    if factor == 1:
+        print("\n=== No Downsampling (using original 10 kHz data) ===")
+        return df.copy()
+    
+    print(f"\n=== Downsampling Data (factor={factor}) ===")
+    original_rate_khz = 10.0
+    new_rate_khz = original_rate_khz / factor
+    original_samples = len(df)
+    
+    print(f"Original sampling rate: {original_rate_khz:.1f} kHz")
+    print(f"New sampling rate: {new_rate_khz:.1f} kHz")
+    print(f"Original samples: {original_samples:,}")
+    
+    downsampled_parts = []
+    runs_processed = 0
+    
+    for run_id in sorted(df['run_id'].unique()):
+        run_data = df[df['run_id'] == run_id].reset_index(drop=True)
+        
+        # Take every Nth sample
+        run_downsampled = run_data.iloc[::factor, :].copy()
+        
+        # Recalculate time if requested
+        if not preserve_time:
+            # New time starts at 0 and increments by factor * original_dt
+            original_dt = run_data['time'].iloc[1] - run_data['time'].iloc[0] if len(run_data) > 1 else 0.0001
+            new_dt = original_dt * factor
+            run_downsampled['time'] = np.arange(len(run_downsampled)) * new_dt
+        
+        downsampled_parts.append(run_downsampled)
+        runs_processed += 1
+        
+        if runs_processed % 100 == 0:
+            print(f"  Processed {runs_processed}/{len(df['run_id'].unique())} runs...")
+    
+    df_downsampled = pd.concat(downsampled_parts, ignore_index=True)
+    new_samples = len(df_downsampled)
+    
+    print(f"New samples: {new_samples:,}")
+    print(f"Reduction: {original_samples/new_samples:.1f}× ({original_samples-new_samples:,} samples removed)")
+    print(f"Sampling period: {1000/new_rate_khz:.1f} μs (was 100 μs)")
+    
+    return df_downsampled
 
 
 def prepare_basic_data(df):
@@ -219,19 +288,62 @@ def main():
     # Load data
     df = load_data(use_parquet=True)
     
+    # Ask about downsampling
+    print("\n" + "="*60)
+    print("DOWNSAMPLING OPTIONS")
+    print("="*60)
+    print("\nOriginal data: 10 kHz sampling rate (100 μs between samples)")
+    print("\nDownsampling options:")
+    print("  1 = 10 kHz (original, recommended for ANN)")
+    print("  10 = 1 kHz (recommended for SNN)")
+    print("  100 = 100 Hz (for very slow SNN or analysis)")
+    print("  custom = specify your own factor")
+    
+    downsample_input = input("\nDownsampling factor (1/10/100/custom, default=1): ").strip().lower()
+    
+    if downsample_input == '' or downsample_input == '1':
+        downsample_factor = 1
+        rate_label = '10khz'
+    elif downsample_input == '10':
+        downsample_factor = 10
+        rate_label = '1khz'
+    elif downsample_input == '100':
+        downsample_factor = 100
+        rate_label = '100hz'
+    elif downsample_input == 'custom':
+        try:
+            downsample_factor = int(input("Enter downsampling factor: ").strip())
+            rate_label = f'{10/downsample_factor:.0f}hz' if downsample_factor > 1 else '10khz'
+        except ValueError:
+            print("Invalid input, using factor=1 (no downsampling)")
+            downsample_factor = 1
+            rate_label = '10khz'
+    else:
+        try:
+            downsample_factor = int(downsample_input)
+            rate_label = f'{10/downsample_factor:.0f}hz' if downsample_factor > 1 else '10khz'
+        except ValueError:
+            print("Invalid input, using factor=1 (no downsampling)")
+            downsample_factor = 1
+            rate_label = '10khz'
+    
+    # Apply downsampling
+    if downsample_factor > 1:
+        df = downsample_data(df, factor=downsample_factor, preserve_time=True)
+    
     # Option 1: Basic instantaneous mapping (RECOMMENDED)
     print("\n" + "="*60)
-    print("OPTION 1: Basic Instantaneous Mapping (RECOMMENDED)")
+    print(f"OPTION 1: Basic Instantaneous Mapping @ {rate_label.upper()}")
     print("="*60)
     
     df_basic = prepare_basic_data(df)
     df_train, df_val, df_test = split_by_runs(df_basic)
-    save_datasets(df_train, df_val, df_test, prefix='basic_')
+    save_datasets(df_train, df_val, df_test, prefix=f'basic_{rate_label}_')
     print_data_info(df_train, df_val, df_test)
     
     # Option 2: Windowed data (ADVANCED)
     print("\n\n" + "="*60)
-    print("OPTION 2: Windowed Data (ADVANCED - Optional)")
+    print(f"OPTION 2: Windowed Data @ {rate_label.upper()} (ADVANCED - Optional)")
     print("="*60)
     
     user_input = input("\nPrepare windowed data? (y/n, default=n): ").strip().lower()
@@ -242,7 +354,7 @@ def main():
         
         df_windowed = prepare_windowed_data(df, window_size=window_size)
         df_train_w, df_val_w, df_test_w = split_by_runs(df_windowed)
-        save_datasets(df_train_w, df_val_w, df_test_w, prefix=f'windowed{window_size}_')
+        save_datasets(df_train_w, df_val_w, df_test_w, prefix=f'windowed{window_size}_{rate_label}_')
         print_data_info(df_train_w, df_val_w, df_test_w)
     else:
         print("Skipping windowed data preparation.")
@@ -251,16 +363,38 @@ def main():
     print("\n" + "="*60)
     print("✓ Data Preparation Complete!")
     print("="*60)
+    
+    if downsample_factor > 1:
+        print(f"\n📊 Sampling Rate: {rate_label.upper()}")
+        print(f"   Original: 10 kHz → Downsampled: {10/downsample_factor:.1f} kHz")
+        print(f"   Factor: {downsample_factor}× (every {downsample_factor}th sample)")
+        if downsample_factor == 10:
+            print("\n   ⚠️  NOTE: 1 kHz is recommended for SNN training")
+            print("      (SNNs typically need 1-5 ms per inference)")
+        elif downsample_factor == 100:
+            print("\n   ⚠️  NOTE: 100 Hz is very slow - only for analysis")
+            print("      (May lose important dynamics)")
+    else:
+        print(f"\n📊 Sampling Rate: 10 kHz (original)")
+        print("   ⚠️  NOTE: For SNN, consider downsampling to 1 kHz")
+        print("      (Run script again with factor=10)")
+    
     print("\nNext Steps:")
     print("1. Go to Edge Impulse Studio: https://studio.edgeimpulse.com/")
     print("2. Create a new 'Regression' project")
-    print("3. Upload 'basic_edge_impulse_train.csv' as Training data")
-    print("4. Upload 'basic_edge_impulse_validation.csv' as Testing data")
+    print(f"3. Upload 'basic_{rate_label}_edge_impulse_train.csv' as Training data")
+    print(f"4. Upload 'basic_{rate_label}_edge_impulse_validation.csv' as Testing data")
     print("5. Follow the EDGE_IMPULSE_TRAINING_GUIDE.md for detailed instructions")
     print("\nRecommended model architecture:")
     print("  Input: [i_d, i_q, n] (3 features)")
     print("  Hidden: 64 → 32 → 16 neurons (ReLU)")
     print("  Output: [u_d, u_q] (2 outputs, Linear)")
+    
+    if downsample_factor == 10:
+        print("\n💡 SNN Training Tip:")
+        print("   After ANN training, convert to SNN using SNN_CONVERSION_GUIDE.md")
+        print("   The 1 kHz rate gives SNN enough time (1 ms) for inference")
+    
     print("\nHappy training! 🚀")
 
 
