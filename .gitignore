@@ -20,6 +20,7 @@ slprj/
 # Data files (too large for git)
 data-preperation/data/
 pmsm-matlab/export/
+pmsm-pem/export/
 edge_impulse_data/
 
 # IDEs
