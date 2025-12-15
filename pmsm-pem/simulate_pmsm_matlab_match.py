@@ -73,7 +73,7 @@ limit_values = dict(
 # Simulationsparameter
 tau = 1/10000
 sim_steps = 2000
-number_of_simulations = 2
+number_of_simulations = 1
 I_nenn = 4.2
 
 out_dir = os.path.join(os.getcwd(), 'export', 'train')
@@ -150,13 +150,14 @@ def extract_state(state):
 print("Starte Datengenerierung...")
 
 for i in range(number_of_simulations):
-    id_ref = np.random.rand() * I_nenn
-    iq_ref = np.random.rand() * I_nenn
+    # Feste Test-Werte (wie MATLAB)
+    id_ref = 0.0    # [A]
+    iq_ref = 2.0    # [A]
     
     state = extract_state(env.reset())
     controller.reset()
     
-    data_log = {'time': [], 'i_d': [], 'i_q': [], 'n': [], 'u_d': [], 'u_q': []}
+    data_log = {'time': [], 'i_d': [], 'i_q': [], 'n': [], 'u_d': [], 'u_q': [], 'i_d_ref': [], 'i_q_ref': []}
     
     for k in range(sim_steps):
         state_vec = extract_state(state)
@@ -168,7 +169,16 @@ for i in range(number_of_simulations):
         omega_elec = motor_parameter['p'] * omega_mech
         epsilon = state_vec[idx_epsilon] * np.pi
         
-        u_d_norm, u_q_norm = controller.control(i_d, i_q, id_ref, iq_ref, omega_elec)
+        # Step bei t=0.1s (k=1000 bei tau=0.0001) - wie in MATLAB
+        step_time_k = 1000
+        if k < step_time_k:
+            id_ref_active = 0.0
+            iq_ref_active = 0.0
+        else:
+            id_ref_active = id_ref
+            iq_ref_active = iq_ref
+        
+        u_d_norm, u_q_norm = controller.control(i_d, i_q, id_ref_active, iq_ref_active, omega_elec)
         
         # dq -> abc Transformation
         c, s = np.cos(epsilon), np.sin(epsilon)
@@ -207,6 +217,8 @@ for i in range(number_of_simulations):
         data_log['n'].append(n_val)
         data_log['u_d'].append(u_d_val)
         data_log['u_q'].append(u_q_val)
+        data_log['i_d_ref'].append(id_ref_active)
+        data_log['i_q_ref'].append(iq_ref_active)
         
         # done-Flag ignorieren um volle Simulationsdauer zu erreichen
     

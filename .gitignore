@@ -12,6 +12,7 @@ build/
 # MATLAB
 *.asv
 *.slxc
+*.slx
 slprj/
 
 # Jupyter Notebook

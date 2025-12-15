@@ -1,137 +1,75 @@
-# PMSM FOC Controller Neural Network Training
+# PMSM FOC Neural Network Training
 
-This repository contains the code and data preparation pipeline for training neural network models to replicate a Field-Oriented Control (FOC) controller for Permanent Magnet Synchronous Motors (PMSM).
+Training neuronaler Netze zur Nachbildung eines FOC-Reglers für PMSM.
 
-## Repository Structure
+## Struktur
 
 ```
 thesis-code/
-├── pmsm-matlab/              # MATLAB/Simulink simulation model
-│   ├── foc_pmsm.slx         # FOC controller Simulink model
-│   ├── pmsm_init.m          # Motor parameters and simulation setup
-│   └── export/              # Generated simulation data (excluded from git)
+├── pmsm-matlab/          # MATLAB/Simulink Simulation
+│   ├── foc_pmsm.slx
+│   └── pmsm_init.m
 │
-├── data-preparation/         # Data processing pipeline
-│   ├── merge_simulation_data.py  # Data merging and preprocessing
-│   ├── prepare_edge_impulse.py  # Edge Impulse data preparation
-│   ├── data_exploration.ipynb   # Data analysis notebook
-│   ├── requirements.txt     # Python dependencies
-│   └── README.md            # Data preparation documentation
+├── pmsm-pem/             # Python Simulation (GEM-basiert)
+│   ├── simulate_pmsm.py              # Mit GEM Controller
+│   └── simulate_pmsm_matlab_match.py # Mit MATLAB-Parametern
 │
-└── docs/                     # Documentation
-    ├── DATA_GENERATION.md   # MATLAB simulation documentation
-    ├── TRAINING_GUIDE.md     # Neural network training guide
-    └── EDGE_IMPULSE_GUIDE.md # Edge Impulse platform guide
+├── data-preperation/     # Datenaufbereitung
+│   ├── merge_simulation_data.py
+│   ├── prepare_edge_impulse.py
+│   └── data_exploration.ipynb
+│
+└── docs/                 # Dokumentation
 ```
 
-## Overview
+## Motor
 
-### Objective
-Train neural networks (ANN and SNN) to replicate the behavior of a MATLAB-implemented FOC controller for PMSM motor control.
+| Parameter | Wert |
+|-----------|------|
+| Polpaare | 3 |
+| R_s | 0.543 Ω |
+| L_d | 1.13 mH |
+| L_q | 1.42 mH |
+| Ψ_PM | 16.9 mWb |
+| I_nenn | 4.2 A |
+| I_max | 10.8 A |
+| V_DC | 48 V |
+| n_nenn | 3000 RPM |
 
-### Data Generation
-- **Simulation Tool:** MATLAB/Simulink
-- **Model:** FOC PMSM controller (`foc_pmsm.slx`)
-- **Runs:** 1000 simulations with randomized operating points
-- **Sampling Rate:** 10 kHz (100 μs timestep)
-- **Duration per Run:** 200 ms
-- **Total Samples:** 2,001,000 data points
+## Datenformat
 
-### Motor Specifications
-- Nominal Current: 4.2 A
-- Maximum Current: 10.8 A
-- DC Bus Voltage: 48 V
-- Nominal Speed: 3000 RPM
-- Direct-axis Inductance (L_d): 1.13 mH
-- Quadrature-axis Inductance (L_q): 1.42 mH
-- Stator Resistance (R_s): 0.543 Ω
-- Pole Pairs: 3
-- Permanent Magnet Flux (Ψ_PM): 16.9 mWb
+**Features:** `i_d`, `i_q` [A], `n` [RPM]  
+**Targets:** `u_d`, `u_q` [V]
 
 ## Quick Start
 
-### 1. MATLAB Simulation
-
+### Option A: MATLAB Simulation
 ```matlab
-% Navigate to pmsm-matlab directory
 cd pmsm-matlab
-
-% Run simulation script
-pmsm_init.m
-
-% Output: 1000 CSV files in export/train/
+pmsm_init
 ```
 
-### 2. Data Preparation
-
-```bash
-# Navigate to data-preparation directory
-cd data-preparation
-
-# Install dependencies
+### Option B: Python Simulation
+```powershell
+cd pmsm-pem
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python simulate_pmsm.py
+```
 
-# Merge simulation data
-python merge_simulation_data.py data
-
-# Prepare data for Edge Impulse
+### Datenaufbereitung
+```bash
+cd data-preperation
+pip install -r requirements.txt
+python merge_simulation_data.py
 python prepare_edge_impulse.py
 ```
 
-### 3. Neural Network Training
+## Simulation
 
-- **General training guide:** See `docs/TRAINING_GUIDE.md`
-- **Edge Impulse platform:** See `docs/EDGE_IMPULSE_GUIDE.md` for step-by-step instructions
+- Abtastrate: 10 kHz
+- Dauer: 0.2 s pro Run
+- Schritte: 2000 pro Run
 
-## Data Format
-
-### Input Features
-- `i_d`: Direct-axis current (A)
-- `i_q`: Quadrature-axis current (A)
-- `n`: Rotational speed (RPM)
-
-### Output Targets
-- `u_d`: Direct-axis voltage command (V)
-- `u_q`: Quadrature-axis voltage command (V)
-
-### Data Files
-- **Panel Format:** `data-preparation/data/merged/merged_panel.csv`
-  - Preserves run structure with `run_id` column
-  - Useful for run-by-run analysis
-  
-- **Stacked Format:** `data-preparation/data/merged/merged_stacked.csv`
-  - Continuous time series across all runs
-  - Useful for time-series analysis
-
-## Requirements
-
-### MATLAB
-- MATLAB R2020b or later
-- Simulink
-- Control System Toolbox
-
-### Python
-- Python 3.8+
-- See `data-preparation/requirements.txt` for dependencies
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@mastersthesis{yourthesis2025,
-  title={Neural Network-Based Control for Permanent Magnet Synchronous Motors},
-  author={Your Name},
-  school={Your University},
-  year={2025}
-}
-```
-
-## License
-
-[Specify your license here]
-
-## Contact
-
-[Your contact information]
-
+Siehe `docs/` für Details zum Training.

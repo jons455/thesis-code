@@ -28,11 +28,16 @@ limit_values = dict(
 # Simulationsparameter
 tau = 1/10000
 sim_steps = 2000
-number_of_simulations = 2
+number_of_simulations = 1  # Nur 1 Test-Simulation
 I_nenn = 4.2
 
 out_dir = os.path.join(os.getcwd(), 'export', 'train')
 os.makedirs(out_dir, exist_ok=True)
+
+# Drehzahl-Referenz (wie MATLAB: 1000 RPM)
+n_ref_rpm = 1000  # RPM
+omega_ref = n_ref_rpm * 2 * np.pi / 60  # rad/s mechanisch
+omega_ref_normalized = omega_ref / limit_values['omega']
 
 # Environment erstellen
 env_id = 'Cont-CC-PMSM-v0'
@@ -87,22 +92,32 @@ def extract_state(state):
 print("Starte Datengenerierung...")
 
 for i in range(number_of_simulations):
-    id_ref = np.random.rand() * I_nenn
-    iq_ref = np.random.rand() * I_nenn
+    # Feste Test-Werte (gleich wie MATLAB!)
+    id_ref = 0.0    # [A] - d-Achsen Sollstrom
+    iq_ref = 2.0    # [A] - q-Achsen Sollstrom (Drehmoment)
     
     state = extract_state(env.reset())
     
     if hasattr(controller, 'reset'):
         controller.reset()
     
-    data_log = {'time': [], 'i_d': [], 'i_q': [], 'n': [], 'u_d': [], 'u_q': []}
+    data_log = {'time': [], 'i_d': [], 'i_q': [], 'n': [], 'u_d': [], 'u_q': [], 'i_d_ref': [], 'i_q_ref': []}
     
     for k in range(sim_steps):
         state_vec = extract_state(state)
         idx_isd, idx_isq, idx_omega, idx_epsilon = get_state_indices(env, state_vec)
         epsilon = state_vec[idx_epsilon] * np.pi
         
-        ref_normalized = np.array([id_ref / limit_values['i'], iq_ref / limit_values['i']])
+        # Step bei t=0.1s (k=1000 bei tau=0.0001) - wie in MATLAB
+        step_time_k = 1000  # 0.1s / 0.0001s = 1000
+        if k < step_time_k:
+            id_ref_active = 0.0
+            iq_ref_active = 0.0
+        else:
+            id_ref_active = id_ref
+            iq_ref_active = iq_ref
+        
+        ref_normalized = np.array([id_ref_active / limit_values['i'], iq_ref_active / limit_values['i']])
         action_abc = controller.control(state_vec, ref_normalized)
         
         # abc -> dq Rücktransformation für Logging
@@ -143,6 +158,8 @@ for i in range(number_of_simulations):
         data_log['n'].append(n_val)
         data_log['u_d'].append(u_d_val)
         data_log['u_q'].append(u_q_val)
+        data_log['i_d_ref'].append(id_ref_active)
+        data_log['i_q_ref'].append(iq_ref_active)
         
         # done-Flag ignorieren um volle Simulationsdauer zu erreichen
     
