@@ -94,7 +94,7 @@ print("Starte Datengenerierung...")
 for i in range(number_of_simulations):
     # Feste Test-Werte (gleich wie MATLAB!)
     id_ref = 0.0    # [A] - d-Achsen Sollstrom
-    iq_ref = 2.0    # [A] - q-Achsen Sollstrom (Drehmoment)
+    iq_ref = 5.0    # [A] - q-Achsen Sollstrom (Drehmoment)
     
     state = extract_state(env.reset())
     

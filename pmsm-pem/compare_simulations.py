@@ -10,6 +10,8 @@ WICHTIG: simulate_pmsm.py wird NICHT verändert!
 
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 from pathlib import Path
 import sys
@@ -179,7 +181,7 @@ def plot_comparison(df_matlab: pd.DataFrame, df_python: pd.DataFrame,
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         print(f"\n[OK] Plot gespeichert: {output_path}")
     
-    plt.show()
+    plt.close()
 
 
 def plot_phase_portrait(df_matlab: pd.DataFrame, df_python: pd.DataFrame,
@@ -212,7 +214,7 @@ def plot_phase_portrait(df_matlab: pd.DataFrame, df_python: pd.DataFrame,
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         print(f"[OK] Phasenportrait gespeichert: {output_path}")
     
-    plt.show()
+    plt.close()
 
 
 # ============================================================================
