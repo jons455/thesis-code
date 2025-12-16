@@ -74,9 +74,8 @@ limit_values = dict(
 tau = 1/10000
 sim_steps = 2000
 number_of_simulations = 1
-I_nenn = 4.2
 
-out_dir = os.path.join(os.getcwd(), 'export', 'train')
+out_dir = os.path.join(os.getcwd(), 'export', 'matlab_match')
 os.makedirs(out_dir, exist_ok=True)
 
 # Environment erstellen
@@ -106,11 +105,12 @@ except Exception as e:
         while hasattr(env_unwrapped, 'env'):
             env_unwrapped = env_unwrapped.env
 
-# PI Controller mit MATLAB-Parametern: Kp = L/Ts, Ki = R/Ts
-K_Pd = motor_parameter['l_d'] / tau  # 11.3
-K_Id = motor_parameter['r_s'] / tau  # 5430
-K_Pq = motor_parameter['l_q'] / tau  # 14.2
-K_Iq = motor_parameter['r_s'] / tau  # 5430
+# PI Controller mit MATLAB-Parametern: Technische Optimaleinstellung
+# Kp = L/(2*Ts), Ki = R/(2*Ts)
+K_Pd = motor_parameter['l_d'] / (2 * tau)  # 5.65
+K_Id = motor_parameter['r_s'] / (2 * tau)  # 2715
+K_Pq = motor_parameter['l_q'] / (2 * tau)  # 7.10
+K_Iq = motor_parameter['r_s'] / (2 * tau)  # 2715
 
 controller = PIController(
     kp_d=K_Pd, ki_d=K_Id,

@@ -28,16 +28,10 @@ limit_values = dict(
 # Simulationsparameter
 tau = 1/10000
 sim_steps = 2000
-number_of_simulations = 1  # Nur 1 Test-Simulation
-I_nenn = 4.2
+number_of_simulations = 1
 
-out_dir = os.path.join(os.getcwd(), 'export', 'train')
+out_dir = os.path.join(os.getcwd(), 'export', 'gem_standard')
 os.makedirs(out_dir, exist_ok=True)
-
-# Drehzahl-Referenz (wie MATLAB: 1000 RPM)
-n_ref_rpm = 1000  # RPM
-omega_ref = n_ref_rpm * 2 * np.pi / 60  # rad/s mechanisch
-omega_ref_normalized = omega_ref / limit_values['omega']
 
 # Environment erstellen
 env_id = 'Cont-CC-PMSM-v0'
@@ -94,7 +88,7 @@ print("Starte Datengenerierung...")
 for i in range(number_of_simulations):
     # Feste Test-Werte (gleich wie MATLAB!)
     id_ref = 0.0    # [A] - d-Achsen Sollstrom
-    iq_ref = 5.0    # [A] - q-Achsen Sollstrom (Drehmoment)
+    iq_ref = 2.0    # [A] - q-Achsen Sollstrom (Drehmoment)
     
     state = extract_state(env.reset())
     
