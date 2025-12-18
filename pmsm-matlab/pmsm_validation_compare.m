@@ -1,14 +1,15 @@
-%% PMSM Validierungs-Simulation für Python-Vergleich
+%% PMSM Validierungs-Simulation für Python-Vergleich (Testsetup mit Drehzahl-Sweep)
 % ============================================================
 % Dieses Skript erzeugt eine Referenzsimulation mit festen
 % Parametern, die mit der Python/GEM-Simulation verglichen
 % werden kann.
 %
-% WICHTIG: Die Drehzahl wird auf 716 RPM gesetzt, da sich
-%          die GEM-Simulation ohne externe Drehzahlregelung
-%          bei diesem Wert einpendelt.
+% Testsetup:
+% - Fixe Sollwerte: id_ref=0, iq_ref=2 (Step bei t=0.1s)
+% - Fixe Drehzahlen: n_ref ∈ {500, 1500, 2500} RPM
+% - Pro Drehzahl wird eine Referenz-CSV exportiert
 %
-% Output: export/validation/validation_sim.csv
+% Output: export/validation/validation_sim_nXXXX.csv
 % ============================================================
 
 clear; close all; clc;
@@ -48,14 +49,14 @@ fprintf('\n');
 id_ref = 0.0;    % [A] - d-Achsen Sollstrom (typisch 0 für MTPA)
 iq_ref = 2.0;    % [A] - q-Achsen Sollstrom (Drehmoment)
 
-% KRITISCH: Drehzahl auf 716 RPM setzen!
-% Dies ist der Gleichgewichtspunkt der GEM-Simulation
-n_ref = 716;     % [RPM] - Angepasst an GEM-Ergebnis
+% Test-Drehzahlen (RPM) für Vergleich MATLAB vs. Python/GEM
+% (Grob: niedrig / mittel / hoch, damit Back-EMF-Einfluss sichtbar wird)
+n_ref_list = [500, 1500, 2500];
 
 fprintf('Validierungsparameter:\n');
 fprintf('  id_ref = %.1f A\n', id_ref);
 fprintf('  iq_ref = %.1f A\n', iq_ref);
-fprintf('  n_ref  = %.0f RPM (GEM Gleichgewichtspunkt)\n', n_ref);
+fprintf('  n_ref  = [%s] RPM\n', strjoin(string(n_ref_list), ', '));
 fprintf('\n');
 
 %% ==================== Modell öffnen und simulieren ====================
@@ -64,182 +65,120 @@ model = "foc_pmsm";
 fprintf('Öffne Simulink-Modell: %s\n', model);
 open_system(model);
 
-% Simulationseinstellungen
-in = Simulink.SimulationInput(model);
-in = setVariable(in, 'setpoint_step_id', id_ref);
-in = setVariable(in, 'setpoint_step_iq', iq_ref);
-in = setVariable(in, 'setpoint_step_n',  n_ref);
-
-fprintf('Starte Simulation...\n');
-tic;
-out = sim(in);
-sim_time = toc;
-fprintf('Simulation abgeschlossen in %.2f Sekunden.\n\n', sim_time);
-
-%% ==================== Daten extrahieren ====================
-signals_from_simulink = {'i_d', 'i_q', 'n', 'u_d', 'u_q'};
-
-L = out.logsout;
-if isempty(L)
-    error('Kein logsout gefunden! Prüfe Simulink-Modell.');
-end
-
-try
-    avail = getElementNames(L);
-catch
-    avail = arrayfun(@(k) L{k}.Name, 1:L.numElements, 'UniformOutput', false);
-end
-
-fprintf('Verfügbare Signale: %s\n', strjoin(avail, ', '));
-
-% Zeitbasis finden
-base_ts = [];
-for k = 1:numel(signals_from_simulink)
-    if any(strcmp(signals_from_simulink{k}, avail))
-        base_ts = getElement(L, signals_from_simulink{k}).Values;
-        break
-    end
-end
-
-if isempty(base_ts)
-    error('Keine Zeitbasis gefunden.');
-end
-
-% Gleichmäßige Zeitachse
-t = (base_ts.Time(1):Ts:base_ts.Time(end)).';
-T = table(t, 'VariableNames', {'time'});
-
-fprintf('Zeitbereich: %.4f s bis %.4f s (%d Punkte)\n', t(1), t(end), length(t));
-
-% Signale hinzufügen
-for k = 1:numel(signals_from_simulink)
-    nm = signals_from_simulink{k};
-    if ~any(strcmp(nm, avail))
-        warning('Signal "%s" nicht gefunden.', nm);
-        continue
-    end
-    ts = getElement(L, nm).Values;
-    if ~isa(ts, 'timeseries')
-        warning('Signal "%s" ist keine timeseries.', nm);
-        continue
-    end
-    tsr = resample(ts, t);
-    vn = matlab.lang.makeValidName(nm);
-    dat = tsr.Data;
-    if size(dat, 2) == 1
-        T.(vn) = dat;
-    else
-        for c = 1:size(dat, 2)
-            T.([vn '_' num2str(c)]) = dat(:, c);
-        end
-    end
-end
-
-% Referenzwerte hinzufügen
-n_rows = height(T);
-T.i_d_ref = repmat(id_ref, n_rows, 1);
-T.i_q_ref = repmat(iq_ref, n_rows, 1);
-T.n_ref   = repmat(n_ref, n_rows, 1);
-
-fprintf('Exportierte Spalten: %s\n', strjoin(T.Properties.VariableNames, ', '));
-
-%% ==================== Export ====================
+% Export-Verzeichnis
 out_dir = fullfile(pwd, 'export', 'validation');
 if ~exist(out_dir, 'dir')
     mkdir(out_dir);
 end
 
-filename = fullfile(out_dir, 'validation_sim.csv');
-writetable(T, filename);
-fprintf('\n✓ Validierungsdaten exportiert: %s\n', filename);
+signals_from_simulink = {'i_d', 'i_q', 'n', 'u_d', 'u_q'};
 
-%% ==================== Vorschau-Plots ====================
-fprintf('\nErstelle Vorschau-Plots...\n');
+for idx_case = 1:numel(n_ref_list)
+    n_ref = n_ref_list(idx_case);
+    fprintf('-------------------------------------------------------\n');
+    fprintf('Case %d/%d: n_ref = %d RPM\n', idx_case, numel(n_ref_list), n_ref);
+    fprintf('-------------------------------------------------------\n');
 
-figure('Name', 'MATLAB Validierungs-Simulation', 'Position', [100, 100, 1200, 800]);
+    % Simulationseinstellungen
+    in = Simulink.SimulationInput(model);
+    in = setVariable(in, 'setpoint_step_id', id_ref);
+    in = setVariable(in, 'setpoint_step_iq', iq_ref);
+    in = setVariable(in, 'setpoint_step_n',  n_ref);
 
-% Strom id
-subplot(3, 2, 1);
-plot(T.time * 1000, T.i_d, 'b', 'LineWidth', 1.5);
-hold on;
-yline(id_ref, 'r--', 'LineWidth', 1);
-xlabel('Zeit [ms]');
-ylabel('i_d [A]');
-title('d-Achsen Strom');
-legend('i_d', 'Sollwert');
-grid on;
+    fprintf('Starte Simulation...\n');
+    tic;
+    out = sim(in);
+    sim_time = toc;
+    fprintf('Simulation abgeschlossen in %.2f Sekunden.\n', sim_time);
 
-% Strom iq
-subplot(3, 2, 2);
-plot(T.time * 1000, T.i_q, 'b', 'LineWidth', 1.5);
-hold on;
-yline(iq_ref, 'r--', 'LineWidth', 1);
-xlabel('Zeit [ms]');
-ylabel('i_q [A]');
-title('q-Achsen Strom');
-legend('i_q', 'Sollwert');
-grid on;
+    % ==================== Daten extrahieren ====================
+    L = out.logsout;
+    if isempty(L)
+        error('Kein logsout gefunden! Prüfe Simulink-Modell.');
+    end
 
-% Drehzahl
-subplot(3, 2, 3);
-plot(T.time * 1000, T.n, 'b', 'LineWidth', 1.5);
-hold on;
-yline(n_ref, 'r--', 'LineWidth', 1);
-xlabel('Zeit [ms]');
-ylabel('n [RPM]');
-title('Drehzahl');
-legend('n', 'Sollwert');
-grid on;
+    try
+        avail = getElementNames(L);
+    catch
+        avail = arrayfun(@(k) L{k}.Name, 1:L.numElements, 'UniformOutput', false);
+    end
 
-% Spannung ud
-subplot(3, 2, 4);
-plot(T.time * 1000, T.u_d, 'b', 'LineWidth', 1.5);
-xlabel('Zeit [ms]');
-ylabel('u_d [V]');
-title('d-Achsen Spannung');
-grid on;
+    % Zeitbasis finden
+    base_ts = [];
+    for k = 1:numel(signals_from_simulink)
+        if any(strcmp(signals_from_simulink{k}, avail))
+            base_ts = getElement(L, signals_from_simulink{k}).Values;
+            break
+        end
+    end
+    if isempty(base_ts)
+        error('Keine Zeitbasis gefunden.');
+    end
 
-% Spannung uq
-subplot(3, 2, 5);
-plot(T.time * 1000, T.u_q, 'b', 'LineWidth', 1.5);
-xlabel('Zeit [ms]');
-ylabel('u_q [V]');
-title('q-Achsen Spannung');
-grid on;
+    % Gleichmäßige Zeitachse
+    t = (base_ts.Time(1):Ts:base_ts.Time(end)).';
+    T = table(t, 'VariableNames', {'time'});
 
-% Phasenportrait
-subplot(3, 2, 6);
-plot(T.i_d, T.i_q, 'b', 'LineWidth', 1.5);
-hold on;
-plot(T.i_d(1), T.i_q(1), 'go', 'MarkerSize', 10, 'MarkerFaceColor', 'g');
-plot(T.i_d(end), T.i_q(end), 'rs', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
-xlabel('i_d [A]');
-ylabel('i_q [A]');
-title('Phasenportrait i_d vs i_q');
-legend('Trajektorie', 'Start', 'Ende');
-grid on;
-axis equal;
+    % Signale hinzufügen
+    for k = 1:numel(signals_from_simulink)
+        nm = signals_from_simulink{k};
+        if ~any(strcmp(nm, avail))
+            warning('Signal "%s" nicht gefunden.', nm);
+            continue
+        end
+        ts = getElement(L, nm).Values;
+        if ~isa(ts, 'timeseries')
+            warning('Signal "%s" ist keine timeseries.', nm);
+            continue
+        end
+        tsr = resample(ts, t);
+        vn = matlab.lang.makeValidName(nm);
+        dat = tsr.Data;
+        if size(dat, 2) == 1
+            T.(vn) = dat;
+        else
+            for c = 1:size(dat, 2)
+                T.([vn '_' num2str(c)]) = dat(:, c);
+            end
+        end
+    end
 
-sgtitle(sprintf('MATLAB Validierung: n_{ref}=%d RPM, i_{d,ref}=%.1f A, i_{q,ref}=%.1f A', ...
-    n_ref, id_ref, iq_ref), 'FontWeight', 'bold');
+    % Referenzwerte hinzufügen
+    n_rows = height(T);
+    T.i_d_ref = repmat(id_ref, n_rows, 1);
+    T.i_q_ref = repmat(iq_ref, n_rows, 1);
+    T.n_ref   = repmat(n_ref, n_rows, 1);
 
-% Plot speichern
-plot_filename = fullfile(out_dir, 'validation_preview.png');
-saveas(gcf, plot_filename);
-fprintf('✓ Vorschau-Plot gespeichert: %s\n', plot_filename);
+    % ==================== Export ====================
+    filename = fullfile(out_dir, sprintf('validation_sim_n%04d.csv', n_ref));
+    writetable(T, filename);
+    fprintf('✓ Validierungsdaten exportiert: %s\n', filename);
 
-%% ==================== Zusammenfassung ====================
-fprintf('\n=======================================================\n');
+    % Optional: Vorschauplot pro Case
+    figure('Name', sprintf('MATLAB Validierung n=%d RPM', n_ref), 'Position', [100, 100, 1200, 800]);
+    subplot(3, 2, 1); plot(T.time*1000, T.i_d, 'b', 'LineWidth', 1.2); hold on; yline(id_ref, 'r--'); grid on; title('i_d'); xlabel('ms'); ylabel('A');
+    subplot(3, 2, 2); plot(T.time*1000, T.i_q, 'b', 'LineWidth', 1.2); hold on; yline(iq_ref, 'r--'); grid on; title('i_q'); xlabel('ms'); ylabel('A');
+    subplot(3, 2, 3); plot(T.time*1000, T.n,   'b', 'LineWidth', 1.2); hold on; yline(n_ref, 'r--'); grid on; title('n');   xlabel('ms'); ylabel('RPM');
+    subplot(3, 2, 4); plot(T.time*1000, T.u_d, 'b', 'LineWidth', 1.2); grid on; title('u_d'); xlabel('ms'); ylabel('V');
+    subplot(3, 2, 5); plot(T.time*1000, T.u_q, 'b', 'LineWidth', 1.2); grid on; title('u_q'); xlabel('ms'); ylabel('V');
+    subplot(3, 2, 6); plot(T.i_d, T.i_q, 'b', 'LineWidth', 1.2); grid on; axis equal; title('i_d vs i_q'); xlabel('A'); ylabel('A');
+    sgtitle(sprintf('MATLAB Validierung: n_{ref}=%d RPM, i_{d,ref}=%.1f A, i_{q,ref}=%.1f A', n_ref, id_ref, iq_ref), 'FontWeight', 'bold');
+
+    plot_filename = fullfile(out_dir, sprintf('validation_preview_n%04d.png', n_ref));
+    saveas(gcf, plot_filename);
+    fprintf('✓ Vorschau-Plot gespeichert: %s\n\n', plot_filename);
+end
+
+fprintf('=======================================================\n');
 fprintf('ZUSAMMENFASSUNG\n');
 fprintf('=======================================================\n');
-fprintf('Drehzahl:     %d RPM (GEM-Gleichgewichtspunkt)\n', n_ref);
-fprintf('Sollströme:   id=%.1f A, iq=%.1f A\n', id_ref, iq_ref);
-fprintf('Datenpunkte:  %d\n', n_rows);
-fprintf('Export:       %s\n', filename);
-fprintf('\nNÄCHSTE SCHRITTE:\n');
-fprintf('1. Python-Simulation mit gleichen Parametern ausführen:\n');
-fprintf('   cd pmsm-pem && python simulate_pmsm.py\n');
-fprintf('2. Vergleichsskript ausführen:\n');
-fprintf('   python compare_simulations.py\n');
+fprintf('Drehzahlen:   [%s] RPM\n', strjoin(string(n_ref_list), ', '));
+fprintf('Sollströme:   id=%.1f A, iq=%.1f A (Step bei t=0.1s)\n', id_ref, iq_ref);
+fprintf('Export:       %s\n', out_dir);
+fprintf('\nNÄCHSTE SCHRITTE (pro Drehzahl):\n');
+fprintf('1. Python-Simulationen ausführen (mit gleicher Drehzahl):\n');
+fprintf('   cd pmsm-pem && python simulate_pmsm.py --n-rpm <n>\n');
+fprintf('   cd pmsm-pem && python simulate_pmsm_matlab_match.py --n-rpm <n>\n');
+fprintf('2. Vergleich fahren (MATLAB CSV auswählen / Pfad im Vergleichsskript setzen)\n');
 fprintf('=======================================================\n');
 

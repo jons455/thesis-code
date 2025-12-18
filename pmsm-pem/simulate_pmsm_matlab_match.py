@@ -6,7 +6,10 @@ Verwendet eigenen PI-Controller mit exakten MATLAB-Parametern
 import numpy as np
 import pandas as pd
 import os
+import argparse
 import gym_electric_motor as gem
+from gym_electric_motor.physical_systems.electric_motors import PermanentMagnetSynchronousMotor
+from gym_electric_motor.physical_systems.mechanical_loads import ConstantSpeedLoad
 
 
 class PIController:
@@ -75,47 +78,64 @@ tau = 1/10000
 sim_steps = 2000
 number_of_simulations = 1
 
+
+def parse_args():
+    p = argparse.ArgumentParser(description="GEM PMSM current-control simulation (MATLAB-matching PI controller)")
+    p.add_argument("--n-rpm", type=float, default=716.0, help="Fixed mechanical speed in rpm (ConstantSpeedLoad).")
+    p.add_argument("--id-ref", type=float, default=0.0, help="d-axis current reference after step [A].")
+    p.add_argument("--iq-ref", type=float, default=2.0, help="q-axis current reference after step [A].")
+    p.add_argument("--step-time", type=float, default=0.1, help="Step time in seconds.")
+    p.add_argument("--sim-steps", type=int, default=sim_steps, help="Number of simulation steps.")
+    p.add_argument("--tau", type=float, default=tau, help="Control cycle time in seconds.")
+    p.add_argument("--output", type=str, default=None, help="Output filename (default: sim_0001.csv)")
+    return p.parse_args()
+
 out_dir = os.path.join(os.getcwd(), 'export', 'matlab_match')
 os.makedirs(out_dir, exist_ok=True)
 
 # Environment erstellen
 env_id = 'Cont-CC-PMSM-v0'
+args = parse_args()
+omega_fixed = args.n_rpm * 2 * np.pi / 60.0
 
-try:
-    env = gem.make(
-        env_id,
-        motor_parameter=motor_parameter,
-        limit_values=limit_values,
-        tau=tau,
-        visualization=None,
-    )
-    env_unwrapped = env
-    while hasattr(env_unwrapped, 'env'):
-        env_unwrapped = env_unwrapped.env
-except Exception as e:
-    print(f"Environment-Fehler: {e}")
-    try:
-        env = gem.make(env_id, motor=motor_parameter, supply=limit_values, tau=tau, visualization=None)
-        env_unwrapped = env
-        while hasattr(env_unwrapped, 'env'):
-            env_unwrapped = env_unwrapped.env
-    except Exception:
-        env = gem.make(env_id, motor_parameter=motor_parameter, limit_values=limit_values, tau=tau)
-        env_unwrapped = env
-        while hasattr(env_unwrapped, 'env'):
-            env_unwrapped = env_unwrapped.env
+# Motor und Load DIREKT erstellen, damit unsere Parameter auch wirklich verwendet werden!
+motor = PermanentMagnetSynchronousMotor(
+    motor_parameter=motor_parameter,
+    limit_values=limit_values,
+)
+load = ConstantSpeedLoad(omega_fixed=float(omega_fixed))
+
+env = gem.make(
+    env_id,
+    motor=motor,
+    load=load,
+    tau=args.tau,
+    visualization=None,
+    constraints=(),  # Keine Constraints -> kein done=True wegen Limit-Überschreitung
+)
+
+env_unwrapped = env
+while hasattr(env_unwrapped, 'env'):
+    env_unwrapped = env_unwrapped.env
+
+# Hole die tatsächlichen Limits vom Physical System (GEM ignoriert unsere limit_values!)
+ps = env_unwrapped.physical_system
+state_names = list(ps.state_names)
+actual_limits = {name: ps.limits[i] for i, name in enumerate(state_names)}
+print(f"GEM Limits: omega={actual_limits.get('omega', 0)*60/(2*np.pi):.0f} rpm, "
+      f"i_sd={actual_limits.get('i_sd', 0):.1f} A, u_sd={actual_limits.get('u_sd', 0):.1f} V")
 
 # PI Controller mit MATLAB-Parametern: Technische Optimaleinstellung
 # Kp = L/(2*Ts), Ki = R/(2*Ts)
-K_Pd = motor_parameter['l_d'] / (2 * tau)  # 5.65
-K_Id = motor_parameter['r_s'] / (2 * tau)  # 2715
-K_Pq = motor_parameter['l_q'] / (2 * tau)  # 7.10
-K_Iq = motor_parameter['r_s'] / (2 * tau)  # 2715
+K_Pd = motor_parameter['l_d'] / (2 * args.tau)  # 5.65
+K_Id = motor_parameter['r_s'] / (2 * args.tau)  # 2715
+K_Pq = motor_parameter['l_q'] / (2 * args.tau)  # 7.10
+K_Iq = motor_parameter['r_s'] / (2 * args.tau)  # 2715
 
 controller = PIController(
     kp_d=K_Pd, ki_d=K_Id,
     kp_q=K_Pq, ki_q=K_Iq,
-    ts=tau, u_max=limit_values['u'],
+    ts=args.tau, u_max=limit_values['u'],
     l_d=motor_parameter['l_d'], l_q=motor_parameter['l_q'],
     psi_pm=motor_parameter['psi_p'], p=motor_parameter['p']
 )
@@ -151,26 +171,27 @@ print("Starte Datengenerierung...")
 
 for i in range(number_of_simulations):
     # Feste Test-Werte (wie MATLAB)
-    id_ref = 0.0    # [A]
-    iq_ref = 2.0    # [A]
+    id_ref = float(args.id_ref)    # [A]
+    iq_ref = float(args.iq_ref)    # [A]
     
     state = extract_state(env.reset())
     controller.reset()
     
     data_log = {'time': [], 'i_d': [], 'i_q': [], 'n': [], 'u_d': [], 'u_q': [], 'i_d_ref': [], 'i_q_ref': []}
     
-    for k in range(sim_steps):
+    for k in range(args.sim_steps):
         state_vec = extract_state(state)
         idx_isd, idx_isq, idx_omega, idx_epsilon = get_state_indices(env, state_vec)
         
-        i_d = state_vec[idx_isd] * limit_values['i']
-        i_q = state_vec[idx_isq] * limit_values['i']
-        omega_mech = state_vec[idx_omega] * limit_values['omega']
+        # Verwende die tatsächlichen GEM-Limits für die Denormalisierung!
+        i_d = state_vec[idx_isd] * actual_limits.get('i_sd', limit_values['i'])
+        i_q = state_vec[idx_isq] * actual_limits.get('i_sq', limit_values['i'])
+        omega_mech = state_vec[idx_omega] * actual_limits.get('omega', limit_values['omega'])
         omega_elec = motor_parameter['p'] * omega_mech
         epsilon = state_vec[idx_epsilon] * np.pi
         
         # Step bei t=0.1s (k=1000 bei tau=0.0001) - wie in MATLAB
-        step_time_k = 1000
+        step_time_k = int(round(args.step_time / args.tau))
         if k < step_time_k:
             id_ref_active = 0.0
             iq_ref_active = 0.0
@@ -199,19 +220,22 @@ for i in range(number_of_simulations):
         else:
             (state, _), reward, done, _, _ = step_result
         
-        # Bei Termination Environment resetten aber Simulation fortsetzen
+        # Bei Termination: Environment resetten (GEM erfordert das), aber
+        # Controller-Zustand behalten um den Integrator nicht zu löschen!
         if done:
             state = extract_state(env.reset())
-        
+            # WICHTIG: controller.reset() NICHT aufrufen!
+            
         state_vec = extract_state(state)
         idx_isd, idx_isq, idx_omega, _ = get_state_indices(env, state_vec)
         
-        i_d_val = state_vec[idx_isd] * limit_values['i']
-        i_q_val = state_vec[idx_isq] * limit_values['i']
-        omega_mech = state_vec[idx_omega] * limit_values['omega']
+        # Verwende die tatsächlichen GEM-Limits für die Denormalisierung!
+        i_d_val = state_vec[idx_isd] * actual_limits.get('i_sd', limit_values['i'])
+        i_q_val = state_vec[idx_isq] * actual_limits.get('i_sq', limit_values['i'])
+        omega_mech = state_vec[idx_omega] * actual_limits.get('omega', limit_values['omega'])
         n_val = omega_mech * 60 / (2 * np.pi)
         
-        data_log['time'].append(k * tau)
+        data_log['time'].append(k * args.tau)
         data_log['i_d'].append(i_d_val)
         data_log['i_q'].append(i_q_val)
         data_log['n'].append(n_val)
@@ -223,7 +247,9 @@ for i in range(number_of_simulations):
         # done-Flag ignorieren um volle Simulationsdauer zu erreichen
     
     df = pd.DataFrame(data_log)
-    filename = os.path.join(out_dir, f'sim_{i+1:04d}.csv')
+    df["n_ref"] = float(args.n_rpm)
+    out_name = args.output if args.output else f'sim_{i+1:04d}.csv'
+    filename = os.path.join(out_dir, out_name)
     df.to_csv(filename, index=False)
     print(f"-> Simulation {i+1} exportiert: {filename}")
 
