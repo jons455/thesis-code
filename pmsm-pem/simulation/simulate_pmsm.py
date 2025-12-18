@@ -47,7 +47,10 @@ def parse_args():
 
 
 args = parse_args()
-out_dir = os.path.join(os.getcwd(), 'export', 'gem_standard')
+# Export-Verzeichnis relativ zum pmsm-pem Basisordner
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PMSM_PEM_DIR = os.path.dirname(SCRIPT_DIR)  # pmsm-pem/
+out_dir = os.path.join(PMSM_PEM_DIR, 'export', 'gem_standard')
 os.makedirs(out_dir, exist_ok=True)
 
 # Environment erstellen

@@ -22,8 +22,9 @@ import sys
 # KONFIGURATION
 # ============================================================================
 
-SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
+SCRIPT_DIR = Path(__file__).parent      # validation/
+PMSM_PEM_DIR = SCRIPT_DIR.parent        # pmsm-pem/
+PROJECT_ROOT = PMSM_PEM_DIR.parent      # thesis-code/
 
 # Drehzahlen für den Vergleich
 SPEEDS_RPM = [500, 1500, 2500]
@@ -32,8 +33,8 @@ SPEEDS_RPM = [500, 1500, 2500]
 def get_sources(n_rpm: int) -> dict:
     return {
         'MATLAB': PROJECT_ROOT / "pmsm-matlab" / "export" / "validation" / f"validation_sim_n{n_rpm:04d}.csv",
-        'GEM Standard': SCRIPT_DIR / "export" / "gem_standard" / f"sim_n{n_rpm:04d}.csv",
-        'GEM Eigener Ctrl': SCRIPT_DIR / "export" / "matlab_match" / f"sim_n{n_rpm:04d}.csv",
+        'GEM Standard': PMSM_PEM_DIR / "export" / "gem_standard" / f"sim_n{n_rpm:04d}.csv",
+        'GEM Eigener Ctrl': PMSM_PEM_DIR / "export" / "matlab_match" / f"sim_n{n_rpm:04d}.csv",
     }
 
 SIGNALS = ['i_d', 'i_q', 'n', 'u_d', 'u_q']
@@ -295,8 +296,8 @@ def main():
     print("=" * 70)
     print(f"Drehzahlen: {SPEEDS_RPM} rpm")
     
-    # Output-Verzeichnis
-    output_dir = SCRIPT_DIR / "export" / "comparison"
+    # Output-Verzeichnis (im pmsm-pem/export/)
+    output_dir = PMSM_PEM_DIR / "export" / "comparison"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Alle Drehzahlen vergleichen

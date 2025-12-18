@@ -12,8 +12,9 @@ build/
 # MATLAB
 *.asv
 *.slxc
-*.slx
+*.slx.r*           # Versions-Backups (z.B. .slx.r2024b)
 slprj/
+# Hinweis: .slx Hauptmodelle NICHT ignorieren (foc_pmsm.slx bleibt in Git)
 
 # Jupyter Notebook
 .ipynb_checkpoints

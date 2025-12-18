@@ -2,6 +2,27 @@
 
 Ziel: MATLAB/Simulink FOC-Simulation durch Python + gym-electric-motor (GEM) ersetzen, um Trainingsdaten für neuronale Netze zu generieren.
 
+## Ordnerstruktur
+
+```
+pmsm-pem/
+├── simulation/                    # Simulationsskripte
+│   ├── simulate_pmsm.py           # GEM mit Standard-Controller
+│   ├── simulate_pmsm_matlab_match.py  # Eigener MATLAB-kompatibler PI-Controller
+│   └── run_operating_point_tests.py   # Batch-Simulation verschiedener Arbeitspunkte
+├── validation/                    # Validierungs- und Vergleichsskripte
+│   ├── compare_simulations.py     # Vergleich MATLAB vs. GEM (Drehzahl-Sweep)
+│   ├── compare_operating_points.py    # Vergleich verschiedener id/iq-Arbeitspunkte
+│   └── debug_script.py            # Debug-Hilfsskript
+├── export/                        # Simulationsergebnisse (CSV + Plots)
+│   ├── gem_standard/              # Ergebnisse mit GEM Standard-Controller
+│   ├── matlab_match/              # Ergebnisse mit eigenem Controller
+│   └── comparison/                # Vergleichsplots und Metriken
+├── docs/                          # Technische Dokumentation
+│   └── GEM_Zusammenfassung.md
+└── venv/                          # Python Virtual Environment
+```
+
 
 ## Warum GEM?
 
@@ -55,6 +76,24 @@ while not done:
 | gem_controllers | https://github.com/upb-lea/gem-controllers |
 
 
+## Schnellstart
+
+```powershell
+cd pmsm-pem
+.\venv\Scripts\activate
+
+# Einzelne Simulation
+python simulation/simulate_pmsm.py --n-rpm 1000 --iq-ref 5
+
+# Batch-Simulation verschiedener Arbeitspunkte
+python simulation/run_operating_point_tests.py
+
+# Validierung gegen MATLAB
+python validation/compare_simulations.py
+python validation/compare_operating_points.py
+```
+
+
 ## Eigener Controller vs. gem_controllers
 
 Der mitgelieferte `gem_controllers` ist praktisch für schnelle Prototypen, aber eine Black-Box. Die PI-Gains werden intern berechnet und passen nicht unbedingt zu einem bestehenden MATLAB-Modell.
@@ -80,7 +119,7 @@ class MatlabFOCController:
         return u_d, u_q
 ```
 
-Das sind ca. 50 Zeilen Python. Siehe `simulate_pmsm_matlab_match.py` für die vollständige Implementierung.
+Das sind ca. 50 Zeilen Python. Siehe `simulation/simulate_pmsm_matlab_match.py` für die vollständige Implementierung.
 
 **Warum GEM trotzdem?**
 
@@ -101,60 +140,13 @@ Der Controller ist der einfache Teil. Die **Strecke** (Motor + Physik + Constrai
 
 Aktuell: Validierung ob GEM dieselben Ergebnisse wie MATLAB liefert.
 
-## TL;DR
-
 | Aspekt | Status |
 |--------|--------|
 | Motorparameter | ✅ Abgeglichen |
 | Simulationsparameter (Ts, Dauer) | ✅ Identisch |
-| PI-Regler | ⚠️ Eigener Controller nötig |
-| Drehzahl | ❌ Nicht direkt steuerbar in GEM CC-Env |
-| Vorzeichen i_q | ❌ Invertiert gegenüber MATLAB |
-
-**Kernproblem:** GEM's Current-Control Environment berechnet die Drehzahl aus der Motorphysik. In MATLAB wird sie als externer Parameter gesetzt. Direkter 1:1 Vergleich daher schwierig.
-
-
-## Erkenntnisse
-
-### GEM Controller ist eine Black-Box
-
-Der Standard `gem_controllers` berechnet PI-Gains intern via Polplatzierung (Tuning-Parameter `a=4`). Das führt zu anderen Werten als im MATLAB-Modell. Für exakte Reproduktion muss ein eigener Controller her.
-
-### Technische Optimaleinstellung
-
-MATLAB verwendet diese Formeln für die PI-Gains:
-
-```
-K_Pd = L_d / (2*Ts) = 0.00113 / (2*0.0001) = 5.65
-K_Pq = L_q / (2*Ts) = 0.00142 / (2*0.0001) = 7.10
-K_Id = K_Iq = R_s / (2*Ts) = 0.543 / (2*0.0001) = 2715
-```
-
-Plus Entkopplungsterme:
-- `u_d_dec = -ω_el * L_q * i_q`
-- `u_q_dec = +ω_el * (L_d * i_d + Ψ_PM)`
-
-### Drehzahl im CC-Environment
-
-Das `Cont-CC-PMSM-v0` Environment ist für **reine Stromregelung** ausgelegt. Die Drehzahl ergibt sich aus:
-- Elektrischem Drehmoment (abhängig von i_q)
-- Lastmoment
-- Trägheit
-
-Startdrehzahl liegt bei ca. 716 RPM, nicht kontrollierbar über Reference-Generator.
-
-### Step-Timing
-
-MATLAB aktiviert Sollwerte erst bei t=0.1s via Step-Block. Das wurde in den Python-Skripten nachgebaut (`step_time_k = 1000` bei Ts=100µs).
-
-
-## Dateien
-
-| Datei | Beschreibung |
-|-------|--------------|
-| `simulate_pmsm.py` | GEM mit Standard-Controller (gem_controllers) |
-| `simulate_pmsm_matlab_match.py` | Eigener PI-Controller mit MATLAB-Parametern |
-| `compare_simulations.py` | Vergleich MATLAB vs. Python Exports |
+| PI-Regler | ✅ GEM Standard erreicht exakt MATLAB Steady-State |
+| Drehzahl | ✅ Über ConstantSpeedLoad steuerbar |
+| Vorzeichen i_q | ✅ Gelöst |
 
 
 ## Motorparameter
@@ -176,50 +168,34 @@ limit_values = dict(
 ```
 
 
-## Vorgehen
+## Arbeitspunkt-Testmatrix
 
-### 1. Baseline herstellen
+Für den Vergleich bei 1000 rpm mit verschiedenen id/iq-Kombinationen:
 
-Bevor Vergleiche sinnvoll sind, muss geklärt werden ob die MATLAB Step-Blöcke feste Werte oder Workspace-Variablen nutzen. Sonst vergleicht man Äpfel mit Birnen.
-
-**Offener Punkt:** Rückmeldung von Dennis zur Simulink-Verdrahtung.
-
-### 2. Drehzahl angleichen
-
-Für einen fairen Vergleich:
-- Option A: MATLAB auf ~716 RPM setzen (GEM Startwert)
-- Option B: Eigenes Motormodell in Python mit externer Drehzahl
-- Option C: GEM Anfangsbedingungen anpassen (falls möglich)
-
-### 3. Vorzeichen prüfen
-
-i_q hat unterschiedliche Vorzeichen. Mögliche Ursachen:
-- Koordinatenkonvention (Rechtssystem vs. Linkssystem)
-- Stromrichtungsdefinition
-- Transformationsmatrix (Park/Clarke)
-
-Braucht Blick in die GEM-Doku oder den Sourcecode.
-
-### 4. Validierung
-
-Nach Angleichung:
-1. Beide Simulationen mit identischen Parametern laufen lassen
-2. `compare_simulations.py` ausführen
-3. Plots und Metriken auswerten
-4. Bei Abweichungen: Ursache isolieren
-
-### 5. Trainingsdaten generieren
-
-Wenn Baseline steht:
-- Drehzahl über weiten Bereich variieren (wichtig wegen Back-EMF!)
-- Verschiedene Strom-Sollwerte
-- Evtl. Lastsprünge
+| Testfall | id [A] | iq [A] | |I| [A] | Beschreibung |
+|----------|--------|--------|--------|--------------|
+| 1 | 0 | 2 | 2.0 | Baseline (niedrige Last) |
+| 2 | 0 | 5 | 5.0 | Mittlere Last |
+| 3 | 0 | 8 | 8.0 | Hohe Last |
+| 4 | -3 | 2 | 3.6 | Moderate Feldschwächung |
+| 5 | -3 | 5 | 5.8 | Feldschwächung + mittlere Last |
+| 6 | -5 | 5 | 7.1 | Stärkere Feldschwächung + Last |
 
 
-## Offene Fragen
+## Dateien
 
-- [ ] Simulink: Feste Werte oder Workspace-Variablen?
-- [ ] GEM: Kann man Anfangsdrehzahl beim Reset setzen?
-- [ ] GEM: Woher kommt die Vorzeichen-Invertierung bei i_q?
-- [ ] Brauchen wir Speed-Control Environment statt Current-Control?
+| Datei | Beschreibung |
+|-------|--------------|
+| `simulation/simulate_pmsm.py` | GEM mit Standard-Controller (gem_controllers) |
+| `simulation/simulate_pmsm_matlab_match.py` | Eigener PI-Controller mit MATLAB-Parametern |
+| `simulation/run_operating_point_tests.py` | Batch-Simulation aller Arbeitspunkte |
+| `validation/compare_simulations.py` | Vergleich MATLAB vs. Python (Drehzahl-Sweep) |
+| `validation/compare_operating_points.py` | Vergleich verschiedener Arbeitspunkte |
 
+
+## Technische Dokumentation
+
+Siehe `docs/` für detaillierte technische Dokumentation:
+- `GEM_Zusammenfassung.md` - Alle GEM-spezifischen Erkenntnisse
+- `../docs/GEM_KONFIGURATION.md` - Vollständige Setup-Dokumentation
+- `../docs/GEM_LEARNINGS.md` - Learnings aus der Validierungsarbeit

@@ -90,7 +90,10 @@ def parse_args():
     p.add_argument("--output", type=str, default=None, help="Output filename (default: sim_0001.csv)")
     return p.parse_args()
 
-out_dir = os.path.join(os.getcwd(), 'export', 'matlab_match')
+# Export-Verzeichnis relativ zum pmsm-pem Basisordner
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PMSM_PEM_DIR = os.path.dirname(SCRIPT_DIR)  # pmsm-pem/
+out_dir = os.path.join(PMSM_PEM_DIR, 'export', 'matlab_match')
 os.makedirs(out_dir, exist_ok=True)
 
 # Environment erstellen

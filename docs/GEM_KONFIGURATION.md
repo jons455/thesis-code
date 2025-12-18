@@ -78,6 +78,8 @@ Zusätzlich zum GEM-Standard-Controller wurde ein eigener PI-Controller implemen
 
 ## Testparameter für Validierung
 
+### Drehzahl-Sweep (Baseline)
+
 **Strom-Sollwerte:** i_d,ref = 0 A und i_q,ref = 2 A, sofort aktiv (step_time = 0)
 
 **Getestete Drehzahlen:** 500 rpm, 1500 rpm, 2500 rpm
@@ -85,6 +87,23 @@ Zusätzlich zum GEM-Standard-Controller wurde ein eigener PI-Controller implemen
 **Simulationsdauer:** 0.2 Sekunden (2000 Schritte bei tau = 100 µs)
 
 **Abtastzeit:** tau = 0.0001 s (entspricht 10 kHz Regelfrequenz)
+
+### Arbeitspunkt-Variation (Erweitert)
+
+**Feste Drehzahl:** 1000 rpm
+
+**Arbeitspunkt-Testmatrix:**
+
+| Testfall | id [A] | iq [A] | |I| [A] | Beschreibung |
+|----------|--------|--------|--------|--------------|
+| 1 | 0 | 2 | 2.0 | Baseline (niedrige Last) |
+| 2 | 0 | 5 | 5.0 | Mittlere Last |
+| 3 | 0 | 8 | 8.0 | Hohe Last |
+| 4 | -3 | 2 | 3.6 | Moderate Feldschwächung |
+| 5 | -3 | 5 | 5.8 | Feldschwächung + mittlere Last |
+| 6 | -5 | 5 | 7.1 | Stärkere Feldschwächung + Last |
+
+**Zweck:** Validierung der Controller-Performance über den gesamten Arbeitspunktbereich, nicht nur bei id=0.
 
 ---
 
