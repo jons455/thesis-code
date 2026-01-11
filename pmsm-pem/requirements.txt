@@ -6,13 +6,14 @@ pandas>=2.0.0
 scipy>=1.10.0
 matplotlib>=3.7.0
 
-# GEM (gym-electric-motor)
+# GEM (gym-electric-motor) - uses Gymnasium (successor to OpenAI Gym)
+# https://github.com/Farama-Foundation/Gymnasium
 gym-electric-motor>=3.0.0
 gymnasium>=0.29.0
 
 # GEM Controllers (install from GitHub)
 # pip install git+https://github.com/upb-lea/gem-control
-gym>=0.26.0  # Required by gem_controllers
+# Note: gem_controllers may still have gym as transitive dependency
 
 # Optional: For block diagrams
 ipython>=8.0.0
