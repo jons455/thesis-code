@@ -11,7 +11,8 @@ Documentation of implementation progress for the neuromorphic PMSM controller be
 **Goal**: Integrate NeuroBench 2025_GC branch and create interface wrappers for closed-loop SNN evaluation.
 
 **Completed**:
-- [x] Installed NeuroBench 2025_GC branch (`pip install git+...@2025_GC`)
+- [x] Installed NeuroBench 2025_GC branch (2026-01-13, commit c8dfd47)
+      `pip install git+https://github.com/NeuroBench/neurobench.git@2025_GC`
 - [x] Created `pmsm-pem/benchmark/` folder structure
 - [x] Implemented `PMSMEnv` Gymnasium wrapper for GEM PMSM environment
 - [x] Implemented `PIControllerAgent` as baseline controller
