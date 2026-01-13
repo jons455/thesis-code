@@ -47,11 +47,11 @@ fprintf('\n');
 
 % Sollströme (Step bei t=0.1s wie in Python)
 id_ref = 0.0;    % [A] - d-Achsen Sollstrom (typisch 0 für MTPA)
-iq_ref = 2.0;    % [A] - q-Achsen Sollstrom (Drehmoment)
+iq_ref = 3.5;    % [A] - q-Achsen Sollstrom (Drehmoment) - Run 003: erhöht
 
 % Test-Drehzahlen (RPM) für Vergleich MATLAB vs. Python/GEM
-% (Grob: niedrig / mittel / hoch, damit Back-EMF-Einfluss sichtbar wird)
-n_ref_list = [500, 1500, 2500];
+% Run 003: Andere Drehzahlen für Validierung
+n_ref_list = [750, 1250, 2000];
 
 fprintf('Validierungsparameter:\n');
 fprintf('  id_ref = %.1f A\n', id_ref);

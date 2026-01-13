@@ -27,21 +27,24 @@ PMSM_PEM_DIR = SCRIPT_DIR.parent        # pmsm-pem/
 PROJECT_ROOT = PMSM_PEM_DIR.parent      # thesis-code/
 
 # Drehzahlen für den Vergleich
-SPEEDS_RPM = [500, 1500, 2500]
+# Run 003: Andere Drehzahlen
+SPEEDS_RPM = [750, 1250, 2000]
 
 # Pfade zu den CSV-Dateien (pro Drehzahl)
+# Run 003: Nur GEM Standard (verifiziert als MATLAB-äquivalent)
 def get_sources(n_rpm: int) -> dict:
     return {
         'MATLAB': PROJECT_ROOT / "pmsm-matlab" / "export" / "validation" / f"validation_sim_n{n_rpm:04d}.csv",
         'GEM Standard': PMSM_PEM_DIR / "export" / "gem_standard" / f"sim_n{n_rpm:04d}.csv",
-        'GEM Eigener Ctrl': PMSM_PEM_DIR / "export" / "matlab_match" / f"sim_n{n_rpm:04d}.csv",
+        # Eigener Controller deaktiviert - hat nicht funktioniert
+        # 'GEM Eigener Ctrl': PMSM_PEM_DIR / "export" / "matlab_match" / f"sim_n{n_rpm:04d}.csv",
     }
 
 SIGNALS = ['i_d', 'i_q', 'n', 'u_d', 'u_q']
 COLORS = {
     'MATLAB': '#1f77b4',           # Blau
-    'GEM Standard': '#ff7f0e',      # Orange
-    'GEM Eigener Ctrl': '#2ca02c',  # Grün
+    'GEM Standard': '#2ca02c',      # Grün (Run 003: als Hauptvergleich)
+    # 'GEM Eigener Ctrl': '#ff7f0e',  # Deaktiviert
 }
 
 

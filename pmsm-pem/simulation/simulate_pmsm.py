@@ -38,7 +38,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="GEM PMSM current-control simulation (standard GEM controller)")
     p.add_argument("--n-rpm", type=float, default=716.0, help="Fixed mechanical speed in rpm (ConstantSpeedLoad).")
     p.add_argument("--id-ref", type=float, default=0.0, help="d-axis current reference after step [A].")
-    p.add_argument("--iq-ref", type=float, default=2.0, help="q-axis current reference after step [A].")
+    p.add_argument("--iq-ref", type=float, default=3.5, help="q-axis current reference after step [A]. Run 003: 3.5A")
     p.add_argument("--step-time", type=float, default=0.0, help="Step time in seconds (0 = immediate).")
     p.add_argument("--sim-steps", type=int, default=sim_steps, help="Number of simulation steps.")
     p.add_argument("--tau", type=float, default=tau, help="Control cycle time in seconds.")

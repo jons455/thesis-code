@@ -24,22 +24,23 @@ SCRIPT_DIR = Path(__file__).parent      # validation/
 PMSM_PEM_DIR = SCRIPT_DIR.parent        # pmsm-pem/
 PROJECT_ROOT = PMSM_PEM_DIR.parent      # thesis-code/
 
-N_RPM = 1000  # Feste Drehzahl
+N_RPM = 1500  # Run 003: Andere Drehzahl (vorher 1000)
 
 # Arbeitspunkte (müssen mit run_operating_point_tests.py übereinstimmen)
+# Run 003: Andere Kombinationen
 OPERATING_POINTS = [
-    (0.0, 2.0, "baseline_low_load"),
-    (0.0, 5.0, "mid_load"),
-    (0.0, 8.0, "high_load"),
-    (-3.0, 2.0, "fw_moderate"),
-    (-3.0, 5.0, "fw_moderate_mid_load"),
-    (-5.0, 5.0, "fw_strong_mid_load"),
+    (0.0, 1.0, "very_low_load"),
+    (0.0, 3.5, "mid_low_load"),
+    (0.0, 6.0, "mid_high_load"),
+    (-2.0, 3.0, "fw_light"),
+    (-4.0, 4.0, "fw_balanced"),
+    (-6.0, 3.0, "fw_strong_low_torque"),
 ]
 
 COLORS = {
     'MATLAB': '#1f77b4',            # Blau
-    'GEM Standard': '#ff7f0e',      # Orange
-    'GEM Eigener Ctrl': '#2ca02c',  # Grün
+    'GEM Standard': '#2ca02c',      # Grün (Run 003: Hauptvergleich)
+    # 'GEM Eigener Ctrl': '#ff7f0e',  # Deaktiviert
 }
 
 SIGNALS = ['i_d', 'i_q', 'u_d', 'u_q']
@@ -61,7 +62,8 @@ def get_sources_for_op(id_val: float, iq_val: float) -> dict:
         'MATLAB': PROJECT_ROOT / "pmsm-matlab" / "export" / "validation" / 
                   f"validation_op_n{N_RPM:04d}_id{int(id_val):+03d}_iq{int(iq_val):+03d}.csv",
         'GEM Standard': PMSM_PEM_DIR / "export" / "gem_standard" / filename,
-        'GEM Eigener Ctrl': PMSM_PEM_DIR / "export" / "matlab_match" / filename,
+        # Eigener Controller deaktiviert
+        # 'GEM Eigener Ctrl': PMSM_PEM_DIR / "export" / "matlab_match" / filename,
     }
 
 

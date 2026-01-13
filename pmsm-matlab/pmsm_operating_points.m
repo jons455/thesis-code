@@ -48,17 +48,18 @@ fprintf('  I_max = %.1f A\n', I_max);
 fprintf('\n');
 
 %% ==================== Testparameter ====================
-% Feste Drehzahl für alle Tests
-n_ref = 1000;  % RPM
+% Run 003: Andere Drehzahl und andere Arbeitspunkte
+n_ref = 1500;  % RPM (vorher 1000)
 
 % Arbeitspunkt-Matrix: [id_ref, iq_ref, Beschreibung]
+% Run 003: Andere Kombinationen für breitere Validierung
 operating_points = {
-    0.0, 2.0, 'baseline_low_load';
-    0.0, 5.0, 'mid_load';
-    0.0, 8.0, 'high_load';
-    -3.0, 2.0, 'fw_moderate';
-    -3.0, 5.0, 'fw_moderate_mid_load';
-    -5.0, 5.0, 'fw_strong_mid_load';
+    0.0, 1.0, 'very_low_load';        % Sehr geringe Last
+    0.0, 3.5, 'mid_low_load';         % Niedrige-mittlere Last  
+    0.0, 6.0, 'mid_high_load';        % Mittlere-hohe Last
+    -2.0, 3.0, 'fw_light';            % Leichte Feldschwächung
+    -4.0, 4.0, 'fw_balanced';         % Balancierte Feldschwächung
+    -6.0, 3.0, 'fw_strong_low_torque';% Starke FS, niedriges Drehmoment
 };
 
 n_tests = size(operating_points, 1);
