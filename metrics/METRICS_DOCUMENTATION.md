@@ -48,7 +48,7 @@ These metrics quantify how precisely the controller tracks the current reference
 | **SS_error** | $\bar{e}_{t>T_{settle}}$ | Steady-state error (mean after settling) | A |
 
 **Literature Reference:**
-> "Integral performance indices such as ITAE provide a single scalar measure that captures both transient and steady-state performance, making them suitable for optimization and comparison."  
+> "Integral performance indices such as ITAE provide a single scalar measure that captures both transient and steady-state performance, making them suitable for optimization and comparison."
 > — *Åström & Murray, Feedback Systems (2008)*
 
 ---
@@ -77,7 +77,7 @@ Step response characteristics following IEEE/ANSI definitions.
 ```
 
 **Literature Reference:**
-> "For servo applications, rise time and settling time are critical metrics as they directly impact positioning accuracy and throughput."  
+> "For servo applications, rise time and settling time are critical metrics as they directly impact positioning accuracy and throughput."
 > — *IEEE Transactions on Industrial Electronics (2021)*
 
 ---

@@ -131,4 +131,3 @@ Recommended tools:
 - Neural network function approximation
 - Spiking neural network conversion methods
 - Neuromorphic computing architectures
-

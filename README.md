@@ -1,100 +1,217 @@
-# PMSM FOC Neural Network Training
+# PMSM Neuromorphic Controller Benchmark
 
-Training neuronaler Netze zur Nachbildung eines FOC-Reglers für PMSM.
+[![CI](https://github.com/jonas/pmsm-neuromorphic-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/jonas/pmsm-neuromorphic-benchmark/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-## Struktur
+Benchmark framework for evaluating neuromorphic (SNN) controllers against conventional PI controllers for PMSM (Permanent Magnet Synchronous Motor) current control.
+
+Part of a Master's thesis on neuromorphic computing for motor control applications.
+
+## Features
+
+- **GEM Integration**: Validated PMSM simulation using gym-electric-motor
+- **NeuroBench Compatible**: Follows NeuroBench framework for standardized evaluation
+- **Comprehensive Metrics**: Control performance (ITAE, settling time), neuromorphic metrics (SyOps, sparsity)
+- **Reproducible**: Seed management and experiment tracking utilities
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10 or higher
+- [Poetry](https://python-poetry.org/docs/#installation) for dependency management
+- (Optional) CUDA-capable GPU for faster SNN training
+
+### Quick Install
+
+```bash
+# Clone the repository
+git clone https://github.com/jonas/pmsm-neuromorphic-benchmark.git
+cd pmsm-neuromorphic-benchmark
+
+# Install dependencies with Poetry
+poetry install
+
+# Activate the virtual environment
+poetry shell
+```
+
+### Development Setup
+
+```bash
+# Install with all dependency groups (dev, docs, jupyter)
+poetry install --with dev,docs,jupyter
+
+# Install pre-commit hooks
+poetry run pre-commit install
+
+# Verify installation
+poetry run pytest --collect-only
+```
+
+## Project Structure
 
 ```
 thesis-code/
-├── pmsm-matlab/              # MATLAB/Simulink Simulation
-│   ├── foc_pmsm.slx          # Simulink FOC-Modell
-│   ├── pmsm_init.m           # Motorparameter
-│   ├── pmsm_validation_compare.m   # Drehzahl-Sweep
-│   └── pmsm_operating_points.m     # Arbeitspunkt-Tests
+├── benchmark/                # NeuroBench integration
+│   ├── pmsm_env.py          # Gymnasium wrapper for GEM
+│   ├── agents.py            # PI controller, SNN placeholder
+│   ├── processors.py        # Spike encoding utilities
+│   └── tests/               # Unit tests
 │
-├── pmsm-pem/                 # Python Simulation (GEM-basiert)
-│   ├── simulation/           # Simulationsskripte
-│   │   ├── simulate_pmsm.py              # GEM Standard-Controller
-│   │   ├── simulate_pmsm_matlab_match.py # Eigener PI-Controller
-│   │   └── run_operating_point_tests.py  # Batch-Simulation
-│   ├── validation/           # Vergleichsskripte
-│   │   ├── compare_simulations.py        # Drehzahl-Vergleich
-│   │   └── compare_operating_points.py   # Arbeitspunkt-Vergleich
-│   └── export/               # Ergebnisse (CSV, Plots)
+├── metrics/                  # Benchmark metrics framework
+│   ├── benchmark_metrics.py # ~1100 lines of metrics
+│   └── tests/               # Metric tests
 │
-├── data-preperation/         # Datenaufbereitung
-│   ├── merge_simulation_data.py
-│   ├── prepare_edge_impulse.py
+├── utils/                    # Utility modules
+│   └── reproducibility.py   # Seed management, experiment tracking
+│
+├── pmsm-pem/                 # GEM PMSM simulation
+│   ├── simulation/          # Simulation scripts
+│   ├── validation/          # MATLAB comparison
+│   └── export/              # Results (CSV, plots)
+│
+├── pmsm-matlab/              # MATLAB/Simulink reference
+│   ├── foc_pmsm.slx         # Simulink FOC model
+│   └── pmsm_init.m          # Motor parameters
+│
+├── data-preperation/         # Data processing scripts
 │   └── data_exploration.ipynb
 │
-└── docs/                     # Dokumentation
-    ├── GEM_KONFIGURATION.md  # GEM Setup & Konfiguration
-    ├── GEM_LEARNINGS.md      # Learnings & Problemlösungen
-    ├── TRAINING_GUIDE.md     # Trainingsanleitung
-    └── EDGE_IMPULSE_GUIDE.md # Edge Impulse Integration
+├── docs/                     # Documentation
+│   ├── ARCHITECTURE.md      # System architecture
+│   ├── BENCHMARK_METRICS.md # Metrics documentation
+│   └── SIMULATION.md        # GEM configuration
+│
+├── tests/                    # Integration & regression tests
+└── pyproject.toml           # Project & tool configuration (Poetry)
 ```
 
-## Motor
+## Motor Parameters
 
-| Parameter | Wert |
-|-----------|------|
-| Polpaare | 3 |
-| R_s | 0.543 Ω |
-| L_d | 1.13 mH |
-| L_q | 1.42 mH |
-| Ψ_PM | 16.9 mWb |
-| I_max | 10.8 A |
-| V_DC | 48 V |
-| n_max | 3000 RPM |
+| Parameter | Value | Unit |
+|-----------|-------|------|
+| Pole pairs (p) | 3 | - |
+| Stator resistance (R_s) | 0.543 | Ω |
+| d-axis inductance (L_d) | 1.13 | mH |
+| q-axis inductance (L_q) | 1.42 | mH |
+| PM flux linkage (Ψ_PM) | 16.9 | mWb |
+| Maximum current (I_max) | 10.8 | A |
+| DC-link voltage (V_DC) | 48 | V |
+| Maximum speed (n_max) | 3000 | RPM |
 
-## Validierungsergebnisse
+## Usage
 
-Der **GEM Standard Controller** erreicht exaktes Tracking über alle getesteten Arbeitspunkte:
+### Running the Benchmark
 
-| Test | id [A] | iq [A] | Tracking-Fehler |
-|------|--------|--------|-----------------|
-| Baseline | 0 | 2 | 0.0000 A |
-| Mittlere Last | 0 | 5 | 0.0000 A |
-| Hohe Last | 0 | 8 | 0.0000 A |
-| Feldschwächung | -3 | 2 | 0.0000 A |
-| Feldschw. + Last | -3 | 5 | 0.0000 A |
-| Starke Feldschw. | -5 | 5 | 0.0000 A |
+```python
+from benchmark import PMSMEnv, PIControllerAgent
+from metrics import run_benchmark
+import pandas as pd
 
-## Quick Start
+# Create environment and agent
+env = PMSMEnv(max_steps=500)
+agent = PIControllerAgent()
 
-### MATLAB Simulation
-```matlab
-cd pmsm-matlab
-pmsm_init
-pmsm_validation_compare    % Drehzahl-Sweep
-pmsm_operating_points      % Arbeitspunkt-Tests
+# Run simulation
+state, _ = env.reset()
+for _ in range(500):
+    action = agent(state)
+    state, reward, done, truncated, info = env.step(action)
+    if done:
+        break
+
+# Evaluate with metrics
+df = pd.DataFrame(env.episode_data)
+result = run_benchmark(df, controller_name="PI Baseline")
+print(result.summary())
 ```
 
-### Python Simulation
-```powershell
-cd pmsm-pem
-.\venv\Scripts\activate
-python simulation/run_operating_point_tests.py   # Simulation
-python validation/compare_operating_points.py    # Vergleich
+### Reproducible Experiments
+
+```python
+from utils import set_seed, ExperimentConfig
+
+# Set all random seeds
+set_seed(42)
+
+# Create experiment configuration
+config = ExperimentConfig(
+    seed=42,
+    model_name="snn_lif_64",
+    hyperparameters={"hidden_size": 64, "beta": 0.9}
+)
+config.save("experiments/exp_001.yaml")
 ```
 
-### Datenaufbereitung
+## Testing
+
 ```bash
-cd data-preperation
-pip install -r requirements.txt
-python merge_simulation_data.py
-python prepare_edge_impulse.py
+# Run all tests
+poetry run pytest
+
+# Run with coverage report
+poetry run pytest --cov=benchmark --cov=metrics --cov=utils --cov-report=html
+
+# Run specific test categories
+poetry run pytest -m "not slow"           # Skip slow tests
+poetry run pytest -m integration          # Integration tests only
+poetry run pytest tests/test_regression.py  # Regression tests
 ```
 
-## Simulation
+## Code Quality
 
-- Abtastrate: 10 kHz (Ts = 100 µs)
-- Dauer: 0.2 s pro Run
-- Schritte: 2000 pro Run
+```bash
+# Format code
+poetry run black .
 
-## Datenformat
+# Lint code
+poetry run ruff check .
+poetry run ruff check --fix .  # Auto-fix issues
 
-**Features:** `i_d`, `i_q` [A], `n` [RPM]  
-**Targets:** `u_d`, `u_q` [V]
+# Type check
+poetry run mypy benchmark metrics utils
+```
 
-Siehe `docs/` für Details.
+## Validation Results
+
+The PI controller baseline achieves precise tracking across all operating points:
+
+| Test | i_d [A] | i_q [A] | Tracking Error |
+|------|---------|---------|----------------|
+| Baseline | 0 | 2 | 0.0000 A |
+| Medium Load | 0 | 5 | 0.0000 A |
+| High Load | 0 | 8 | 0.0000 A |
+| Field Weakening | -3 | 2 | 0.0000 A |
+| FW + Load | -3 | 5 | 0.0000 A |
+| Strong FW | -5 | 5 | 0.0000 A |
+
+## Simulation Parameters
+
+- **Sampling rate**: 10 kHz (Ts = 100 µs)
+- **Episode duration**: 0.2 s per run
+- **Steps per episode**: 2000
+
+## Documentation
+
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Benchmark Metrics](docs/BENCHMARK_METRICS.md)
+- [Simulation Details](docs/SIMULATION.md)
+- [Work Progress](docs/WORK_PROGRESS.md)
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests and linting (`poetry run pytest && poetry run black . && poetry run ruff check .`)
+4. Commit changes (`git commit -m 'Add amazing feature'`)
+5. Push to branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+## Acknowledgments
+
+- [gym-electric-motor (GEM)](https://github.com/upb-lea/gym-electric-motor) - Electric motor simulation
+- [NeuroBench](https://neurobench.readthedocs.io/) - Neuromorphic computing benchmarks
+- [snnTorch](https://snntorch.readthedocs.io/) - Spiking neural network framework

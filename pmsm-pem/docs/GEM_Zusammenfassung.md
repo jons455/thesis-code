@@ -63,7 +63,7 @@ limits = {name: ps.limits[i] for i, name in enumerate(ps.state_names)}
 
 ### 2.5 State-Indizes (für `Cont-CC-PMSM-v0`)
 ```python
-state_names = ['omega', 'torque', 'i_a', 'i_b', 'i_c', 'i_sd', 'i_sq', 
+state_names = ['omega', 'torque', 'i_a', 'i_b', 'i_c', 'i_sd', 'i_sq',
                'u_a', 'u_b', 'u_c', 'u_sd', 'u_sq', 'epsilon', 'u_sup']
 # Typische Indizes: omega=0, i_sd=5, i_sq=6, epsilon=12
 ```
@@ -90,7 +90,7 @@ if isinstance(state, tuple):
 import gem_controllers as gc
 
 controller = gc.GemController.make(
-    env_unwrapped, 
+    env_unwrapped,
     'Cont-CC-PMSM-v0',
     decoupling=True,
     current_safety_margin=0.2,
@@ -135,24 +135,24 @@ class PIController:
         self.tau = tau
         self.integral_d = 0.0
         self.integral_q = 0.0
-    
+
     def control(self, i_d, i_q, i_d_ref, i_q_ref, omega_elec):
         # Regelfehler
         e_d = i_d_ref - i_d
         e_q = i_q_ref - i_q
-        
+
         # Integratoren (Euler vorwärts)
         self.integral_d += self.Ki_d * e_d * self.tau
         self.integral_q += self.Ki_q * e_q * self.tau
-        
+
         # PI-Ausgang
         u_d_pi = self.Kp_d * e_d + self.integral_d
         u_q_pi = self.Kp_q * e_q + self.integral_q
-        
+
         # Entkopplung
         u_d = u_d_pi - omega_elec * self.L_q * i_q
         u_q = u_q_pi + omega_elec * (self.L_d * i_d + self.Psi_PM)
-        
+
         return u_d, u_q
 ```
 
@@ -239,4 +239,3 @@ K_Id = K_Iq = R_s / (2 * Ts)
 ---
 
 *Letzte Aktualisierung: 18. Dezember 2025*
-

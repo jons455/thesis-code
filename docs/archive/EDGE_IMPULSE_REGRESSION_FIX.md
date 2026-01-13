@@ -62,4 +62,3 @@ Edge Impulse erwartet möglicherweise ein bestimmtes Format. Versuchen Sie:
 - **Flatten Block:** Nur `i_d`, `i_q`, `n` als Input (✓)
 - **Regression Block:** `u_d`, `u_q` als Output (✓)
 - **Timestamp:** Kann als Feature verwendet werden oder ignoriert werden
-

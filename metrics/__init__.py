@@ -8,10 +8,10 @@ both conventional and neuromorphic controllers for PMSM current control.
 Usage:
 ------
     from metrics import run_benchmark, BenchmarkResult, NeuromorphicMetrics
-    
+
     # Load simulation data
     df = pd.read_csv('simulation.csv')
-    
+
     # Run benchmark
     result = run_benchmark(df, controller_name="My Controller")
     print(result.summary())
@@ -26,46 +26,43 @@ Metric Categories:
 """
 
 from .benchmark_metrics import (
-    # Data classes
-    PMSMParameters,
+    # Constants
+    DEFAULT_MOTOR,
     AccuracyMetrics,
+    BenchmarkResult,
     DynamicsMetrics,
     EfficiencyMetrics,
-    SafetyMetrics,
+    MetricCategory,
     NeuromorphicMetrics,
-    BenchmarkResult,
-    
+    # Data classes
+    PMSMParameters,
+    SafetyMetrics,
+    compare_controllers,
     # Computation functions
     compute_accuracy_metrics,
     compute_dynamics_metrics,
     compute_efficiency_metrics,
-    compute_safety_metrics,
     compute_neuromorphic_metrics_from_spikes,
-    
+    compute_safety_metrics,
     # High-level functions
     run_benchmark,
-    compare_controllers,
-    
-    # Constants
-    DEFAULT_MOTOR,
-    MetricCategory,
 )
 
 __all__ = [
-    'PMSMParameters',
-    'AccuracyMetrics',
-    'DynamicsMetrics',
-    'EfficiencyMetrics',
-    'SafetyMetrics',
-    'NeuromorphicMetrics',
-    'BenchmarkResult',
-    'compute_accuracy_metrics',
-    'compute_dynamics_metrics',
-    'compute_efficiency_metrics',
-    'compute_safety_metrics',
-    'compute_neuromorphic_metrics_from_spikes',
-    'run_benchmark',
-    'compare_controllers',
-    'DEFAULT_MOTOR',
-    'MetricCategory',
+    "PMSMParameters",
+    "AccuracyMetrics",
+    "DynamicsMetrics",
+    "EfficiencyMetrics",
+    "SafetyMetrics",
+    "NeuromorphicMetrics",
+    "BenchmarkResult",
+    "compute_accuracy_metrics",
+    "compute_dynamics_metrics",
+    "compute_efficiency_metrics",
+    "compute_safety_metrics",
+    "compute_neuromorphic_metrics_from_spikes",
+    "run_benchmark",
+    "compare_controllers",
+    "DEFAULT_MOTOR",
+    "MetricCategory",
 ]

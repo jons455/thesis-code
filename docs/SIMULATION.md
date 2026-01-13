@@ -166,4 +166,3 @@ controller = gc.GemController.make(env, 'Cont-CC-PMSM-v0', decoupling=True, a=4)
 The validation archives are preserved in:
 - `pmsm-pem/export/archive/baseline_2024-12-18/`
 - `pmsm-pem/export/archive/verification_2025-12-18_1418/`
-

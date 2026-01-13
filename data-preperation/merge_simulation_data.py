@@ -1,13 +1,14 @@
+import glob
 import os
 import re
-import glob
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def parse_run_id(path: str) -> int:
     base = os.path.basename(path)
-    m = re.search(r'(\d+)', base)
+    m = re.search(r"(\d+)", base)
     return int(m.group(1)) if m else 0
 
 
@@ -95,14 +96,16 @@ def save_outputs(panel: pd.DataFrame, stacked: pd.DataFrame, out_dir: str):
     return panel_path_csv, stacked_path_csv
 
 
-def main(input_dir: str,
-         pattern: str = "sim_*.csv",
-         time_col: str = "time",
-         out_dir: str = None,
-         mode: str = "both"):
+def main(
+    input_dir: str,
+    pattern: str = "sim_*.csv",
+    time_col: str = "time",
+    out_dir: str = None,
+    mode: str = "both",
+):
     """
     Merge simulation CSV files into unified formats.
-    
+
     Modes:
       - "panel": Preserves original time + run_id per run
       - "stack": Concatenates runs into continuous time series
@@ -133,11 +136,19 @@ def main(input_dir: str,
 if __name__ == "__main__":
     import argparse
 
-    p = argparse.ArgumentParser(description="Merge simulation CSVs into panel and/or single stacked time series.")
+    p = argparse.ArgumentParser(
+        description="Merge simulation CSVs into panel and/or single stacked time series."
+    )
     p.add_argument("input_dir", type=str, help="Directory containing sim_*.csv")
-    p.add_argument("--pattern", type=str, default="sim_*.csv", help="Glob pattern (default: sim_*.csv)")
+    p.add_argument(
+        "--pattern", type=str, default="sim_*.csv", help="Glob pattern (default: sim_*.csv)"
+    )
     p.add_argument("--time-col", type=str, default="time", help="Time column name")
-    p.add_argument("--out-dir", type=str, default=None, help="Output directory (default: <input_dir>/merged)")
-    p.add_argument("--mode", type=str, choices=["panel", "stack", "both"], default="both", help="Output mode")
+    p.add_argument(
+        "--out-dir", type=str, default=None, help="Output directory (default: <input_dir>/merged)"
+    )
+    p.add_argument(
+        "--mode", type=str, choices=["panel", "stack", "both"], default="both", help="Output mode"
+    )
     args = p.parse_args()
     main(args.input_dir, args.pattern, args.time_col, args.out_dir, args.mode)

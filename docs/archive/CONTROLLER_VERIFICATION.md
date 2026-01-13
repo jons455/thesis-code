@@ -298,4 +298,3 @@ Der eigene PI-Controller mit MATLAB-Parametern zeigt signifikante Probleme:
 Die Äquivalenz zu MATLAB ist hiermit **verifiziert und archiviert**:
 - Baseline: `pmsm-pem/export/archive/baseline_2024-12-18/`
 - Verifikation: `pmsm-pem/export/archive/verification_2025-12-18_1418/`
-

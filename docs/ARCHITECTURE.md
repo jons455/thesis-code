@@ -1,7 +1,7 @@
 # System Architecture: Neuromorphic PMSM Control Benchmark
 
-**Date**: 2026-01-13  
-**Version**: WP2 Complete  
+**Date**: 2026-01-13
+**Version**: WP2 Complete
 **Branch**: `wp2-neurobench-integration`
 
 ---
@@ -38,7 +38,7 @@
 
 ### 2.1 Motor Simulation Layer (GEM)
 
-**Package**: `gym-electric-motor` (GEM)  
+**Package**: `gym-electric-motor` (GEM)
 **Environment**: `Cont-CC-PMSM-v0` (Continuous Current Control PMSM)
 
 ```python
@@ -62,7 +62,7 @@ limit_values = {
 
 ### 2.2 Environment Wrapper (PMSMEnv)
 
-**File**: `pmsm-pem/benchmark/pmsm_env.py`  
+**File**: `pmsm-pem/benchmark/pmsm_env.py`
 **Purpose**: Bridge between GEM and NeuroBench
 
 ```
@@ -97,7 +97,7 @@ class PIControllerAgent:
     Technical Optimum tuning:
     Kp = L / (2*Ts)
     Ki = R / (2*Ts)
-    
+
     With decoupling and anti-windup.
     """
     def __call__(self, state) -> action:
@@ -111,19 +111,19 @@ class PIControllerAgent:
 class SNNControllerAgent:
     """
     snnTorch LIF network.
-    
+
     Architecture (planned):
     - Input: 4 neurons (i_d, i_q, e_d, e_q)
     - Hidden: 64-128 LIF neurons
     - Output: 2 neurons (u_d, u_q from membrane potential)
-    
+
     Training: Imitation learning from PI trajectories.
     """
 ```
 
 ### 2.4 NeuroBench Integration
 
-**Package**: `neurobench` (installed from 2025_GC branch, 2026-01-13)  
+**Package**: `neurobench` (installed from 2025_GC branch, 2026-01-13)
 **Key Class**: `BenchmarkClosedLoop`
 
 ```python
@@ -285,4 +285,3 @@ Normalized Observation (to controller):
    - Run BenchmarkClosedLoop with SNN
    - Collect NeuroBench metrics (SyOps, sparsity)
    - Compare to PI baseline
-

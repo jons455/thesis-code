@@ -164,4 +164,3 @@ Für die praktische Arbeit wie Trainingsdatengenerierung und RL-Training sollte 
 ---
 
 *Letzte Aktualisierung: Dezember 2025*
-

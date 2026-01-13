@@ -50,4 +50,3 @@ Documentation of implementation progress for the neuromorphic PMSM controller be
 ---
 
 *Last updated: 2026-01-13*
-

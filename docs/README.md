@@ -1,6 +1,6 @@
 # Documentation
 
-**Project**: Neuromorphic PMSM Controller Benchmark  
+**Project**: Neuromorphic PMSM Controller Benchmark
 **Goal**: Systematic evaluation pipeline comparing PI vs SNN controllers for PMSM current control.
 
 ---
@@ -67,4 +67,3 @@ The `archive/` folder contains superseded documentation:
 - Edge Impulse guides (alternative approach, not used)
 - Old training guides (to be updated for snnTorch)
 - Original GEM docs (consolidated into SIMULATION.md)
-

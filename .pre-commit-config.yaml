@@ -1,0 +1,54 @@
+# Pre-commit hooks for PMSM Neuromorphic Benchmark
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(pmsm-matlab/|data-preperation/data/)
+      - id: end-of-file-fixer
+        exclude: ^(pmsm-matlab/|data-preperation/data/)
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Black - Code formatter
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: ['--config', 'pyproject.toml']
+        exclude: ^(pmsm-matlab/|venv/|data-preperation/venv/|pmsm-pem/venv/)
+
+  # Ruff - Fast Python linter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.14
+    hooks:
+      - id: ruff
+        args: ['--fix', '--config', 'pyproject.toml']
+        exclude: ^(pmsm-matlab/|venv/|data-preperation/venv/|pmsm-pem/venv/)
+
+  # MyPy - Static type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pandas-stubs
+          - types-PyYAML
+        args: ['--config-file', 'pyproject.toml']
+        exclude: ^(pmsm-matlab/|venv/|data-preperation/venv/|pmsm-pem/venv/|tests/)
+
+# CI configuration
+ci:
+  autofix_commit_msg: 'style: auto-fix by pre-commit hooks'
+  autoupdate_commit_msg: 'chore: update pre-commit hooks'
+

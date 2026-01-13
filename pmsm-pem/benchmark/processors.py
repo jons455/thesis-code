@@ -10,6 +10,8 @@ For the PI baseline, no processors are needed.
 """
 
 import numpy as np
+import torch
+from typing import Tuple, Optional
 
 
 def normalize_state(
@@ -19,7 +21,7 @@ def normalize_state(
 ) -> np.ndarray:
     """
     Normalize PMSM state for neural network input.
-
+    
     Parameters
     ----------
     state : np.ndarray
@@ -28,7 +30,7 @@ def normalize_state(
         Maximum current for normalization [A]
     u_max : float
         Maximum voltage for normalization [V]
-
+        
     Returns
     -------
     np.ndarray
@@ -46,14 +48,14 @@ def denormalize_action(
 ) -> np.ndarray:
     """
     Denormalize neural network output to voltage commands.
-
+    
     Parameters
     ----------
     action : np.ndarray
         Normalized action in range [-1, 1]
     u_max : float
         Maximum voltage [V]
-
+        
     Returns
     -------
     np.ndarray
@@ -66,7 +68,6 @@ def denormalize_action(
 # Spike Encoding (for future SNN implementation)
 # =============================================================================
 
-
 def rate_encode(
     value: float,
     min_val: float,
@@ -77,10 +78,10 @@ def rate_encode(
 ) -> np.ndarray:
     """
     Rate coding: Convert continuous value to spike probability.
-
+    
     The value is mapped to a firing rate, and spikes are generated
     stochastically based on that rate.
-
+    
     Parameters
     ----------
     value : float
@@ -93,7 +94,7 @@ def rate_encode(
         Maximum firing rate [Hz]
     dt : float
         Simulation timestep [s]
-
+        
     Returns
     -------
     np.ndarray
@@ -102,16 +103,16 @@ def rate_encode(
     # Normalize to [0, 1]
     normalized = (value - min_val) / (max_val - min_val)
     normalized = np.clip(normalized, 0, 1)
-
+    
     # Convert to firing rate
     rate = normalized * max_rate
-
+    
     # Spike probability for this timestep
     prob = rate * dt
-
+    
     # Generate spikes (population with same rate for now)
     spikes = np.random.random(num_neurons) < prob
-
+    
     return spikes.astype(np.float32)
 
 
@@ -122,16 +123,16 @@ def population_decode(
 ) -> float:
     """
     Decode spike train back to continuous value.
-
+    
     Simple mean-rate decoding from population activity.
-
+    
     Parameters
     ----------
     spikes : np.ndarray
         Spike counts or rates from decoding neurons
     min_val, max_val : float
         Range of output values
-
+        
     Returns
     -------
     float
@@ -141,3 +142,4 @@ def population_decode(
     mean_activity = np.mean(spikes)
     value = min_val + mean_activity * (max_val - min_val)
     return value
+

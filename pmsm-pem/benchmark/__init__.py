@@ -15,20 +15,19 @@ Usage:
 ------
     from benchmark import PMSMEnv, PIControllerAgent
     from neurobench.benchmarks import BenchmarkClosedLoop
-
+    
     env = PMSMEnv()
     agent = PIControllerAgent(env)
-
+    
     benchmark = BenchmarkClosedLoop(agent, env, ...)
     results = benchmark.run()
 """
 
-from .agents import PIControllerAgent, PIControllerTorchAgent, PIParameters
 from .pmsm_env import PMSMEnv
+from .agents import PIControllerAgent
 
 __all__ = [
-    "PMSMEnv",
-    "PIControllerAgent",
-    "PIControllerTorchAgent",
-    "PIParameters",
+    'PMSMEnv',
+    'PIControllerAgent',
 ]
+

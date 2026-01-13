@@ -98,7 +98,7 @@ i_d,i_q,n,u_d,u_q
 1. **During upload:**
    - **Label field:** Leave empty or enter "regression"
    - **Category:** Select "Training" / "Testing"
-   
+
 2. **After upload:**
    - Go to **Data acquisition** → Click on your uploaded file
    - Click three dots → **"Edit labels"** or **"Configure"**
@@ -327,4 +327,3 @@ u_q = constrain(u_q, -V_max, V_max);
 - Edge Impulse Documentation: https://docs.edgeimpulse.com/
 - TensorFlow Lite: https://www.tensorflow.org/lite
 - Neural Network Regression: Standard machine learning practice
-

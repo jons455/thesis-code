@@ -53,4 +53,3 @@ The FOC controller is implemented in Simulink (`foc_pmsm.slx`) and configured vi
 ## Data Processing
 
 See `data-preparation/README.md` for details on data merging and preprocessing.
-

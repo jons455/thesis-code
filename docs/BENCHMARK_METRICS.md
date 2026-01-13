@@ -2,8 +2,8 @@
 
 **Document Purpose**: Meeting preparation - Overview of metrics framework for neuromorphic motor control benchmark.
 
-**Date**: 2026-01-13  
-**Author**: Jonas  
+**Date**: 2026-01-13
+**Author**: Jonas
 **Status**: WP2 Complete, metrics framework ready
 
 ---
@@ -166,7 +166,7 @@ agent = PIControllerAgent()  # or: SNNControllerAgent(trained_model)
 benchmark = BenchmarkClosedLoop(
     agent=agent,
     environment=env,
-    metric_list=[[Footprint, ConnectionSparsity], 
+    metric_list=[[Footprint, ConnectionSparsity],
                  [ActivationSparsity, SynapticOperations]]
 )
 results = benchmark.run(nr_interactions=50, max_length=500)
@@ -240,4 +240,3 @@ Comparison to PI Baseline:
 | Neuromorphic | SyOps | ✅ | Pending SNN |
 | Neuromorphic | Sparsity | ✅ | Pending SNN |
 | Neuromorphic | Energy Est. | ✅ | Pending SNN |
-

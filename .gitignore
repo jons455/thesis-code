@@ -1,5 +1,6 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,6 +9,24 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.eggs/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Experiments & Logs
+experiments/
+logs/
+*.log
 
 # MATLAB
 *.asv
@@ -34,4 +53,3 @@ edge_impulse_data/
 # OS
 .DS_Store
 Thumbs.db
-
