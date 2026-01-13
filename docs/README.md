@@ -25,9 +25,12 @@ thesis-code/
 │   ├── agents.py          # PI baseline, SNN controllers
 │   └── run_benchmark.py   # Main benchmark script
 │
+├── metrics/               # Metrics framework (standalone)
+│   ├── benchmark_metrics.py  # ~1100 lines
+│   └── test_metrics.py
+│
 ├── pmsm-pem/              # GEM PMSM simulation
 │   ├── simulation/        # Simulation scripts
-│   ├── metrics/           # Metrics framework (~1100 lines)
 │   ├── validation/        # MATLAB comparison
 │   └── export/            # Generated data
 │

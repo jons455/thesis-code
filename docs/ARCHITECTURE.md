@@ -163,11 +163,13 @@ thesis-code/
 │   ├── processors.py           # Spike encoding (placeholder)
 │   └── run_benchmark.py        # Validation script
 │
+├── metrics/                     # Metrics framework (standalone)
+│   ├── __init__.py
+│   ├── benchmark_metrics.py    # ~1100 lines of metrics
+│   ├── test_metrics.py         # Unit tests
+│   └── METRICS_DOCUMENTATION.md
+│
 ├── pmsm-pem/                    # GEM PMSM simulation
-│   ├── metrics/                 # Metrics framework (~1100 lines)
-│   │   ├── benchmark_metrics.py
-│   │   └── METRICS_DOCUMENTATION.md
-│   │
 │   ├── simulation/              # GEM simulation scripts
 │   │   ├── simulate_pmsm.py    # GEM standard controller
 │   │   └── run_operating_point_tests.py
