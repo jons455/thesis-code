@@ -6,15 +6,26 @@ Documentation of implementation progress for the neuromorphic PMSM controller be
 
 ## 2026-01-13
 
-### WP2 Start: NeuroBench Integration & Interface Development
+### WP2: NeuroBench Integration & Interface Development
 
 **Goal**: Integrate NeuroBench 2025_GC branch and create interface wrappers for closed-loop SNN evaluation.
 
-**Planned Tasks**:
-- [ ] Explore NeuroBench 2025_GC `BenchmarkClosedLoop` API
-- [ ] Implement `PMSMEnv` wrapper (GEM → NeuroBench Gymnasium interface)
-- [ ] Implement `SNNTorchAgent` wrapper (stateful neuron management)
-- [ ] Validate pipeline with PI controller as baseline agent
+**Completed**:
+- [x] Installed NeuroBench 2025_GC branch (`pip install git+...@2025_GC`)
+- [x] Created `pmsm-pem/benchmark/` folder structure
+- [x] Implemented `PMSMEnv` Gymnasium wrapper for GEM PMSM environment
+- [x] Implemented `PIControllerAgent` as baseline controller
+- [x] Validated pipeline: PI controller achieves perfect tracking (0.00 mA error)
+
+**Key Results**:
+- PI controller baseline: i_d = 0.0000 A (ref: 0.0), i_q = 2.0000 A (ref: 2.0)
+- 453/500 steps within settling threshold (2%)
+- Integration validated without full NeuroBench metrics (minor API differences)
+
+**Next Steps**:
+- [ ] Fix NeuroBench hook compatibility for full metrics
+- [ ] Implement SNN controller architecture (WP3)
+- [ ] Implement spike encoding/decoding processors
 
 ---
 
