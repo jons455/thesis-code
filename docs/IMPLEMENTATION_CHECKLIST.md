@@ -18,38 +18,55 @@
 
 ---
 
-## WP2: NeuroBench Integration & Interface Development
+## WP2: NeuroBench Integration & Interface Development 🔄 IN PROGRESS
 
 ### 2.1 NeuroBench Setup
 - [ ] Install NeuroBench `2025_GC` branch with closed-loop support
-- [ ] Verify `BenchmarkClosedLoop` class is available
+- [ ] Verify `BenchmarkClosedLoop` class is available and working
 
-### 2.2 Environment Wrapper
-- [ ] Create `PMSMEnv` wrapper adapting GEM → NeuroBench Gymnasium interface
-  - [ ] Implement `reset()` returning observation
-  - [ ] Implement `step(action)` returning (obs, reward, done, truncated, info)
-  - [ ] Define observation space (i_d, i_q, i_d_ref, i_q_ref, omega, epsilon)
-  - [ ] Define action space (u_d, u_q normalized)
+### 2.2 Environment Wrapper ✅ COMPLETED
+- [x] Create `PMSMEnv` wrapper adapting GEM → NeuroBench Gymnasium interface
+  - [x] Implement `reset()` returning (observation, info)
+  - [x] Implement `step(action)` returning (obs, reward, done, truncated, info)
+  - [x] Define observation space: `[i_d, i_q, e_d, e_q]` normalized
+  - [x] Define action space: `[u_d, u_q]` normalized to [-1, 1]
+  - [x] GEM integration with Park/Clarke transforms
+  - [x] Episode data recording for analysis
+- [x] `PMSMConfig` dataclass with validated motor parameters
+- [x] `OperationsConfig` for NeuroBench compatibility
 
-### 2.3 Agent Wrapper
-- [ ] Create `SNNTorchAgent` wrapper for NeuroBench
+### 2.3 Agent Wrappers ✅ PI DONE / 🔲 SNN PENDING
+- [x] Create `PIControllerAgent` as reference baseline
+  - [x] Technical Optimum tuning (Kp, Ki from motor parameters)
+  - [x] Decoupling compensation (back-EMF)
+  - [x] Anti-windup on integrators
+  - [x] `__call__(state) -> action` interface
+  - [x] `reset()` for state initialization
+- [x] Create `PIControllerTorchAgent` (PyTorch wrapper for NeuroBench)
+- [ ] Create `SNNTorchAgent` wrapper (placeholder exists)
   - [ ] Implement stateful neuron management across timesteps
-  - [ ] Handle membrane potential persistence between `__call__` invocations
+  - [ ] Handle membrane potential persistence between calls
   - [ ] Implement `reset()` for neuron state initialization
 
-### 2.4 Pipeline Validation
-- [ ] Create `PIAgent` wrapper as reference
-- [ ] Run `BenchmarkClosedLoop` with PI-controller
+### 2.4 Pre/Post Processors ✅ BASIC FRAMEWORK DONE
+- [x] `normalize_state()` function
+- [x] `denormalize_action()` function
+- [x] `rate_encode()` spike encoding (for SNN)
+- [x] `population_decode()` spike decoding (for SNN)
+
+### 2.5 Pipeline Validation 🔄 PARTIAL
+- [x] Simple integration test (PI + PMSMEnv) - WORKING
+- [ ] Run `BenchmarkClosedLoop` with PI-controller successfully
 - [ ] Verify metrics match standalone simulation results
-- [ ] Confirm closed-loop pipeline works end-to-end
+- [ ] Confirm closed-loop pipeline works end-to-end with NeuroBench
 
 ---
 
-## WP3: SNN Training & Closed-Loop Validation
+## WP3: SNN Training & Closed-Loop Validation 🔲 NOT STARTED
 
 ### 3.1 Network Architecture
 - [ ] Design LIF network using snnTorch
-  - [ ] Input layer: 6 neurons (i_d, i_q, i_d_ref, i_q_ref, omega, epsilon)
+  - [ ] Input layer: 4 neurons (i_d, i_q, e_d, e_q)
   - [ ] Hidden layer(s): TBD neurons with LIF dynamics
   - [ ] Output layer: 2 neurons (u_d, u_q)
 - [ ] Implement rate coding for spike encoding
@@ -75,7 +92,7 @@
 
 ---
 
-## WP4: Systematic Evaluation & Baseline Comparison
+## WP4: Systematic Evaluation & Baseline Comparison 🔲 NOT STARTED
 
 ### 4.1 Benchmark Scenarios
 - [ ] **Step Response**: Multiple reference step sizes
@@ -87,7 +104,7 @@
 - [ ] **Disturbance Rejection**: Load torque steps
 
 ### 4.2 Controller Comparison
-- [ ] **PI Controller** (baseline) - already implemented
+- [x] **PI Controller** (baseline) - IMPLEMENTED
 - [ ] **ANN Controller** (optional dense baseline)
   - [ ] Same architecture as SNN but with ReLU activations
   - [ ] Train with same imitation learning approach
@@ -108,7 +125,7 @@
 
 ---
 
-## WP5: Export & Contribution Packaging
+## WP5: Export & Contribution Packaging 🔲 NOT STARTED
 
 ### 5.1 NIR Export (Stretch Goal)
 - [ ] Export trained SNN to NIR format
@@ -129,25 +146,35 @@
 
 ## Quick Reference: Key Files
 
-| Component | Location |
-|-----------|----------|
-| PMSM Simulation | `pmsm-pem/simulation/simulate_pmsm.py` |
-| Metrics Framework | `metrics/benchmark_metrics.py` |
-| Benchmark Env | `benchmark/pmsm_env.py` |
-| Agents | `benchmark/agents.py` |
-| Training Data | `export/train/*.csv` |
+| Component | Location | Status |
+|-----------|----------|--------|
+| PMSM Simulation | `pmsm-pem/simulation/simulate_pmsm.py` | ✅ |
+| Metrics Framework | `metrics/benchmark_metrics.py` | ✅ |
+| Benchmark Env | `benchmark/pmsm_env.py` | ✅ |
+| PI Agent | `benchmark/agents.py` | ✅ |
+| SNN Agent | `benchmark/agents.py` | 🔲 Placeholder |
+| Processors | `benchmark/processors.py` | ✅ Basic |
+| Benchmark Runner | `benchmark/run_benchmark.py` | 🔄 Partial |
+| Training Data | `export/train/*.csv` | ✅ |
 
 ---
 
 ## Progress Tracking
 
-| Work Package | Status | Est. Effort |
-|--------------|--------|-------------|
-| WP1 | ✅ Complete | - |
-| WP2 | 🔲 Not Started | Week 1 |
-| WP3 | 🔲 Not Started | Week 2 |
-| WP4 | 🔲 Not Started | Week 2-3 |
-| WP5 | 🔲 Not Started | Week 3 |
+| Work Package | Status | Completion |
+|--------------|--------|------------|
+| WP1 | ✅ Complete | 100% |
+| WP2 | 🔄 In Progress | ~70% |
+| WP3 | 🔲 Not Started | 0% |
+| WP4 | 🔲 Not Started | 0% |
+| WP5 | 🔲 Not Started | 0% |
+
+---
+
+## Next Priority Tasks
+
+1. **Install/verify NeuroBench 2025_GC branch**
+2. **Get `BenchmarkClosedLoop` working with PI controller**
+3. **Then move to WP3: SNN implementation**
 
 Last Updated: 2026-01-13
-
