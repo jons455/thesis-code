@@ -9,10 +9,11 @@ baseline through the NeuroBench BenchmarkClosedLoop framework.
 
 Usage:
 ------
-    python -m benchmark.run_benchmark
+    cd benchmark
+    python run_benchmark.py
     
-    # Or from pmsm-pem directory:
-    python benchmark/run_benchmark.py
+    # Or from project root:
+    python -m benchmark.run_benchmark
 """
 
 import sys
@@ -38,9 +39,9 @@ from neurobench.metrics.static import (
     ConnectionSparsity,
 )
 
-# Local imports
-from benchmark.pmsm_env import PMSMEnv, make_pmsm_env
-from benchmark.agents import PIControllerAgent, PIControllerTorchAgent
+# Local imports (benchmark is now a top-level package)
+from pmsm_env import PMSMEnv, make_pmsm_env
+from agents import PIControllerAgent, PIControllerTorchAgent
 
 
 def run_simple_test():

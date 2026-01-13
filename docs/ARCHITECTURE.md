@@ -156,24 +156,16 @@ results, avg_time = benchmark.run(nr_interactions=50, max_length=500)
 
 ```
 thesis-code/
-├── docs/
-│   ├── ARCHITECTURE.md          # This file
-│   ├── BENCHMARK_METRICS.md     # Metrics documentation
-│   ├── WORK_PROGRESS.md         # Progress log
-│   ├── CONTROLLER_VERIFICATION.md
-│   ├── GEM_KONFIGURATION.md
-│   └── GEM_LEARNINGS.md
+├── benchmark/                   # NeuroBench integration (standalone)
+│   ├── __init__.py
+│   ├── pmsm_env.py             # PMSMEnv Gymnasium wrapper
+│   ├── agents.py               # PI baseline, SNN placeholder
+│   ├── processors.py           # Spike encoding (placeholder)
+│   └── run_benchmark.py        # Validation script
 │
-├── pmsm-pem/                    # Main Python package
-│   ├── benchmark/               # NEW - NeuroBench integration
-│   │   ├── __init__.py
-│   │   ├── pmsm_env.py         # PMSMEnv Gymnasium wrapper
-│   │   ├── agents.py           # PI baseline, SNN placeholder
-│   │   ├── processors.py       # Spike encoding (placeholder)
-│   │   └── run_benchmark.py    # Validation script
-│   │
-│   ├── metrics/                 # Existing metrics framework
-│   │   ├── benchmark_metrics.py # ~1100 lines
+├── pmsm-pem/                    # GEM PMSM simulation
+│   ├── metrics/                 # Metrics framework (~1100 lines)
+│   │   ├── benchmark_metrics.py
 │   │   └── METRICS_DOCUMENTATION.md
 │   │
 │   ├── simulation/              # GEM simulation scripts
@@ -191,9 +183,17 @@ thesis-code/
 │   │
 │   └── venv/                    # Python virtual environment
 │
-└── pmsm-matlab/                 # MATLAB reference implementation
-    ├── foc_pmsm.slx            # Simulink model
-    └── export/validation/       # MATLAB validation data
+├── pmsm-matlab/                 # MATLAB reference implementation
+│   ├── foc_pmsm.slx            # Simulink model
+│   └── export/validation/       # MATLAB validation data
+│
+└── docs/                        # Documentation
+    ├── README.md               # Docs overview
+    ├── ARCHITECTURE.md         # This file
+    ├── BENCHMARK_METRICS.md    # Metrics documentation
+    ├── SIMULATION.md           # GEM configuration & validation
+    ├── WORK_PROGRESS.md        # Progress log
+    └── archive/                # Old/superseded docs
 ```
 
 ---
