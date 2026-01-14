@@ -1,7 +1,7 @@
 # System Architecture: Neuromorphic PMSM Control Benchmark
 
-**Date**: 2026-01-13
-**Version**: WP2 Complete
+**Date**: 2026-01-14
+**Version**: WP2.1 - Processor Architecture
 **Branch**: `wp2-neurobench-integration`
 
 ---
@@ -9,28 +9,46 @@
 ## 1. High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           BENCHMARK PIPELINE                                     │
-│                                                                                  │
-│  ┌────────────────┐    ┌─────────────────┐    ┌─────────────────┐              │
-│  │   Reference    │    │   Controller    │    │     Motor       │              │
-│  │   Generator    │───▶│   (PI / SNN)    │───▶│   Simulation    │              │
-│  │                │    │                 │    │     (GEM)       │              │
-│  └────────────────┘    └────────▲────────┘    └────────┬────────┘              │
-│                                 │                      │                        │
-│                                 │    Feedback Loop     │                        │
-│                                 └──────────────────────┘                        │
-│                                                                                  │
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                           BENCHMARK PIPELINE                                    │
+│                                                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                         METRICS COLLECTION                               │   │
+│  │                              EPISODE LOOP                                │   │
+│  │                                                                          │   │
+│  │   state ──▶ [PreProc] ──▶ Agent ──▶ [PostProc] ──▶ action               │   │
+│  │     ▲                                                  │                 │   │
+│  │     │            ┌──────────────────────┐              │                 │   │
+│  │     └────────────│    ENVIRONMENT       │◀─────────────┘                 │   │
+│  │                  │    (GEM/PMSMEnv)     │                                │   │
+│  │                  └──────────────────────┘                                │   │
+│  │                             │                                            │   │
+│  │                             ▼                                            │   │
+│  │                  ┌──────────────────────┐                                │   │
+│  │                  │   METRICS RECORDER   │                                │   │
+│  │                  └──────────────────────┘                                │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                      │                                          │
+│                                      ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │                         METRICS COMPUTATION                              │   │
 │  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐                │   │
 │  │  │Control Metrics│  │ Neuromorphic  │  │   NeuroBench  │                │   │
 │  │  │ (ITAE, etc.)  │  │  (SyOps, etc) │  │   Standard    │                │   │
 │  │  └───────────────┘  └───────────────┘  └───────────────┘                │   │
 │  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                 │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Key Insight: Layered Architecture
+
+The benchmark separates concerns into distinct layers:
+- **Preprocessor**: Transforms env state → agent input (e.g., delta encoding)
+- **Agent**: The controller being benchmarked (PI, SNN, ANN)
+- **Postprocessor**: Transforms agent output → env action (e.g., integrator)
+- **Recorder**: Logs data for metrics computation
+
+This allows mixing and matching different controllers with different encoding schemes.
 
 ---
 
@@ -105,23 +123,144 @@ class PIControllerAgent:
         # action: [u_d, u_q] normalized
 ```
 
-#### SNN Controller (To be implemented in WP3)
+#### SNN Controller (Hybrid SNN-Integrator Architecture)
+
+The SNN uses a **hybrid architecture** to solve the steady-state problem:
+- **SNN**: Learns fast dynamics (like P/D terms) - fires when error *changes*
+- **External Integrator**: Provides memory (like I term) - holds voltage at steady state
 
 ```python
-class SNNControllerAgent:
+class HybridSNNAgent:
     """
-    snnTorch LIF network.
-
-    Architecture (planned):
-    - Input: 4 neurons (i_d, i_q, e_d, e_q)
-    - Hidden: 64-128 LIF neurons
-    - Output: 2 neurons (u_d, u_q from membrane potential)
-
+    Hybrid SNN-Integrator for PMSM current control.
+    
+    The SNN predicts 'kicks' (Δu per timestep).
+    The integrator accumulates these into steady voltage.
+    
     Training: Imitation learning from PI trajectories.
+    Target: Δu = u[t] - u[t-1] (NOT du/dt!)
     """
+    
+    def __init__(self, snn_model):
+        self.snn = snn_model  # snnTorch LIF network
+        # Integrator state handled by PostProcessor
+    
+    def __call__(self, state) -> np.ndarray:
+        # state: [i_d, i_q, Δe_d, Δe_q] (delta-encoded by PreProcessor)
+        # output: [kick_d, kick_q] (integrated by PostProcessor)
+        return self.snn(state)
 ```
 
-### 2.4 NeuroBench Integration
+**Why Hybrid?**
+| Problem | Pure SNN Issue | Hybrid Solution |
+|---------|---------------|-----------------|
+| Steady state | Spikes decay → output drifts | Integrator holds voltage |
+| Sparsity | Always spiking to maintain output | Silent at steady state (Δe=0) |
+| Training | Must learn absolute values | Only learns changes |
+
+### 2.4 Processor Layer (Pre/Post Processing)
+
+**File**: `benchmark/processors.py`
+
+Processors transform data between the environment and agent. This enables:
+- Different encoding schemes (direct, delta, spike)
+- Controller-agnostic benchmark pipeline
+- Easy experimentation with architectures
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         PROCESSOR CHAIN                                  │
+│                                                                          │
+│  Environment           Preprocessor           Agent           Postprocessor          Environment
+│  [i_d,i_q,e_d,e_q] ──▶ DeltaEncoding ──▶ SNN ──▶ Integrator ──▶ [u_d,u_q]
+│                        [i_d,i_q,Δe_d,Δe_q]    [kick_d,kick_q]           
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Preprocessors
+
+| Preprocessor | Input | Output | Use Case |
+|--------------|-------|--------|----------|
+| `IdentityPreprocessor` | state | state | PI controller |
+| `DeltaEncodingPreprocessor` | [i,e] | [i,Δe] | Hybrid SNN |
+| `SpikeEncodingPreprocessor` | continuous | spikes | Fully spiking SNN |
+
+#### Postprocessors
+
+| Postprocessor | Input | Output | Use Case |
+|---------------|-------|--------|----------|
+| `IdentityPostprocessor` | [u_d,u_q] | [u_d,u_q] | PI controller |
+| `IntegratorPostprocessor` | [kick_d,kick_q] | [u_d,u_q] | Hybrid SNN |
+| `SpikeDecodingPostprocessor` | spikes | [u_d,u_q] | Fully spiking SNN |
+
+#### Configuration
+
+```python
+@dataclass
+class ProcessorConfig:
+    """Centralized configuration to avoid magic numbers."""
+    
+    # Motor limits
+    i_max: float = 10.8      # Maximum current [A]
+    u_max: float = 48.0      # Maximum voltage [V]
+    
+    # Timing
+    dt: float = 1e-4         # Control timestep [s]
+    
+    # Preprocessing
+    max_delta: float = None  # Optional delta clamping
+    
+    # Postprocessing (Integrator)
+    anti_windup: bool = True
+    
+    # Spike encoding
+    num_neurons_per_input: int = 10
+    max_spike_rate: float = 100.0  # Hz
+```
+
+### 2.5 Design Decisions & Gotchas
+
+#### ⚠️ Gotcha 1: Integrator Time Trap
+
+The SNN must be trained to predict **Δu per timestep**, NOT du/dt:
+
+| SNN Output | Training Target | Postprocessor |
+|------------|-----------------|---------------|
+| **Δu per step** ✅ | `u[t] - u[t-1]` | `u_acc += kick` |
+| du/dt ❌ | `(u[t] - u[t-1]) / dt` | `u_acc += kick * dt` |
+
+**Decision**: Use Δu per step. Simpler, avoids dt dependency.
+
+#### ⚠️ Gotcha 2: First Step Shock
+
+With delta encoding, the first timestep has a massive delta if reference jumps:
+```
+t=0: error = 0
+t=1: error = 10A (step reference)
+delta = 10A - 0 = 10A  ← Huge spike!
+```
+
+**Decision**: Accept it (physically correct). Add optional `max_delta` clamping for debugging.
+
+#### ⚠️ Gotcha 3: Anti-Windup
+
+The integrator must not accumulate beyond voltage limits:
+
+```python
+# Correct: Clamp accumulator, not just output
+if abs(self.u_acc) >= 1.0:
+    self.u_acc = np.clip(self.u_acc, -1.0, 1.0)
+```
+
+#### ✅ Decision: Data Copy
+
+Always use `.copy()` when recording state arrays:
+```python
+self.states.append(state.copy())  # ✅ Not state (mutable reference)
+```
+
+### 2.7 NeuroBench Integration
 
 **Package**: `neurobench` (installed from 2025_GC branch, 2026-01-13)
 **Key Class**: `BenchmarkClosedLoop`
@@ -150,6 +289,37 @@ benchmark = BenchmarkClosedLoop(
 results, avg_time = benchmark.run(nr_interactions=50, max_length=500)
 ```
 
+### 2.8 Controller Configurations
+
+Different controllers require different processor chains:
+
+| Controller | Preprocessor | Postprocessor | Notes |
+|------------|--------------|---------------|-------|
+| PI (baseline) | Identity | Identity | Direct state→action |
+| Hybrid SNN | DeltaEncoding | Integrator | Δe input, kick output |
+| Fully Spiking SNN | SpikeEncoding | SpikeDecoding | All-spike pathway |
+| ANN (baseline) | Identity | Identity | Fair DL comparison |
+
+Example configurations:
+
+```python
+# PI Controller - no processing
+runner_pi = EpisodeRunner(
+    env=PMSMEnv(),
+    agent=PIControllerAgent(),
+    preprocessor=IdentityPreprocessor(),
+    postprocessor=IdentityPostprocessor(),
+)
+
+# Hybrid SNN - delta encoding + integrator
+runner_snn = EpisodeRunner(
+    env=PMSMEnv(),
+    agent=load_snn('hybrid_snn.pt'),
+    preprocessor=DeltaEncodingPreprocessor(config),
+    postprocessor=IntegratorPostprocessor(config),
+)
+```
+
 ---
 
 ## 3. File Structure
@@ -159,8 +329,10 @@ thesis-code/
 ├── benchmark/                   # NeuroBench integration (standalone)
 │   ├── __init__.py
 │   ├── pmsm_env.py             # PMSMEnv Gymnasium wrapper
-│   ├── agents.py               # PI baseline, SNN placeholder
-│   ├── processors.py           # Spike encoding (placeholder)
+│   ├── agents.py               # PI baseline, SNN wrapper
+│   ├── processors.py           # Pre/Post processors (encoding, integrator)
+│   ├── runner.py               # EpisodeRunner orchestration
+│   ├── config.py               # ProcessorConfig, BenchmarkConfig
 │   └── run_benchmark.py        # Validation script
 │
 ├── metrics/                     # Metrics framework (standalone)
@@ -168,6 +340,12 @@ thesis-code/
 │   ├── benchmark_metrics.py    # ~1100 lines of metrics
 │   ├── test_metrics.py         # Unit tests
 │   └── METRICS_DOCUMENTATION.md
+│
+├── snn/                         # SNN models (external training)
+│   ├── __init__.py
+│   ├── models.py               # snnTorch network definitions
+│   ├── dataset.py              # PyTorch Dataset for PI trajectories
+│   └── train.py                # Training script (imitation learning)
 │
 ├── pmsm-pem/                    # GEM PMSM simulation
 │   ├── simulation/              # GEM simulation scripts
@@ -202,10 +380,11 @@ thesis-code/
 
 ## 4. Data Flow Diagram
 
+### 4.1 Environment Layer (PMSMEnv)
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CONTROL LOOP                                    │
-│                          (runs at 10 kHz)                                    │
+│                              ENVIRONMENT LAYER                               │
 │                                                                              │
 │   ┌─────────┐   ┌──────────────────────────────────────────────────────┐   │
 │   │Reference│   │                    PMSMEnv                            │   │
@@ -216,22 +395,78 @@ thesis-code/
 │   └─────────┘   │  └────┬────┘    └─────▲──────┘    └──────┬──────┘   │   │
 │                 │       │               │                   │          │   │
 │                 │       ▼               │                   ▼          │   │
-│                 │  ┌─────────┐    ┌─────┴──────┐    ┌─────────────┐   │   │
-│                 │  │Normalize│    │ Controller │    │   Extract   │   │   │
-│                 │  │  State  │───▶│  (PI/SNN)  │    │   State     │   │   │
-│                 │  │         │    │            │    │             │   │   │
-│                 │  └─────────┘    └────────────┘    └─────────────┘   │   │
-│                 └──────────────────────────────────────────────────────┘   │
+│                 │  ┌─────────┐         │             ┌─────────────┐   │   │
+│                 │  │Normalize│         │             │   Extract   │   │   │
+│                 │  │  State  │         │             │   State     │   │   │
+│                 │  └────┬────┘         │             └──────┬──────┘   │   │
+│                 └───────│──────────────│────────────────────│──────────┘   │
+│                         │              │                    │               │
+│                         ▼              │                    ▼               │
+│                    [i_d,i_q,e_d,e_q]   │           GEM state vector        │
+│                                        │                                    │
+└────────────────────────────────────────│────────────────────────────────────┘
+                                         │
+                                         ▼
+                                  [u_d, u_q] action
+```
+
+### 4.2 Processor Layer (Benchmark Pipeline)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              PROCESSOR LAYER                                 │
+│                          (wraps Environment + Agent)                         │
+│                                                                              │
+│   ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐     │
+│   │  PMSMEnv   │    │   PRE-     │    │   AGENT    │    │   POST-    │     │
+│   │  (state)   │───▶│ PROCESSOR  │───▶│  (PI/SNN)  │───▶│ PROCESSOR  │──┐  │
+│   │            │    │            │    │            │    │            │  │  │
+│   └────────────┘    └────────────┘    └────────────┘    └────────────┘  │  │
+│         ▲                                                                │  │
+│         │                         action                                 │  │
+│         └────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│   Example: Hybrid SNN Pipeline                                              │
+│   ┌─────────────┐   ┌──────────────┐   ┌──────────┐   ┌──────────────┐     │
+│   │[i_d,i_q,    │   │ DeltaEncoding│   │   SNN    │   │  Integrator  │     │
+│   │ e_d,e_q]    │──▶│ [i_d,i_q,    │──▶│ kick_d,  │──▶│  u_d,u_q     │     │
+│   │             │   │  Δe_d,Δe_q]  │   │ kick_q   │   │  (accumulated)│    │
+│   └─────────────┘   └──────────────┘   └──────────┘   └──────────────┘     │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
 
-State Vector (from GEM):
+### 4.3 State/Action Vectors
+
+**GEM State Vector** (14 values):
+```
 [omega, torque, i_a, i_b, i_c, i_sd, i_sq, u_a, u_b, u_c, u_sd, u_sq, epsilon, u_sup]
    0      1      2    3    4     5     6    7    8    9    10    11     12      13
+```
 
-Normalized Observation (to controller):
+**PMSMEnv Observation** (4 values, normalized):
+```
 [i_d/i_max, i_q/i_max, e_d/i_max, e_q/i_max]
     0           1          2          3
+```
+
+**Preprocessed State** (depends on preprocessor):
+```
+Identity:      [i_d, i_q, e_d, e_q]      ← for PI controller
+DeltaEncoding: [i_d, i_q, Δe_d, Δe_q]    ← for Hybrid SNN
+SpikeEncoding: [spikes × 4×N neurons]    ← for Fully Spiking SNN
+```
+
+**Agent Output** (depends on agent type):
+```
+PI/ANN:     [u_d, u_q]         ← direct voltage
+Hybrid SNN: [kick_d, kick_q]    ← voltage change per step
+Spiking:    [spikes × 2×M]      ← spike trains
+```
+
+**Postprocessed Action** (to environment):
+```
+Always: [u_d, u_q] normalized to [-1, 1]
 ```
 
 ---
@@ -269,19 +504,73 @@ Normalized Observation (to controller):
 
 ---
 
-## 7. Next Steps (WP3)
+## 7. Next Steps
 
-1. **SNN Architecture Design**
-   - Input: 4 neurons (direct or rate-coded)
-   - Hidden: 64-128 LIF neurons (snnTorch)
-   - Output: 2 neurons (membrane potential → voltage)
+### 7.1 Implement Processor Layer (Priority 1)
 
-2. **Training Pipeline**
-   - Load PI trajectories from `export/train/` (580+ files)
-   - Supervised imitation learning (MSE loss)
-   - Validate closed-loop stability
+**Status**: Design complete, implementation pending
 
-3. **Benchmark Execution**
-   - Run BenchmarkClosedLoop with SNN
-   - Collect NeuroBench metrics (SyOps, sparsity)
-   - Compare to PI baseline
+| File | Purpose | Status |
+|------|---------|--------|
+| `benchmark/config.py` | ProcessorConfig dataclass | 🔜 TODO |
+| `benchmark/processors.py` | Pre/Postprocessors | 🔜 TODO (expand existing) |
+| `benchmark/runner.py` | EpisodeRunner class | 🔜 TODO |
+
+### 7.2 SNN Development (WP3 - External)
+
+**Note**: SNN training is separate from the benchmark pipeline.
+The pipeline accepts any pre-trained `.pt` model file.
+
+| Component | Description | Status |
+|-----------|-------------|--------|
+| SNN Architecture | Hybrid SNN-Integrator (snnTorch LIF) | 🔜 Design done |
+| Training Target | Δu = u[t] - u[t-1] per timestep | ✅ Decided |
+| Training Data | 580+ PI trajectories in `export/train/` | ✅ Available |
+| Training Script | `snn/train.py` | 🔜 TODO |
+
+### 7.3 Benchmark Execution (WP4)
+
+Once the processor layer and a trained SNN are available:
+
+1. **Configure benchmark scenarios**
+   - Step responses at various operating points
+   - Disturbance rejection tests
+   - Load sweep tests
+
+2. **Run all controllers**
+   - PI baseline (IdentityPreprocessor + IdentityPostprocessor)
+   - Hybrid SNN (DeltaEncodingPreprocessor + IntegratorPostprocessor)
+   - Optional: ANN baseline (same as PI, fair comparison)
+
+3. **Collect metrics**
+   - Control quality: ITAE, IAE, RMSE, rise time, settling time, overshoot
+   - Neuromorphic: SyOps, activation sparsity, energy estimate
+   - NeuroBench standard metrics
+
+4. **Generate comparison report**
+   - Tables: PI vs SNN vs ANN
+   - Plots: step responses, Pareto fronts (accuracy vs efficiency)
+
+---
+
+## 8. Design Principles
+
+1. **Separation of Concerns**
+   - Environment layer: Physics simulation only
+   - Processor layer: Encoding/decoding only
+   - Agent layer: Control logic only
+   - Metrics layer: Measurement only
+
+2. **Controller Agnostic**
+   - Any controller implementing `__call__(state) → action` and `reset()` works
+   - Processors are swappable for experimentation
+
+3. **Training vs Benchmarking Split**
+   - Training (offline): Uses DataLoader, generates `.pt` files
+   - Benchmarking (online): Uses EpisodeRunner, measures performance
+   - Same Agent class works in both contexts
+
+4. **Reproducibility**
+   - All configurations in dataclasses
+   - Seeds for RNG in environment and encoding
+   - Logged episode data for post-hoc analysis

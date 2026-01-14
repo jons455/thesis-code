@@ -53,6 +53,46 @@ DEFAULT_MOTOR = PMSMParameters()
 
 
 # =============================================================================
+# BENCHMARK CONFIGURATION
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class BenchmarkConfig:
+    """
+    Standard benchmark configuration for comparable metrics.
+
+    CRITICAL: All benchmarks MUST use the same episode length for
+    ITAE and Total Variation metrics to be comparable!
+    """
+
+    # Standard episode length (1.0 second for comparable ITAE)
+    episode_duration: float = 1.0  # [s]
+
+    # Control frequency
+    control_frequency: float = 10000.0  # [Hz] (10 kHz)
+
+    # Derived parameters
+    @property
+    def dt(self) -> float:
+        """Control timestep [s]."""
+        return 1.0 / self.control_frequency
+
+    @property
+    def num_steps(self) -> int:
+        """Number of steps per episode."""
+        return int(self.episode_duration * self.control_frequency)
+
+
+# Default benchmark configuration
+DEFAULT_BENCHMARK_CONFIG = BenchmarkConfig()
+
+# Convenience constants
+STANDARD_EPISODE_DURATION = 1.0  # [s] - Use this for all benchmarks!
+STANDARD_NUM_STEPS = 10000  # 1.0s @ 10kHz
+
+
+# =============================================================================
 # METRIC CATEGORIES (following ISO/IEC 25010 adapted for control)
 # =============================================================================
 
@@ -630,6 +670,94 @@ def compute_safety_metrics(
 
 
 # =============================================================================
+# 4.5 STABILITY METRICS (Control Smoothness)
+# =============================================================================
+
+
+@dataclass
+class StabilityMetrics:
+    """
+    Control smoothness and stability metrics.
+
+    The key metric here is Total Variation (TV), which measures voltage
+    "chattering" - a critical weakness of SNN controllers.
+
+    An SNN might achieve perfect tracking (low RMSE) but oscillate the
+    voltage rapidly, causing:
+    - Torque ripple and mechanical vibration
+    - Audible noise
+    - Bearing and gearbox wear
+    - Wasted switching energy
+
+    Note: Motor inductance acts as low-pass filter with τ = L/R ≈ 2.6ms
+    (f_cutoff ≈ 61 Hz). Chattering above 60 Hz is electrically filtered
+    but still wastes energy.
+    """
+
+    # Total Variation (normalized by episode length)
+    TV_u_d: float = 0.0  # Total variation of u_d [V/step]
+    TV_u_q: float = 0.0  # Total variation of u_q [V/step]
+    TV_total: float = 0.0  # Combined TV [V/step]
+
+    # Raw Total Variation (not normalized)
+    TV_u_d_raw: float = 0.0  # Raw TV of u_d [V]
+    TV_u_q_raw: float = 0.0  # Raw TV of u_q [V]
+
+    # Comparison to baseline (if available)
+    TV_ratio: float = 1.0  # TV_snn / TV_pi (>1 means more chattering)
+
+    # High-frequency content (optional analysis)
+    hf_power_ratio: float = 0.0  # Power above motor cutoff frequency
+
+
+def compute_stability_metrics(
+    u_d: np.ndarray,
+    u_q: np.ndarray,
+    baseline_tv: float = None,
+) -> StabilityMetrics:
+    """
+    Compute control smoothness metrics from voltage data.
+
+    Parameters
+    ----------
+    u_d, u_q : np.ndarray
+        Voltage commands [V] (can be normalized or physical)
+    baseline_tv : float, optional
+        Total variation from baseline controller (e.g., PI) for comparison
+
+    Returns
+    -------
+    StabilityMetrics
+        Computed stability metrics
+    """
+    # Total Variation: sum of absolute differences
+    tv_u_d_raw = float(np.sum(np.abs(np.diff(u_d))))
+    tv_u_q_raw = float(np.sum(np.abs(np.diff(u_q))))
+
+    # Normalized by number of steps (average change per step)
+    n_steps = len(u_d)
+    tv_u_d = tv_u_d_raw / n_steps if n_steps > 0 else 0.0
+    tv_u_q = tv_u_q_raw / n_steps if n_steps > 0 else 0.0
+
+    # Combined (magnitude of voltage change vector)
+    tv_total = np.sqrt(tv_u_d**2 + tv_u_q**2)
+
+    # Ratio to baseline
+    tv_ratio = 1.0
+    if baseline_tv is not None and baseline_tv > 0:
+        tv_ratio = tv_total / baseline_tv
+
+    return StabilityMetrics(
+        TV_u_d=tv_u_d,
+        TV_u_q=tv_u_q,
+        TV_total=tv_total,
+        TV_u_d_raw=tv_u_d_raw,
+        TV_u_q_raw=tv_u_q_raw,
+        TV_ratio=tv_ratio,
+    )
+
+
+# =============================================================================
 # 5. NEUROMORPHIC-SPECIFIC METRICS
 # =============================================================================
 
@@ -917,6 +1045,7 @@ class BenchmarkResult:
     dynamics: DynamicsMetrics = field(default_factory=DynamicsMetrics)
     efficiency: EfficiencyMetrics = field(default_factory=EfficiencyMetrics)
     safety: SafetyMetrics = field(default_factory=SafetyMetrics)
+    stability: StabilityMetrics = field(default_factory=StabilityMetrics)
     neuromorphic: Optional[NeuromorphicMetrics] = None
 
     def to_dict(self) -> dict[str, any]:
@@ -930,7 +1059,7 @@ class BenchmarkResult:
         }
 
         # Add all metrics from dataclasses
-        for category_name in ["accuracy", "dynamics", "efficiency", "safety"]:
+        for category_name in ["accuracy", "dynamics", "efficiency", "safety", "stability"]:
             category = getattr(self, category_name)
             for field_name, value in category.__dict__.items():
                 result[f"{category_name}_{field_name}"] = value
@@ -967,6 +1096,10 @@ class BenchmarkResult:
             "SAFETY",
             f"  Current Violations: {self.safety.current_violations} ({self.safety.current_violation_rate:.2f}%)",
             f"  Max Current:      {self.efficiency.i_magnitude_max:.2f} A (limit: {self.motor_params.I_max} A)",
+            "",
+            "STABILITY (Control Smoothness)",
+            f"  Total Variation:  {self.stability.TV_total:.4f} V/step",
+            f"  TV Ratio vs PI:   {self.stability.TV_ratio:.2f}×",
         ]
 
         if self.neuromorphic is not None:
@@ -1035,6 +1168,7 @@ def run_benchmark(
     dynamics = compute_dynamics_metrics(time, i_d, i_q, i_d_ref, i_q_ref, step_time)
     efficiency = compute_efficiency_metrics(time, i_d, i_q, u_d, u_q, n, motor)
     safety = compute_safety_metrics(time, i_d, i_q, u_d, u_q, motor)
+    stability = compute_stability_metrics(u_d, u_q)
 
     return BenchmarkResult(
         controller_name=controller_name,
@@ -1048,6 +1182,7 @@ def run_benchmark(
         dynamics=dynamics,
         efficiency=efficiency,
         safety=safety,
+        stability=stability,
     )
 
 

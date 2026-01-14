@@ -1,242 +1,355 @@
-# Benchmark Metrics for Neuromorphic PMSM Control
+# Benchmark Metrics for Neuromorphic PMSM Current Control
 
-**Document Purpose**: Meeting preparation - Overview of metrics framework for neuromorphic motor control benchmark.
+**Document Purpose**: Defines the metrics framework for comparing SNN vs PI controllers.
 
-**Date**: 2026-01-13
+**Date**: 2026-01-14
 **Author**: Jonas
-**Status**: WP2 Complete, metrics framework ready
+**Status**: Final Framework
 
 ---
 
 ## Executive Summary
 
-This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM current control against conventional PI controllers. We combine:
+This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM current control against conventional PI controllers.
 
-1. **Control Engineering Metrics** - How well does it control the motor?
-2. **Neuromorphic Computing Metrics** - How efficiently does the SNN compute?
+**The Goal**: Find the best trade-off between **Control Fidelity** and **Neuromorphic Efficiency**.
 
-The goal is to answer: *Can SNNs match PI control quality while being more computationally efficient?*
+**The Model**: A current controller that learns the mapping:
+```
+(i_ref, i_ist, n) → (u_d, u_q)
+```
+
+**Standardization**: All episodes run for **1.0 second** (10,000 steps at 10 kHz) to ensure comparable metrics.
 
 ---
 
-## 1. Control Performance Metrics
+## Metrics Overview
 
-These metrics evaluate **Regelgüte** (control quality) - standard in control engineering.
-
-### 1.1 Accuracy Metrics (Tracking Error)
-
-| Metric | Formula | Unit | What it measures |
-|--------|---------|------|------------------|
-| **ITAE** | ∫ t·\|e(t)\| dt | A·s² | Penalizes errors that persist over time |
-| **IAE** | ∫ \|e(t)\| dt | A·s | Total accumulated error |
-| **ISE** | ∫ e(t)² dt | A²·s | Penalizes large errors heavily |
-| **MAE** | (1/N) Σ\|eₖ\| | A | Average absolute error |
-| **RMSE** | √((1/N) Σeₖ²) | A | Root mean squared error |
-| **Steady-State Error** | mean(e) for t > t_settle | A | Final tracking accuracy |
-
-**Why ITAE?** It's the standard for controller benchmarking because it penalizes both slow settling AND persistent errors.
-
-### 1.2 Dynamic Response Metrics
-
-| Metric | Definition | Unit | Target |
-|--------|------------|------|--------|
-| **Rise Time (tᵣ)** | Time from 10% to 90% of final value | ms | < 5 ms |
-| **Settling Time (tₛ)** | Time to stay within ±2% of reference | ms | < 10 ms |
-| **Overshoot (Mₚ)** | Peak value above reference | % | < 10% |
-| **Peak Time** | Time to reach peak | ms | - |
-
-### 1.3 Efficiency Metrics (Electrical)
-
-| Metric | Formula | Unit | What it measures |
-|--------|---------|------|------------------|
-| **Copper Losses** | I²R integrated | W or J | Energy lost in windings |
-| **Electrical Power** | u·i integrated | W | Total power consumed |
-| **Efficiency** | P_mech / P_elec | % | Motor efficiency |
-
-### 1.4 Safety Metrics
-
-| Metric | What it measures |
-|--------|------------------|
-| **Current Violations** | Times \|I\| > I_max |
-| **Voltage Violations** | Times \|U\| > U_max |
-| **di/dt Violations** | Excessive current rate of change |
-| **Instability Index** | Oscillation detection |
+| Category | Metric | Unit | Purpose |
+|----------|--------|------|---------|
+| **Accuracy** | RMSE | A | Overall tracking quality |
+| **Accuracy** | ITAE | A·s² | Detect steady-state drift (SNN weakness) |
+| **Dynamics** | Settling Time | ms | Controller agility |
+| **Dynamics** | Overshoot | % | Safety check |
+| **Stability** | Control Smoothness (TV) | V/step | Detect chattering (SNN weakness) |
+| **Neuromorphic** | SyOps/step | ops | Computational cost proxy |
+| **Neuromorphic** | Activation Sparsity | % | Efficiency measure |
 
 ---
 
-## 2. Neuromorphic Computing Metrics
+## 1. Control Quality Metrics (Accuracy)
 
-These metrics quantify the **computational efficiency** of SNNs - following the NeuroBench standard [Yik et al., 2024].
+*Does the motor actually do what it is told?*
 
-### 2.1 Synaptic Operations (SyOps)
+### 1.1 RMSE (Root Mean Square Error)
 
-**The key metric for neuromorphic efficiency.**
+**The primary tracking accuracy metric.**
 
-```
-SyOps = Σ (spikes × fan-out connections)
-```
-
-| Metric | Unit | Description |
-|--------|------|-------------|
-| **Total SyOps** | count | Total spike-triggered accumulations |
-| **SyOps/timestep** | count/step | Average per control cycle |
-| **SyOps/second** | SyOps/s | Rate of operations |
-
-**Why SyOps matter:**
-- In ANNs: Every neuron computes every cycle → O(n²) operations
-- In SNNs: Only neurons that spike trigger computation → O(k·n) where k << n
-- Lower SyOps = Lower energy on neuromorphic hardware
-
-### 2.2 Sparsity Metrics
-
-| Metric | Formula | Range | Better |
-|--------|---------|-------|--------|
-| **Activation Sparsity** | 1 - (active neurons / total) | 0-1 | Higher |
-| **Temporal Sparsity** | 1 - (spikes / possible spikes) | 0-1 | Higher |
-| **Connection Sparsity** | 1 - (nonzero weights / total) | 0-1 | Higher |
-
-**Typical values:**
-- ANNs: 0-40% activation sparsity
-- SNNs: 80-99% activation sparsity (event-driven advantage!)
-
-### 2.3 Latency Metrics
-
-| Metric | Unit | Description |
-|--------|------|-------------|
-| **Inference Latency** | µs | Time to compute one control action |
-| **Max Latency** | µs | Worst-case for real-time guarantees |
-| **Jitter** | µs | Variance in latency |
-
-**Constraint**: Control loop runs at 10 kHz → Max 100 µs per inference!
-
-### 2.4 Energy Estimation
-
-| Metric | Formula | Unit |
-|--------|---------|------|
-| **Dynamic Energy** | SyOps × E_per_SyOp | pJ |
-| **Static Energy** | P_static × time | pJ |
-| **Total Energy** | Dynamic + Static | pJ/inference |
-
-**Platform-specific energy per SyOp:**
-
-| Platform | Energy/SyOp | Source |
-|----------|-------------|--------|
-| Loihi 2 | ~23 pJ | Intel 2021 |
-| SpiNNaker 2 | ~10 pJ | Mayr 2019 |
-| GPU (for comparison) | ~1000 pJ | - |
-
----
-
-## 3. How We Run the Benchmark
-
-### 3.1 Benchmark Scenarios
-
-| Scenario | Description | What it tests |
-|----------|-------------|---------------|
-| **Step Response** | Sudden change in reference | Rise time, overshoot |
-| **Operating Point Sweep** | Various (id, iq) combinations | Robustness across envelope |
-| **Disturbance Rejection** | Load torque step | Stability, recovery |
-
-### 3.2 Code Structure
-
-```
-pmsm-pem/
-├── benchmark/                    # NeuroBench integration
-│   ├── pmsm_env.py              # Gymnasium wrapper for GEM
-│   ├── agents.py                # PI baseline, future SNN
-│   └── run_benchmark.py         # Main benchmark script
-├── metrics/                      # Our custom metrics
-│   ├── benchmark_metrics.py     # ~1100 lines of metrics
-│   └── METRICS_DOCUMENTATION.md # Detailed formulas
-```
-
-### 3.3 Running a Benchmark
+| Property | Value |
+|----------|-------|
+| Formula | $RMSE = \sqrt{\frac{1}{N} \sum_{t=1}^{N} (i_{ref}[t] - i_{meas}[t])^2}$ |
+| Unit | Amperes [A] |
+| Better | Lower |
+| Normalized | ✅ Yes (independent of episode length) |
 
 ```python
-from benchmark import PMSMEnv, PIControllerAgent
-from neurobench.benchmarks import BenchmarkClosedLoop
-
-# 1. Create environment
-env = PMSMEnv(n_rpm=1000, i_d_ref=0.0, i_q_ref=2.0)
-
-# 2. Create controller (PI baseline or SNN)
-agent = PIControllerAgent()  # or: SNNControllerAgent(trained_model)
-
-# 3. Run benchmark
-benchmark = BenchmarkClosedLoop(
-    agent=agent,
-    environment=env,
-    metric_list=[[Footprint, ConnectionSparsity],
-                 [ActivationSparsity, SynapticOperations]]
-)
-results = benchmark.run(nr_interactions=50, max_length=500)
-
-# 4. Also compute control metrics
-from metrics import run_benchmark
-control_results = run_benchmark(episode_data, controller_name="SNN")
+error = i_ref - i_meas
+rmse = np.sqrt(np.mean(error**2))
 ```
 
-### 3.4 Expected Output
+**Why RMSE?** Industry standard for tracking accuracy. Gives the "average" error magnitude.
+
+**⚠️ Limitation**: Averages out short spikes. A 1ms error disappears in a 1s average.
+
+### 1.2 ITAE (Integral of Time-weighted Absolute Error)
+
+**Critical for detecting SNN integrator drift.**
+
+| Property | Value |
+|----------|-------|
+| Formula | $ITAE = \sum_{t=1}^{N} t \cdot |e[t]| \cdot dt$ |
+| Unit | A·s² |
+| Better | Lower |
+| Normalized | ⚠️ Depends on episode length → **Standardize to 1.0s** |
+
+```python
+# times = [0.0, 0.0001, 0.0002, ...]  (1.0s total)
+itae = np.sum(times * np.abs(error) * dt)
+```
+
+**Why ITAE?** It penalizes errors that persist over time. If an SNN has slight bias, the error won't go to zero, and ITAE will grow continuously. This exposes the #1 SNN weakness: **steady-state drift**.
+
+**⚠️ Critical**: Episode length MUST be standardized to 1.0s for comparable ITAE values.
+
+### 1.3 Maximum Error (Optional)
+
+**Catches the worst-case moment that RMSE hides.**
+
+| Property | Value |
+|----------|-------|
+| Formula | $e_{max} = \max(|i_{ref} - i_{meas}|)$ |
+| Unit | Amperes [A] |
+| Better | Lower |
+
+```python
+max_error = np.max(np.abs(error))
+```
+
+---
+
+## 2. Dynamic Response Metrics
+
+*How fast does it react?*
+
+### 2.1 Settling Time (T_set)
+
+**The "agility" metric. SNNs often beat PIs here.**
+
+| Property | Value |
+|----------|-------|
+| Definition | Time for output to enter and stay within ±2% error band |
+| Unit | milliseconds [ms] |
+| Better | Lower |
+| Typical PI | 5-10 ms |
+| Target SNN | < 5 ms |
+
+```python
+threshold = 0.02 * step_magnitude  # 2% band
+outside_band = np.where(np.abs(error) > threshold)[0]
+if len(outside_band) > 0:
+    t_set = times[outside_band[-1]]
+else:
+    t_set = 0.0  # Already settled
+```
+
+### 2.2 Overshoot (M_p)
+
+**Safety check. Does the SNN "kick" too hard on step changes?**
+
+| Property | Value |
+|----------|-------|
+| Formula | $M_p = \frac{\max(y) - y_{final}}{y_{final} - y_{initial}} \times 100\%$ |
+| Unit | Percent [%] |
+| Better | Lower |
+| Safe | < 10% |
+| Dangerous | > 20% |
+
+```python
+peak = np.max(current_after_step)
+overshoot = (peak - target) / step_magnitude * 100
+```
+
+**⚠️ Noise sensitivity**: A single sensor spike registers as overshoot. 
+**Solution**: Apply 5-sample moving average before calculating max.
+
+---
+
+## 3. Stability Metrics (Safety)
+
+*Is the controller destroying the hardware?*
+
+### 3.1 Control Smoothness (Total Variation)
+
+**The "SNN Killer" metric. Measures voltage chattering.**
+
+| Property | Value |
+|----------|-------|
+| Formula | $TV = \frac{1}{N} \sum_{t=1}^{N} |u[t] - u[t-1]|$ |
+| Unit | V/step (normalized) |
+| Better | Lower |
+| PI Baseline | ~0.01 V/step (smooth) |
+| Bad SNN | ~1.0 V/step (chattering) |
+
+```python
+voltage_changes = np.diff(voltages)
+tv_normalized = np.mean(np.abs(voltage_changes))
+
+# Or compare to PI baseline
+tv_ratio = tv_snn / tv_pi  # >1 means SNN is "chattier"
+```
+
+**Why this matters:**
+- An SNN might track perfectly (low RMSE)
+- But oscillate voltage ±24V at 10kHz
+- This causes:
+  - Torque ripple → mechanical vibration
+  - Audible noise
+  - Bearing wear
+  - Wasted switching energy
+
+**Physical filtering note**: Motor inductance acts as low-pass filter (τ = L/R ≈ 2.6ms, f_cutoff ≈ 61 Hz). Chattering above 60 Hz is electrically filtered but still wastes energy.
+
+### 3.2 Constraint Violations
+
+| Metric | Threshold | Unit |
+|--------|-----------|------|
+| Current violations | \|I\| > 10.8 A | count |
+| Voltage violations | \|U\| > 48 V | count |
+| di/dt violations | > 50,000 A/s | count |
+
+---
+
+## 4. Neuromorphic Efficiency Metrics
+
+*Is it actually efficient?*
+
+### 4.1 SyOps (Synaptic Operations)
+
+**The "cost" metric. Proxy for energy consumption.**
+
+| Property | Value |
+|----------|-------|
+| Formula | $SyOps = \sum_{layers} (SpikeCount_{layer} \times FanOut_{layer})$ |
+| Report as | SyOps/step (normalized by episode length) |
+| Better | Lower |
+
+```python
+# Per layer
+syops_layer = spike_count * fan_out
+
+# Total per inference step
+syops_per_step = total_syops / num_timesteps
+```
+
+**Why SyOps matter:**
+- ANNs: Every neuron computes every cycle → O(n²) operations
+- SNNs: Only spiking neurons trigger computation → O(k·n) where k << n
+- Lower SyOps = Lower energy on neuromorphic hardware
+
+**Energy estimation:**
+| Platform | Energy/SyOp | SyOps/step | Energy/step |
+|----------|-------------|------------|-------------|
+| Loihi 2 | ~23 pJ | 1000 | 23 nJ |
+| SpiNNaker 2 | ~10 pJ | 1000 | 10 nJ |
+| GPU (comparison) | ~1000 pJ | 1000 | 1 µJ |
+
+### 4.2 Activation Sparsity
+
+**How "silent" is the network?**
+
+| Property | Value |
+|----------|-------|
+| Formula | $Sparsity = 1 - \frac{TotalSpikes}{TotalNeurons \times TimeSteps}$ |
+| Unit | Percent [%] or ratio [0-1] |
+| Better | Higher |
+| Typical ANN | 0-40% |
+| Good SNN | 80-95% |
+| Excellent SNN | > 95% |
+
+```python
+total_possible = num_neurons * num_timesteps
+sparsity = 1.0 - (total_spikes / total_possible)
+```
+
+**Why sparsity matters:**
+- High sparsity = Fewer computations = Lower power
+- At steady state with delta encoding: Sparsity should approach 100%
+
+---
+
+## 5. Benchmark Configuration
+
+### 5.1 Standardized Episode Parameters
+
+| Parameter | Value | Reason |
+|-----------|-------|--------|
+| **Episode length** | **1.0 s** | Makes ITAE, TV comparable |
+| Control frequency | 10 kHz | Standard for PMSM |
+| Timestep (dt) | 100 µs | 1/10kHz |
+| Steps per episode | 10,000 | 1.0s × 10kHz |
+| Step response time | 0.0 s | Step at t=0 |
+
+### 5.2 Benchmark Scenarios
+
+| Scenario | i_d_ref | i_q_ref | Speed | Purpose |
+|----------|---------|---------|-------|---------|
+| Step Low | 0.0 A | 2.0 A | 1000 rpm | Basic tracking |
+| Step Mid | 0.0 A | 5.0 A | 1000 rpm | Medium load |
+| Step High | 0.0 A | 8.0 A | 1000 rpm | Near limit |
+| Speed Sweep | 0.0 A | 2.0 A | 500-2500 rpm | Robustness |
+| Flux Weakening | -2.0 A | 5.0 A | 2000 rpm | d-axis control |
+
+### 5.3 Reporting Template
 
 ```
-Controller: SNN-LIF-2Layer
+=======================================================================
+Controller: SNN-Hybrid-64neurons
+Episode: 1.0s @ 10kHz (10,000 steps)
 Operating Point: id=0A, iq=2A @ 1000rpm
+=======================================================================
 
-Control Metrics:
-  ITAE: 0.0023 A·s²
-  Rise Time: 3.2 ms
-  Settling Time: 8.1 ms
-  Overshoot: 5.3%
-  Steady-State Error: 0.01 A
+CONTROL QUALITY
+  RMSE (i_q):           0.045 A
+  ITAE (i_q):           0.0023 A·s²
+  Max Error (i_q):      0.32 A
+  
+DYNAMICS
+  Settling Time:        3.2 ms
+  Overshoot:            5.3%
+  
+STABILITY
+  Control Smoothness:   0.08 V/step  (PI baseline: 0.05 V/step)
+  TV Ratio vs PI:       1.6×
+  Constraint Violations: 0
 
-Neuromorphic Metrics:
-  SyOps/step: 1,240
-  Activation Sparsity: 92.3%
-  Inference Latency: 45 µs
-  Estimated Energy: 28.5 nJ/step
+NEUROMORPHIC EFFICIENCY
+  SyOps/step:           1,240
+  Activation Sparsity:  92.3%
+  Estimated Energy:     28.5 nJ/step (Loihi 2)
 
-Comparison to PI Baseline:
-  Control Quality: 98.2% of PI performance
-  Computational Cost: 15x fewer operations
+COMPARISON TO PI BASELINE
+  RMSE ratio:           1.05× (5% worse)
+  Settling time ratio:  0.64× (36% faster)
+  SyOps reduction:      15× fewer operations
+=======================================================================
 ```
 
 ---
 
-## 4. Key Questions for Discussion
+## 6. The Trade-off Visualization
 
-1. **Which control metrics are most important?**
-   - ITAE vs. settling time vs. overshoot trade-offs?
+The final comparison is a **Pareto front**:
 
-2. **How to weight control quality vs. efficiency?**
-   - Pareto front? Weighted score?
+```
+Control Quality (RMSE ↓)
+        ▲
+    0.02│           × PI Baseline (reference)
+        │       
+    0.04│     × SNN-Large (better control, more SyOps)
+        │
+    0.06│  × SNN-Medium ← BEST TRADE-OFF
+        │
+    0.08│      × SNN-Small (worse control, fewer SyOps)
+        │
+        └──────────────────────────────────────────────►
+              500    1000    1500    2000    2500
+                    Neuromorphic Cost (SyOps/step ↑)
+```
 
-3. **What sparsity levels are realistic?**
-   - Literature suggests 80-95% for motor control
-
-4. **Latency constraints?**
-   - 100 µs hard limit for 10 kHz control
+**The winning SNN** is the one closest to the PI baseline in control quality while having significantly lower SyOps.
 
 ---
 
-## 5. References
+## 7. Implementation Checklist
+
+| Component | File | Status |
+|-----------|------|--------|
+| RMSE computation | `benchmark_metrics.py` | ✅ |
+| ITAE computation | `benchmark_metrics.py` | ✅ |
+| Settling time | `benchmark_metrics.py` | ✅ |
+| Overshoot | `benchmark_metrics.py` | ✅ |
+| **Control Smoothness (TV)** | `benchmark_metrics.py` | ✅ |
+| SyOps from spikes | `benchmark_metrics.py` | ✅ |
+| Sparsity | `benchmark_metrics.py` | ✅ |
+| Episode length config | `benchmark/config.py` | 🔜 |
+| Standardized scenarios | `benchmark/scenarios.py` | 🔜 |
+
+---
+
+## References
 
 1. **NeuroBench**: Yik et al., "NeuroBench: A Framework for Benchmarking Neuromorphic Computing", arXiv 2024
 2. **gym-electric-motor**: Balakrishnan et al., JOSS 2021
-3. **Symmetrical Optimum**: Kessler, 1958 (PI tuning method)
+3. **Technical Optimum**: Kessler, 1958 (PI tuning method)
 4. **Loihi 2 Energy**: Davies et al., Intel 2021
-
----
-
-## Appendix: Metric Implementation Status
-
-| Category | Metric | Implemented | Tested |
-|----------|--------|-------------|--------|
-| Accuracy | ITAE, IAE, ISE | ✅ | ✅ |
-| Accuracy | MAE, RMSE | ✅ | ✅ |
-| Dynamics | Rise/Settling Time | ✅ | ✅ |
-| Dynamics | Overshoot | ✅ | ✅ |
-| Efficiency | Copper Losses | ✅ | ✅ |
-| Safety | Limit Violations | ✅ | ✅ |
-| Neuromorphic | SyOps | ✅ | Pending SNN |
-| Neuromorphic | Sparsity | ✅ | Pending SNN |
-| Neuromorphic | Energy Est. | ✅ | Pending SNN |
+5. **Total Variation**: Rudin-Osher-Fatemi, 1992 (signal processing)
