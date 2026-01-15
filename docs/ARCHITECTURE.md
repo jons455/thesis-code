@@ -1,10 +1,7 @@
 # System Architecture: Neuromorphic PMSM Control Benchmark
 
-**Date**: 2026-01-14
-**Version**: WP2.1 - Processor Architecture
-**Branch**: `wp2-neurobench-integration`
+This document helps me keeping track if the architectural aspects of my software. There is also a [draw.io model](https://app.diagrams.net/#G1W4HkU8qH2lNLPS4p-ilH75E5m6x5HMOT#%7B%22pageId%22%3A%22fyiX_BZgRGonI7MBzxk7%22%7D). 
 
----
 
 ## 1. High-Level Architecture
 
@@ -50,7 +47,7 @@ The benchmark separates concerns into distinct layers:
 
 This allows mixing and matching different controllers with different encoding schemes.
 
----
+
 
 ## 2. Component Details
 
@@ -80,7 +77,7 @@ limit_values = {
 
 ### 2.2 Environment Wrapper (PMSMEnv)
 
-**File**: `pmsm-pem/benchmark/pmsm_env.py`
+**File**: `benchmark/pmsm_env.py`
 **Purpose**: Bridge between GEM and NeuroBench
 
 ```
@@ -105,7 +102,7 @@ Agent Output        PMSMEnv              GEM Environment
 
 ### 2.3 Controller Agents
 
-**File**: `pmsm-pem/benchmark/agents.py`
+**File**: `benchmark/agents.py`
 
 #### PI Controller (Baseline)
 
@@ -153,7 +150,7 @@ class HybridSNNAgent:
 
 **Why Hybrid?**
 | Problem | Pure SNN Issue | Hybrid Solution |
-|---------|---------------|-----------------|
+|||--|
 | Steady state | Spikes decay → output drifts | Integrator holds voltage |
 | Sparsity | Always spiking to maintain output | Silent at steady state (Δe=0) |
 | Training | Must learn absolute values | Only learns changes |
@@ -181,7 +178,7 @@ Processors transform data between the environment and agent. This enables:
 #### Preprocessors
 
 | Preprocessor | Input | Output | Use Case |
-|--------------|-------|--------|----------|
+|--|-|--|-|
 | `IdentityPreprocessor` | state | state | PI controller |
 | `DeltaEncodingPreprocessor` | [i,e] | [i,Δe] | Hybrid SNN |
 | `SpikeEncodingPreprocessor` | continuous | spikes | Fully spiking SNN |
@@ -189,7 +186,7 @@ Processors transform data between the environment and agent. This enables:
 #### Postprocessors
 
 | Postprocessor | Input | Output | Use Case |
-|---------------|-------|--------|----------|
+||-|--|-|
 | `IdentityPostprocessor` | [u_d,u_q] | [u_d,u_q] | PI controller |
 | `IntegratorPostprocessor` | [kick_d,kick_q] | [u_d,u_q] | Hybrid SNN |
 | `SpikeDecodingPostprocessor` | spikes | [u_d,u_q] | Fully spiking SNN |
@@ -226,7 +223,7 @@ class ProcessorConfig:
 The SNN must be trained to predict **Δu per timestep**, NOT du/dt:
 
 | SNN Output | Training Target | Postprocessor |
-|------------|-----------------|---------------|
+||--||
 | **Δu per step** ✅ | `u[t] - u[t-1]` | `u_acc += kick` |
 | du/dt ❌ | `(u[t] - u[t-1]) / dt` | `u_acc += kick * dt` |
 
@@ -294,7 +291,7 @@ results, avg_time = benchmark.run(nr_interactions=50, max_length=500)
 Different controllers require different processor chains:
 
 | Controller | Preprocessor | Postprocessor | Notes |
-|------------|--------------|---------------|-------|
+||--||-|
 | PI (baseline) | Identity | Identity | Direct state→action |
 | Hybrid SNN | DeltaEncoding | Integrator | Δe input, kick output |
 | Fully Spiking SNN | SpikeEncoding | SpikeDecoding | All-spike pathway |
@@ -320,7 +317,7 @@ runner_snn = EpisodeRunner(
 )
 ```
 
----
+
 
 ## 3. File Structure
 
@@ -376,7 +373,7 @@ thesis-code/
     └── archive/                # Old/superseded docs
 ```
 
----
+
 
 ## 4. Data Flow Diagram
 
@@ -469,26 +466,26 @@ Spiking:    [spikes × 2×M]      ← spike trains
 Always: [u_d, u_q] normalized to [-1, 1]
 ```
 
----
+
 
 ## 5. Simulation Parameters
 
 | Parameter | Value | Description |
-|-----------|-------|-------------|
+|--|-|-|
 | Control frequency | 10 kHz | Sampling rate |
 | Timestep (Ts) | 100 µs | Control period |
 | Episode length | 500-2000 steps | 50-200 ms |
 | Operating points | 6+ combinations | id/iq sweep |
 | Speed range | 500-2500 rpm | Mechanical speed |
 
----
+
 
 ## 6. Validation Results (Current)
 
 ### PI Controller Baseline (2026-01-13)
 
 | Metric | Value | Status |
-|--------|-------|--------|
+|--|-|--|
 | Final tracking error | 0.00 mA | ✅ |
 | Steps in target (2%) | 453/500 | ✅ |
 | i_d tracking | 0.0000 A (ref: 0.0) | ✅ |
@@ -497,35 +494,39 @@ Always: [u_d, u_q] normalized to [-1, 1]
 ### Comparison with MATLAB (Previous validation)
 
 | Metric | GEM vs MATLAB | Status |
-|--------|---------------|--------|
+|--||--|
 | Current tracking error | < 1e-11 A | ✅ Equivalent |
 | All operating points | 6/6 passed | ✅ |
 | Voltage offset | ~68% (normalization) | ⚠️ Known |
 
----
 
-## 7. Next Steps
 
-### 7.1 Implement Processor Layer (Priority 1)
+## 7. Next Steps (WP3)
+
+### 7.1 Implement Processor Layer
 
 **Status**: Design complete, implementation pending
 
 | File | Purpose | Status |
-|------|---------|--------|
+|||--|
 | `benchmark/config.py` | ProcessorConfig dataclass | 🔜 TODO |
-| `benchmark/processors.py` | Pre/Postprocessors | 🔜 TODO (expand existing) |
+| `benchmark/processors.py` | Pre/Postprocessors (class-based) | 🔜 TODO (expand existing functions) |
 | `benchmark/runner.py` | EpisodeRunner class | 🔜 TODO |
 
-### 7.2 SNN Development (WP3 - External)
+**Existing**: `benchmark/processors.py` has basic functions (`normalize_state`, `rate_encode`, etc.)
+**Needed**: Class-based processors (IdentityPreprocessor, DeltaEncodingPreprocessor, IntegratorPostprocessor)
+
+### 7.2 SNN Development
 
 **Note**: SNN training is separate from the benchmark pipeline.
 The pipeline accepts any pre-trained `.pt` model file.
 
 | Component | Description | Status |
-|-----------|-------------|--------|
-| SNN Architecture | Hybrid SNN-Integrator (snnTorch LIF) | 🔜 Design done |
+|--|-|--|
+| SNN Architecture | Hybrid SNN-Integrator (snnTorch LIF) | ✅ Design done |
 | Training Target | Δu = u[t] - u[t-1] per timestep | ✅ Decided |
-| Training Data | 580+ PI trajectories in `export/train/` | ✅ Available |
+| Training Data | 580+ PI trajectories in `pmsm-pem/export/train/` | ✅ Available |
+| SNN Folder | `snn/` directory structure | 🔜 TODO |
 | Training Script | `snn/train.py` | 🔜 TODO |
 
 ### 7.3 Benchmark Execution (WP4)
@@ -533,25 +534,25 @@ The pipeline accepts any pre-trained `.pt` model file.
 Once the processor layer and a trained SNN are available:
 
 1. **Configure benchmark scenarios**
-   - Step responses at various operating points
+   - Step responses at various operating points (1.0s episodes)
+   - Operating point sweep (500-2500 rpm)
    - Disturbance rejection tests
-   - Load sweep tests
 
 2. **Run all controllers**
    - PI baseline (IdentityPreprocessor + IdentityPostprocessor)
    - Hybrid SNN (DeltaEncodingPreprocessor + IntegratorPostprocessor)
-   - Optional: ANN baseline (same as PI, fair comparison)
+   - Optional: ANN baseline (fair comparison)
 
 3. **Collect metrics**
-   - Control quality: ITAE, IAE, RMSE, rise time, settling time, overshoot
-   - Neuromorphic: SyOps, activation sparsity, energy estimate
-   - NeuroBench standard metrics
+   - Control quality: RMSE, ITAE, Max Error, settling time, overshoot
+   - Stability: Control Smoothness (TV) - critical for detecting SNN chattering
+   - Neuromorphic: SyOps/step, activation sparsity, energy estimate
 
 4. **Generate comparison report**
    - Tables: PI vs SNN vs ANN
-   - Plots: step responses, Pareto fronts (accuracy vs efficiency)
+   - Plots: step responses, Pareto fronts (RMSE vs SyOps)
 
----
+
 
 ## 8. Design Principles
 

@@ -1,5 +1,12 @@
 # Data Pipeline - Simulation Data Merger
 
+> **Note**: This folder contains data preparation tools from an earlier project phase.
+> The `merge_simulation_data.py` script is still useful for data analysis.
+> The `prepare_edge_impulse.py` script is **legacy** — Edge Impulse was explored but not used.
+> See `docs/archive/EDGE_IMPULSE_GUIDE.md` for historical context.
+
+---
+
 This pipeline merges multiple simulation runs into unified panel and stacked time series formats for analysis.
 
 ## Input Data

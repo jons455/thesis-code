@@ -13,7 +13,5 @@ gymnasium>=0.29.0
 
 # GEM Controllers (install from GitHub)
 # pip install git+https://github.com/upb-lea/gem-control
-# Note: gem_controllers may still have gym as transitive dependency
-
-# Optional: For block diagrams
+# Note: gem_controllers may still have gym as transitive dependency# Optional: For block diagrams
 ipython>=8.0.0

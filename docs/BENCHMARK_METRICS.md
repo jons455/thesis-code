@@ -1,12 +1,8 @@
 # Benchmark Metrics for Neuromorphic PMSM Current Control
 
-**Document Purpose**: Defines the metrics framework for comparing SNN vs PI controllers.
+This Document helps me to keep track and understand all the metrics. not so scientific and explaining what is what hehe. 
 
-**Date**: 2026-01-14
-**Author**: Jonas
-**Status**: Final Framework
 
----
 
 ## Executive Summary
 
@@ -21,12 +17,12 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 
 **Standardization**: All episodes run for **1.0 second** (10,000 steps at 10 kHz) to ensure comparable metrics.
 
----
+
 
 ## Metrics Overview
 
 | Category | Metric | Unit | Purpose |
-|----------|--------|------|---------|
+|-|--|||
 | **Accuracy** | RMSE | A | Overall tracking quality |
 | **Accuracy** | ITAE | A·s² | Detect steady-state drift (SNN weakness) |
 | **Dynamics** | Settling Time | ms | Controller agility |
@@ -35,7 +31,7 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 | **Neuromorphic** | SyOps/step | ops | Computational cost proxy |
 | **Neuromorphic** | Activation Sparsity | % | Efficiency measure |
 
----
+
 
 ## 1. Control Quality Metrics (Accuracy)
 
@@ -46,7 +42,7 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 **The primary tracking accuracy metric.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $RMSE = \sqrt{\frac{1}{N} \sum_{t=1}^{N} (i_{ref}[t] - i_{meas}[t])^2}$ |
 | Unit | Amperes [A] |
 | Better | Lower |
@@ -66,7 +62,7 @@ rmse = np.sqrt(np.mean(error**2))
 **Critical for detecting SNN integrator drift.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $ITAE = \sum_{t=1}^{N} t \cdot |e[t]| \cdot dt$ |
 | Unit | A·s² |
 | Better | Lower |
@@ -86,7 +82,7 @@ itae = np.sum(times * np.abs(error) * dt)
 **Catches the worst-case moment that RMSE hides.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $e_{max} = \max(|i_{ref} - i_{meas}|)$ |
 | Unit | Amperes [A] |
 | Better | Lower |
@@ -95,7 +91,7 @@ itae = np.sum(times * np.abs(error) * dt)
 max_error = np.max(np.abs(error))
 ```
 
----
+
 
 ## 2. Dynamic Response Metrics
 
@@ -106,7 +102,7 @@ max_error = np.max(np.abs(error))
 **The "agility" metric. SNNs often beat PIs here.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Definition | Time for output to enter and stay within ±2% error band |
 | Unit | milliseconds [ms] |
 | Better | Lower |
@@ -127,7 +123,7 @@ else:
 **Safety check. Does the SNN "kick" too hard on step changes?**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $M_p = \frac{\max(y) - y_{final}}{y_{final} - y_{initial}} \times 100\%$ |
 | Unit | Percent [%] |
 | Better | Lower |
@@ -142,7 +138,7 @@ overshoot = (peak - target) / step_magnitude * 100
 **⚠️ Noise sensitivity**: A single sensor spike registers as overshoot. 
 **Solution**: Apply 5-sample moving average before calculating max.
 
----
+
 
 ## 3. Stability Metrics (Safety)
 
@@ -153,7 +149,7 @@ overshoot = (peak - target) / step_magnitude * 100
 **The "SNN Killer" metric. Measures voltage chattering.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $TV = \frac{1}{N} \sum_{t=1}^{N} |u[t] - u[t-1]|$ |
 | Unit | V/step (normalized) |
 | Better | Lower |
@@ -182,12 +178,12 @@ tv_ratio = tv_snn / tv_pi  # >1 means SNN is "chattier"
 ### 3.2 Constraint Violations
 
 | Metric | Threshold | Unit |
-|--------|-----------|------|
+|--|--||
 | Current violations | \|I\| > 10.8 A | count |
 | Voltage violations | \|U\| > 48 V | count |
 | di/dt violations | > 50,000 A/s | count |
 
----
+
 
 ## 4. Neuromorphic Efficiency Metrics
 
@@ -198,7 +194,7 @@ tv_ratio = tv_snn / tv_pi  # >1 means SNN is "chattier"
 **The "cost" metric. Proxy for energy consumption.**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $SyOps = \sum_{layers} (SpikeCount_{layer} \times FanOut_{layer})$ |
 | Report as | SyOps/step (normalized by episode length) |
 | Better | Lower |
@@ -218,7 +214,7 @@ syops_per_step = total_syops / num_timesteps
 
 **Energy estimation:**
 | Platform | Energy/SyOp | SyOps/step | Energy/step |
-|----------|-------------|------------|-------------|
+|-|-||-|
 | Loihi 2 | ~23 pJ | 1000 | 23 nJ |
 | SpiNNaker 2 | ~10 pJ | 1000 | 10 nJ |
 | GPU (comparison) | ~1000 pJ | 1000 | 1 µJ |
@@ -228,7 +224,7 @@ syops_per_step = total_syops / num_timesteps
 **How "silent" is the network?**
 
 | Property | Value |
-|----------|-------|
+|-|-|
 | Formula | $Sparsity = 1 - \frac{TotalSpikes}{TotalNeurons \times TimeSteps}$ |
 | Unit | Percent [%] or ratio [0-1] |
 | Better | Higher |
@@ -245,14 +241,14 @@ sparsity = 1.0 - (total_spikes / total_possible)
 - High sparsity = Fewer computations = Lower power
 - At steady state with delta encoding: Sparsity should approach 100%
 
----
+
 
 ## 5. Benchmark Configuration
 
 ### 5.1 Standardized Episode Parameters
 
 | Parameter | Value | Reason |
-|-----------|-------|--------|
+|--|-|--|
 | **Episode length** | **1.0 s** | Makes ITAE, TV comparable |
 | Control frequency | 10 kHz | Standard for PMSM |
 | Timestep (dt) | 100 µs | 1/10kHz |
@@ -262,7 +258,7 @@ sparsity = 1.0 - (total_spikes / total_possible)
 ### 5.2 Benchmark Scenarios
 
 | Scenario | i_d_ref | i_q_ref | Speed | Purpose |
-|----------|---------|---------|-------|---------|
+|-|||-||
 | Step Low | 0.0 A | 2.0 A | 1000 rpm | Basic tracking |
 | Step Mid | 0.0 A | 5.0 A | 1000 rpm | Medium load |
 | Step High | 0.0 A | 8.0 A | 1000 rpm | Near limit |
@@ -304,7 +300,7 @@ COMPARISON TO PI BASELINE
 =======================================================================
 ```
 
----
+
 
 ## 6. The Trade-off Visualization
 
@@ -328,12 +324,12 @@ Control Quality (RMSE ↓)
 
 **The winning SNN** is the one closest to the PI baseline in control quality while having significantly lower SyOps.
 
----
+
 
 ## 7. Implementation Checklist
 
 | Component | File | Status |
-|-----------|------|--------|
+|--||--|
 | RMSE computation | `benchmark_metrics.py` | ✅ |
 | ITAE computation | `benchmark_metrics.py` | ✅ |
 | Settling time | `benchmark_metrics.py` | ✅ |
@@ -344,7 +340,7 @@ Control Quality (RMSE ↓)
 | Episode length config | `benchmark/config.py` | 🔜 |
 | Standardized scenarios | `benchmark/scenarios.py` | 🔜 |
 
----
+
 
 ## References
 

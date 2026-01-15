@@ -2,9 +2,7 @@
 
 This document consolidates all GEM (gym-electric-motor) configuration, setup, and validation learnings.
 
-**Merged from**: `GEM_KONFIGURATION.md`, `GEM_LEARNINGS.md`, `CONTROLLER_VERIFICATION.md`
 
----
 
 ## 1. Overview
 
@@ -21,14 +19,14 @@ This environment implements:
 - PI current controller (gem_controllers)
 - Decoupling compensation
 
----
+
 
 ## 2. Motor Parameters
 
 Matched to MATLAB/Simulink model:
 
 | Parameter | Symbol | Value | Unit |
-|-----------|--------|-------|------|
+|--|--|-||
 | Pole pairs | p | 3 | - |
 | Stator resistance | R_s | 0.543 | Ω |
 | d-axis inductance | L_d | 1.13 | mH |
@@ -38,7 +36,7 @@ Matched to MATLAB/Simulink model:
 ### Limits
 
 | Parameter | Value | Unit |
-|-----------|-------|------|
+|--|-||
 | Max current | 10.8 | A |
 | Max voltage | 48 | V |
 | Max speed | 3000 | rpm |
@@ -46,12 +44,12 @@ Matched to MATLAB/Simulink model:
 ### Control Parameters
 
 | Parameter | Value |
-|-----------|-------|
+|--|-|
 | Control frequency | 10 kHz |
 | Sampling period | 100 µs |
 | PI tuning | Technical Optimum (a=4) |
 
----
+
 
 ## 3. Key Learnings from Validation
 
@@ -93,14 +91,14 @@ i_d_physical = i_d_normalized * limits['i_sd']
 
 **Solution**: Use **GEM Standard Controller** (`gem_controllers.TorqueController`) - it's verified equivalent to MATLAB.
 
----
+
 
 ## 4. Validation Results
 
 ### GEM Standard Controller vs. MATLAB
 
 | Speed (rpm) | i_d MAE | i_q MAE | Status |
-|-------------|---------|---------|--------|
+|-|||--|
 | 500 | 8.8e-15 A | 1.1e-12 A | ✅ Perfect |
 | 1500 | 7.7e-14 A | 2.9e-12 A | ✅ Perfect |
 | 2500 | 3.3e-13 A | 7.3e-12 A | ✅ Perfect |
@@ -108,7 +106,7 @@ i_d_physical = i_d_normalized * limits['i_sd']
 ### Operating Points (1000 rpm)
 
 | id_ref | iq_ref | Δid | Δiq | Status |
-|--------|--------|-----|-----|--------|
+|--|--|--|--|--|
 | 0 A | 2 A | ~0 | ~0 | ✅ |
 | 0 A | 5 A | ~0 | ~0 | ✅ |
 | 0 A | 8 A | ~0 | ~0 | ✅ |
@@ -120,19 +118,19 @@ i_d_physical = i_d_normalized * limits['i_sd']
 
 There's a ~68% relative offset in u_d and u_q compared to MATLAB. This is due to different normalization/sensor modeling but **does not affect current tracking**.
 
----
+
 
 ## 5. File Locations
 
 | Purpose | File |
-|---------|------|
+|||
 | Main simulation | `pmsm-pem/simulation/simulate_pmsm.py` |
 | Operating point tests | `pmsm-pem/simulation/run_operating_point_tests.py` |
 | MATLAB comparison | `pmsm-pem/validation/compare_simulations.py` |
 | Exported data | `pmsm-pem/export/gem_standard/` |
 | Archived runs | `pmsm-pem/export/archive/` |
 
----
+
 
 ## 6. Quick Start
 
@@ -157,7 +155,7 @@ import gem_controllers as gc
 controller = gc.GemController.make(env, 'Cont-CC-PMSM-v0', decoupling=True, a=4)
 ```
 
----
+
 
 ## 7. Conclusion
 

@@ -196,6 +196,7 @@ Für den Vergleich bei 1000 rpm mit verschiedenen id/iq-Kombinationen:
 ## Technische Dokumentation
 
 Siehe `docs/` für detaillierte technische Dokumentation:
-- `GEM_Zusammenfassung.md` - Alle GEM-spezifischen Erkenntnisse
-- `../docs/GEM_KONFIGURATION.md` - Vollständige Setup-Dokumentation
-- `../docs/GEM_LEARNINGS.md` - Learnings aus der Validierungsarbeit
+- `docs/GEM_Zusammenfassung.md` - Alle GEM-spezifischen Erkenntnisse
+- `../docs/SIMULATION.md` - Konsolidierte GEM-Dokumentation (Setup + Learnings)
+- `../docs/archive/GEM_KONFIGURATION.md` - Original Setup-Dokumentation (archiviert)
+- `../docs/archive/GEM_LEARNINGS.md` - Original Learnings (archiviert)

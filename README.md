@@ -53,34 +53,35 @@ poetry run pytest --collect-only
 
 ## Project Structure
 
+The framework is designed as a **modular pipeline** where each component can be developed, tested, and documented independently. Each module has its own README with usage examples and API documentation.
+
 ```
 thesis-code/
-├── benchmark/                # NeuroBench integration
+├── benchmark/                # NeuroBench integration        → README.md
 │   ├── pmsm_env.py          # Gymnasium wrapper for GEM
 │   ├── agents.py            # PI controller, SNN placeholder
 │   ├── processors.py        # Spike encoding utilities
 │   └── tests/               # Unit tests
 │
-├── metrics/                  # Benchmark metrics framework
+├── metrics/                  # Benchmark metrics framework   → METRICS_DOCUMENTATION.md
 │   ├── benchmark_metrics.py # ~1100 lines of metrics
 │   └── tests/               # Metric tests
 │
 ├── utils/                    # Utility modules
 │   └── reproducibility.py   # Seed management, experiment tracking
 │
-├── pmsm-pem/                 # GEM PMSM simulation
+├── pmsm-pem/                 # GEM PMSM simulation           → README.md
 │   ├── simulation/          # Simulation scripts
 │   ├── validation/          # MATLAB comparison
 │   └── export/              # Results (CSV, plots)
 │
-├── pmsm-matlab/              # MATLAB/Simulink reference
+├── pmsm-matlab/              # MATLAB/Simulink reference     → README.md
 │   ├── foc_pmsm.slx         # Simulink FOC model
 │   └── pmsm_init.m          # Motor parameters
 │
-├── data-preperation/         # Data processing scripts
+├── data-preperation/         # Data processing (legacy)      → README.md
 │   └── data_exploration.ipynb
 │
-├── docs/                     # Documentation
 │   ├── ARCHITECTURE.md      # System architecture
 │   ├── BENCHMARK_METRICS.md # Metrics documentation
 │   └── SIMULATION.md        # GEM configuration
@@ -88,6 +89,8 @@ thesis-code/
 ├── tests/                    # Integration & regression tests
 └── pyproject.toml           # Project & tool configuration (Poetry)
 ```
+
+This modularity allows swapping components (e.g., different controllers, encoding schemes) without changing the overall pipeline.
 
 ## Motor Parameters
 
@@ -194,21 +197,6 @@ The PI controller baseline achieves precise tracking across all operating points
 - **Episode duration**: 0.2 s per run
 - **Steps per episode**: 2000
 
-## Documentation
-
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [Benchmark Metrics](docs/BENCHMARK_METRICS.md)
-- [Simulation Details](docs/SIMULATION.md)
-- [Work Progress](docs/WORK_PROGRESS.md)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests and linting (`poetry run pytest && poetry run black . && poetry run ruff check .`)
-4. Commit changes (`git commit -m 'Add amazing feature'`)
-5. Push to branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
 
 ## Acknowledgments
 
