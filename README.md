@@ -1,13 +1,12 @@
-# PMSM Neuromorphic Controller Benchmark
+# Neuromorphic PMSM Control Benchmark Pipeline
 
-[![CI](https://github.com/jonas/pmsm-neuromorphic-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/jonas/pmsm-neuromorphic-benchmark/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-Benchmark framework for evaluating neuromorphic (SNN) controllers against conventional PI controllers for PMSM (Permanent Magnet Synchronous Motor) current control.
+A benchmark pipeline for systematic evaluation of Spiking Neural Network (SNN) controllers versus conventional PI controllers for PMSM (Permanent Magnet Synchronous Motor) current control.
 
-Part of a Master's thesis on neuromorphic computing for motor control applications.
+**Master's Thesis Project** — Evaluating neuromorphic computing approaches for real-time motor control applications.
 
 ## Features
 
