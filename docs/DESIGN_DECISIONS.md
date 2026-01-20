@@ -10,116 +10,51 @@ Use this for the thesis Implementation and Discussion chapters.
 
 | # | Decision | Date | Impact |
 |---|----------|------|--------|
-| D1 | GEM over MATLAB for simulation | ~Dec 2025 | High |
-| D2 | Imitation learning over RL | ~Dec 2025 | High |
-| D3 | PI controller tuning method | ~Jan 2026 | Medium |
-| D4 | NeuroBench framework integration | 2026-01-13 | High |
-| D5 | Gymnasium wrapper design | 2026-01-13 | Medium |
-| D6 | Pure SNN vs Hybrid SNN-Integrator | 2026-01-20 | High |
-| D7 | Slow-leak output neurons | 2026-01-20 | High |
-| D8 | Direct voltage target (not Δu) | 2026-01-20 | Medium |
-| D9 | snnTorch framework | 2026-01-20 | Medium |
+| D1 | GEM (Python) over MATLAB for simulation | ~Dec 2025 | High |
+| D2 | NeuroBench framework integration | 2026-01-13 | High |
+| D3 | Gymnasium wrapper design | 2026-01-13 | Medium |
+| D4 | Pure SNN vs Hybrid SNN-Integrator | 2026-01-20 | High |
+| D5 | Slow-leak output neurons | 2026-01-20 | High |
+| D6 | Direct voltage target (not Δu) | 2026-01-20 | Medium |
+| D7 | snnTorch framework | 2026-01-20 | Medium |
 
 ---
 
-## D1: GEM over MATLAB for Simulation (estimated)
+## D1: GEM (Python) over MATLAB for Simulation (estimated)
 
 **Date**: ~December 2025  
 **Category**: Simulation Environment
 
 ### Context
-Need a PMSM simulation environment for training and evaluating controllers.
+Need a PMSM simulation environment for training and evaluating controllers. The benchmark should be easily accessible and reproducible.
 
 ### Options Considered
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **MATLAB/Simulink** | Industry standard, validated | License required, not Gym-compatible |
-| **GEM (gym-electric-motor)** | Open source, Gym interface, validated | Less documentation |
+| **MATLAB/Simulink** | Industry standard, validated | License required, mixed languages, not portable |
+| **GEM (gym-electric-motor)** | Pure Python, Gym interface, open source | Less documentation |
 | **Custom simulation** | Full control | Time-consuming, validation needed |
 
 ### Decision
 **→ GEM (gym-electric-motor)**
 
 ### Rationale
-1. OpenAI Gym interface → compatible with NeuroBench
-2. Physically validated motor models (University of Paderborn)
-3. No license costs
-4. Active maintenance
-5. MATLAB used only for validation, not main simulation
+1. **All-in-one language** — Entire benchmark pipeline in Python (no MATLAB dependency)
+2. **Easily accessible** — Anyone can run the benchmark without licenses
+3. **Shippable** — Complete package can be shared/published
+4. **NeuroBench compatible** — OpenAI Gym interface works with benchmark framework
+5. **Open source** — Reproducible by other researchers
+
+### Key Insight
+We don't need the "most perfect" simulation — we need an **accessible, reproducible benchmark**. GEM is validated and good enough for fair SNN vs PI comparison.
 
 ### Validation
-GEM simulation matched MATLAB/Simulink with tracking error < 1e-11 A at steady state.
+GEM simulation matched MATLAB/Simulink with tracking error < 1e-11 A at steady state (used for validation only, not the main pipeline).
 
 ---
 
-## D2: Imitation Learning over Reinforcement Learning (estimated)
-
-**Date**: ~December 2025  
-**Category**: Training Approach
-
-### Context
-Need a method to train the SNN controller.
-
-### Options Considered
-
-| Option | Pros | Cons |
-|--------|------|------|
-| **Reinforcement Learning** | Can discover novel strategies | Slow, unstable, needs reward shaping |
-| **Imitation Learning** | Fast, stable, uses expert data | Limited to expert's capability |
-| **Hybrid (IL + RL)** | Best of both | Complex, time-consuming |
-
-### Decision
-**→ Imitation Learning (Supervised)**
-
-### Rationale
-1. PI controller is already optimal for this task → good expert
-2. 580+ trajectories available → plenty of training data
-3. Much faster training than RL (hours vs days)
-4. More reliable convergence
-5. Thesis timeline constraint (~2 months)
-
-### Trade-offs
-- SNN cannot exceed PI performance (by design)
-- But goal is efficiency comparison, not outperforming PI
-
----
-
-## D3: PI Controller Tuning Method (estimated)
-
-**Date**: ~January 2026  
-**Category**: Baseline Controller
-
-### Context
-Need to tune PI controller gains for the baseline.
-
-### Options Considered
-
-| Option | Description |
-|--------|-------------|
-| **Technical Optimum** | Kp = L/(2*Ts), Ki = R/(2*Ts) |
-| **Symmetrical Optimum** | Different pole placement |
-| **Manual tuning** | Trial and error |
-| **Auto-tuning** | Optimization-based |
-
-### Decision
-**→ Technical Optimum**
-
-### Rationale
-1. Standard method in drive control literature
-2. Analytically derived from motor parameters
-3. Known good performance for current control
-4. Reproducible (no manual tuning)
-
-### Parameters
-```
-Kp_d = L_d / (2 * Ts) = 0.00113 / (2 * 0.0001) = 5.65
-Ki_d = R_s / (2 * Ts) = 0.543 / (2 * 0.0001) = 2715
-```
-
----
-
-## D4: NeuroBench Framework Integration
+## D2: NeuroBench Framework Integration
 
 **Date**: 2026-01-13  
 **Category**: Benchmarking Framework
@@ -151,7 +86,7 @@ Need standardized metrics for neuromorphic controller evaluation.
 
 ---
 
-## D5: Gymnasium Wrapper Design
+## D3: Gymnasium Wrapper Design
 
 **Date**: 2026-01-13  
 **Category**: Interface Design
@@ -175,7 +110,7 @@ GEM environment needs to be wrapped for NeuroBench compatibility.
 
 ---
 
-## D6: Pure SNN vs Hybrid SNN-Integrator
+## D4: Pure SNN vs Hybrid SNN-Integrator
 
 **Date**: 2026-01-20  
 **Category**: SNN Architecture (Critical Decision)
@@ -211,7 +146,7 @@ BrainChip Akida supports LIF neurons with configurable time constants → slow-l
 
 ---
 
-## D7: Slow-Leak Output Neuron Parameters
+## D5: Slow-Leak Output Neuron Parameters
 
 **Date**: 2026-01-20  
 **Category**: Neuron Dynamics
@@ -242,7 +177,7 @@ After 100 steps: V = V(0) * 0.995^100 ≈ 0.6 * V(0)
 
 ---
 
-## D8: Direct Voltage Target (not Δu)
+## D6: Direct Voltage Target (not Δu)
 
 **Date**: 2026-01-20  
 **Category**: Training Target
@@ -268,7 +203,7 @@ Hybrid approach uses Δu (voltage change) as target. What should Pure SNN use?
 
 ---
 
-## D9: snnTorch Framework
+## D7: snnTorch Framework
 
 **Date**: 2026-01-20  
 **Category**: SNN Framework
