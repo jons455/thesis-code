@@ -1,0 +1,271 @@
+# Experiment Log
+
+This document tracks training experiments, hyperparameter searches, and benchmark runs. Each experiment should be reproducible from the recorded configuration.
+
+Use this for the thesis Results chapter.
+
+---
+
+## Experiment Index
+
+| ID | Date | Description | Status | Key Result |
+|----|------|-------------|--------|------------|
+| E001 | 2026-01-20 | Quick test (3 epochs, 5 files) | ✅ Done | Loss: 0.04 |
+| E002 | — | Full training baseline | 🔲 TODO | — |
+| E003 | — | Hyperparameter: hidden_size | 🔲 TODO | — |
+| E004 | — | Hyperparameter: beta_output | 🔲 TODO | — |
+| E005 | — | Closed-loop validation | 🔲 TODO | — |
+
+---
+
+## E001: Quick Test (Pipeline Validation)
+
+**Date**: 2026-01-20  
+**Goal**: Verify training pipeline works end-to-end  
+**Status**: ✅ Complete
+
+### Configuration
+
+```yaml
+# Model
+hidden_size: 64
+num_hidden_layers: 2
+beta_hidden: 0.9
+beta_output: 0.995
+
+# Training
+epochs: 3
+batch_size: 32
+learning_rate: 0.001
+window_size: 100
+stride: 50
+
+# Data
+max_files: 5  # Limited for quick test
+val_split: 0.2
+```
+
+### Command
+```bash
+poetry run python -m snn.train --epochs 3 --max_files 5
+```
+
+### Results
+
+| Epoch | Train Loss | Val Loss | MAE | Best? |
+|-------|------------|----------|-----|-------|
+| 1 | 0.149 | 0.071 | 0.216 | ✅ |
+| 2 | 0.059 | 0.041 | 0.166 | ✅ |
+| 3 | 0.046 | 0.040 | 0.165 | ✅ |
+
+### Observations
+- Loss decreases consistently → training works
+- MAE of 0.165 on normalized voltage → ~8V error (needs improvement)
+- Only 5 files used → expect better with full dataset
+- Model saved to `snn/checkpoints/best_model.pt`
+
+### Next Steps
+- Run full training with all 580+ files
+- Increase epochs to 100
+
+---
+
+## E002: Full Training Baseline
+
+**Date**: —  
+**Goal**: Train on complete dataset to establish baseline performance  
+**Status**: 🔲 TODO
+
+### Configuration
+
+```yaml
+# Model
+hidden_size: 64
+num_hidden_layers: 2
+beta_hidden: 0.9
+beta_output: 0.995
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+window_size: 100
+stride: 50
+
+# Data
+max_files: null  # All files
+val_split: 0.2
+```
+
+### Command
+```bash
+poetry run python -m snn.train --epochs 100
+```
+
+### Results
+
+| Metric | Value |
+|--------|-------|
+| Final train loss | — |
+| Final val loss | — |
+| Best val loss | — |
+| MAE (normalized) | — |
+| MAE (Amps) | — |
+| Training time | — |
+
+### Observations
+- [To be filled after experiment]
+
+---
+
+## E003: Hyperparameter Study — Hidden Size
+
+**Date**: —  
+**Goal**: Find optimal hidden layer size  
+**Status**: 🔲 TODO
+
+### Configurations Tested
+
+| Config | hidden_size | Parameters | Val Loss | MAE |
+|--------|-------------|------------|----------|-----|
+| A | 32 | ~2,500 | — | — |
+| B | 64 | ~4,600 | — | — |
+| C | 128 | ~17,000 | — | — |
+| D | 256 | ~66,000 | — | — |
+
+### Command Template
+```bash
+poetry run python -m snn.train --epochs 50 --hidden_size {SIZE}
+```
+
+### Observations
+- [To be filled]
+
+---
+
+## E004: Hyperparameter Study — Output Beta
+
+**Date**: —  
+**Goal**: Find optimal slow-leak rate for output neurons  
+**Status**: 🔲 TODO
+
+### Configurations Tested
+
+| Config | beta_output | Time Constant | Val Loss | Closed-Loop Stable? |
+|--------|-------------|---------------|----------|---------------------|
+| A | 0.99 | ~10 steps | — | — |
+| B | 0.995 | ~200 steps | — | — |
+| C | 0.999 | ~1000 steps | — | — |
+| D | 0.9999 | ~10000 steps | — | — |
+
+### Observations
+- [To be filled]
+- Higher beta = better steady-state hold, slower response
+- Lower beta = faster response, more drift
+
+---
+
+## E005: Closed-Loop Validation
+
+**Date**: —  
+**Goal**: Test trained SNN in closed-loop with PMSMEnv  
+**Status**: 🔲 TODO
+
+### Configuration
+```yaml
+model: snn/checkpoints/best_model.pt
+environment: PMSMEnv
+max_steps: 500
+reference:
+  i_d_ref: 0.0
+  i_q_ref: 2.0
+```
+
+### Results
+
+| Metric | PI Baseline | SNN |
+|--------|-------------|-----|
+| Final i_d error [A] | 0.0000 | — |
+| Final i_q error [A] | 0.0000 | — |
+| RMSE [A] | 0.0000 | — |
+| ITAE | — | — |
+| Settling time [ms] | — | — |
+| Overshoot [%] | — | — |
+| Steps in target | 453/500 | — |
+
+### Step Response Plot
+[To be added: comparison plot]
+
+### Observations
+- [Stability assessment]
+- [Comparison to PI]
+- [Issues observed]
+
+---
+
+## E006: Operating Point Sweep
+
+**Date**: —  
+**Goal**: Test SNN across multiple operating points  
+**Status**: 🔲 TODO
+
+### Operating Points
+
+| Point | i_d [A] | i_q [A] | Speed [rpm] | SNN RMSE | PI RMSE |
+|-------|---------|---------|-------------|----------|---------|
+| Baseline | 0 | 2 | 1000 | — | 0.00 |
+| Medium load | 0 | 5 | 1000 | — | 0.00 |
+| High load | 0 | 8 | 1000 | — | 0.00 |
+| Field weakening | -3 | 2 | 1000 | — | 0.00 |
+| Low speed | 0 | 2 | 500 | — | 0.00 |
+| High speed | 0 | 2 | 2500 | — | 0.00 |
+
+---
+
+## Experiment Template
+
+```markdown
+## EXXX: [Experiment Title]
+
+**Date**: YYYY-MM-DD  
+**Goal**: [What are we trying to learn?]  
+**Status**: 🔲 TODO / 🔄 Running / ✅ Complete
+
+### Configuration
+```yaml
+# Model
+hidden_size: 
+beta_output: 
+
+# Training
+epochs: 
+batch_size: 
+```
+
+### Command
+```bash
+[Command to reproduce]
+```
+
+### Results
+| Metric | Value |
+|--------|-------|
+
+### Observations
+- [Key findings]
+- [Unexpected results]
+- [Next steps]
+```
+
+---
+
+## Tips for Reproducibility
+
+1. **Always record the random seed** — Set in train.py
+2. **Save config with checkpoint** — Already done in model.save()
+3. **Log git commit hash** — Know exact code version
+4. **Save training curves** — history.json in checkpoints/
+
+---
+
+*Last Updated: 2026-01-20*
