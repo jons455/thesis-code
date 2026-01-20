@@ -286,7 +286,8 @@ def train(config: TrainConfig) -> SimpleSNNController:
             f"Val: {val_metrics['loss']:.6f} | "
             f"MAE: {val_metrics['mae']:.4f} | "
             f"LR: {lr:.2e}"
-            + (" *" if is_best else "")
+            + (" *" if is_best else ""),
+            flush=True
         )
         
         # Periodic checkpoint

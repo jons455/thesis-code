@@ -11,10 +11,11 @@ Use this for the thesis Results chapter.
 | ID | Date | Description | Status | Key Result |
 |----|------|-------------|--------|------------|
 | E001 | 2026-01-20 | Quick test (3 epochs, 5 files) | ✅ Done | Loss: 0.04 |
-| E002 | — | Full training baseline | 🔲 TODO | — |
+| E001b | 2026-01-20 | Closed-loop verification (E001 model) | ✅ Done | Stable but untrained |
+| E002 | 2026-01-20 | Full training baseline | 🔄 Running | — |
 | E003 | — | Hyperparameter: hidden_size | 🔲 TODO | — |
 | E004 | — | Hyperparameter: beta_output | 🔲 TODO | — |
-| E005 | — | Closed-loop validation | 🔲 TODO | — |
+| E005 | — | Closed-loop validation (E002 model) | 🔲 TODO | — |
 
 ---
 
@@ -70,11 +71,59 @@ poetry run python -m snn.train --epochs 3 --max_files 5
 
 ---
 
+## E001b: Closed-Loop Verification
+
+**Date**: 2026-01-20  
+**Goal**: Verify SNN can run in closed-loop with GEM simulation  
+**Status**: ✅ Complete
+
+### Configuration
+
+Uses model from E001 (3 epochs, 5 files training)
+
+```yaml
+environment: PMSMEnv
+n_rpm: 1000
+i_d_ref: 0.0
+i_q_ref: 2.0
+max_steps: 500
+```
+
+### Command
+```bash
+python -m benchmark.run_benchmark
+```
+
+### Results
+
+| Controller | Final Error | RMSE | Time in Target | Status |
+|------------|-------------|------|----------------|--------|
+| PI Baseline | 0.00 mA | ~0 A | 453/500 | PASS |
+| SNN (E001) | 262,985 mA | 215.9 A | 0/500 | Needs training |
+
+| Sparsity Metric | Value |
+|-----------------|-------|
+| Hidden Layer 0 | 80.9% |
+| Hidden Layer 1 | 90.3% |
+
+### Observations
+- **Pipeline WORKS**: SNN runs in closed-loop without crashes or NaN
+- **Currents exploded**: Expected with minimal training (only 3 epochs, 5 files)
+- **Sparsity is excellent**: 80-90% means efficient neuromorphic execution
+- **Next**: Full training should dramatically improve tracking
+
+### Key Implementation
+- `SNNControllerAgent` added to `benchmark/agents.py`
+- Maintains stateful membrane potentials across timesteps
+- Properly resets neuron states for new episodes
+
+---
+
 ## E002: Full Training Baseline
 
-**Date**: —  
+**Date**: 2026-01-20  
 **Goal**: Train on complete dataset to establish baseline performance  
-**Status**: 🔲 TODO
+**Status**: 🔄 Running
 
 ### Configuration
 

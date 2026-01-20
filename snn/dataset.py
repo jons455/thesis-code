@@ -235,16 +235,21 @@ class PMSMDataset(Dataset):
     
     def _load_all_files(self) -> None:
         """Load all files and extract windows."""
-        print(f"Loading {len(self.files)} trajectory files...")
+        import sys
+        
+        n_files = len(self.files)
+        print(f"Loading {n_files} trajectory files...", flush=True)
         
         total_windows = 0
+        loaded_files = 0
         
-        for filepath in self.files:
+        for i, filepath in enumerate(self.files):
             result = self._load_file(filepath)
             if result is None:
                 continue
             
             inputs, targets = result
+            loaded_files += 1
             
             # Extract windows
             num_steps = len(inputs)
@@ -257,8 +262,12 @@ class PMSMDataset(Dataset):
                 window_out = targets[start:end]
                 self.windows.append((window_in, window_out))
                 total_windows += 1
+            
+            # Progress update every 100 files
+            if (i + 1) % 100 == 0 or i == n_files - 1:
+                print(f"  [{i+1}/{n_files}] Loaded {loaded_files} files, {total_windows} windows", flush=True)
         
-        print(f"Loaded {total_windows} training windows from {len(self.files)} files")
+        print(f"Done! {total_windows} training windows from {loaded_files} files", flush=True)
     
     def __len__(self) -> int:
         return len(self.windows)
