@@ -61,58 +61,61 @@ This document helps me to keep the overview on what is left to do in the remaini
 
 
 
-## WP3: SNN Training & Closed-Loop Validation 🔲 NOT STARTED
+## WP3: SNN Training & Closed-Loop Validation 🔄 IN PROGRESS
 
-### 3.1 Processor Layer Implementation (from ARCHITECTURE.md)
+### 3.1 Architecture Decision ✅
 
-**Note**: The architecture defines a processor layer for flexible encoding/decoding. This enables the Hybrid SNN-Integrator architecture.
+**Decision**: Use **Pure SNN** approach instead of Hybrid SNN-Integrator.
 
-- [ ] Create `benchmark/config.py`
-  - [ ] `ProcessorConfig` dataclass (motor limits, dt, anti_windup settings)
-- [ ] Expand `benchmark/processors.py` with class-based processors
-  - [ ] `IdentityPreprocessor` - for PI controller (pass-through)
-  - [ ] `DeltaEncodingPreprocessor` - for Hybrid SNN ([i_d, i_q, e_d, e_q] → [i_d, i_q, Δe_d, Δe_q])
-  - [ ] `SpikeEncodingPreprocessor` - for fully spiking SNN (optional)
-  - [ ] `IdentityPostprocessor` - for PI controller (pass-through)
-  - [ ] `IntegratorPostprocessor` - for Hybrid SNN (accumulates kicks → voltage)
-  - [ ] `SpikeDecodingPostprocessor` - for fully spiking SNN (optional)
-- [ ] Create `benchmark/runner.py`
-  - [ ] `EpisodeRunner` class orchestrating env + preprocessor + agent + postprocessor
+- [x] Evaluate architecture options (Pure SNN vs Hybrid)
+- [x] Choose Pure SNN with slow-leak output neurons (β=0.995)
+- [x] Document architecture in `docs/SNN_ARCHITECTURE.md`
 
-### 3.2 SNN Model Development
-- [ ] Create `snn/` folder structure
-  - [ ] `snn/__init__.py`
-  - [ ] `snn/models.py` - snnTorch network definitions
-  - [ ] `snn/dataset.py` - PyTorch Dataset for PI trajectories
-  - [ ] `snn/train.py` - Training script (imitation learning)
-- [ ] Design LIF network using snnTorch
-  - [ ] Input layer: 4 neurons (i_d, i_q, Δe_d, Δe_q)
-  - [ ] Hidden layer(s): TBD neurons with LIF dynamics
-  - [ ] Output layer: 2 neurons (kick_d, kick_q)
-- [ ] Training target: Δu = u[t] - u[t-1] per timestep (NOT du/dt!)
+**Rationale**: Pure SNN is simpler (no external integrator) and fully deployable on neuromorphic hardware (Akida).
 
-### 3.3 Imitation Learning
-- [ ] Load PI-controller trajectory data from `pmsm-pem/export/train/`
-- [ ] Preprocess data (normalization, windowing, delta computation)
-- [ ] Define loss function (MSE on output voltage kicks)
-- [ ] Train Hybrid SNN to imitate PI-controller Δu
-- [ ] Validate on held-out trajectories
+### 3.2 SNN Model Development ✅
+- [x] Create `snn/` folder structure
+  - [x] `snn/__init__.py` - Module exports
+  - [x] `snn/models.py` - SimpleSNNController (~310 lines)
+  - [x] `snn/dataset.py` - PMSMDataset (~310 lines)
+  - [x] `snn/train.py` - Training script with CLI (~400 lines)
+- [x] Design LIF network using snnTorch
+  - [x] Input layer: 4 neurons (i_d, i_q, e_d, e_q)
+  - [x] Hidden layers: 64 neurons each, LIF with β=0.9
+  - [x] Output layer: 2 neurons, LIF with β=0.995 (slow-leak = integrator)
+- [x] Output = membrane potential (not spikes) → continuous voltage
+- [x] Training target: absolute voltage [u_d, u_q] (not Δu)
 
-### 3.4 Closed-Loop Integration
-- [ ] Implement `HybridSNNAgent` class
-  - [ ] Stateful neuron management across timesteps
-  - [ ] Membrane potential persistence between calls
+### 3.3 Imitation Learning ✅ PIPELINE READY
+- [x] Load PI-controller trajectory data from `pmsm-pem/export/train/`
+- [x] Preprocess data (normalization, windowing)
+- [x] Define loss function (MSE on output voltage)
+- [x] Implement training loop with validation split
+- [x] Quick test: 3 epochs, 5 files → loss decreasing ✅
+- [ ] **Full training run** (all 580+ files, 100 epochs)
+
+### 3.4 Closed-Loop Integration 🔲 NEXT
+- [ ] Implement `SNNControllerAgent` in `benchmark/agents.py`
+  - [ ] Load trained model from checkpoint
+  - [ ] Stateful membrane potential across timesteps
+  - [ ] `__call__(state) -> action` interface
   - [ ] `reset()` for neuron state initialization
-- [ ] Configure runner with DeltaEncodingPreprocessor + IntegratorPostprocessor
-- [ ] Run `BenchmarkClosedLoop` with Hybrid SNN controller
-- [ ] Verify closed-loop stability
+- [ ] Test with PMSMEnv in closed loop
+- [ ] Verify closed-loop stability (no NaN/explosion)
 - [ ] Compare step response: SNN vs PI
 
-### 3.5 Initial Results
+### 3.5 Initial Results 🔲
 - [ ] Generate step response comparison plots
 - [ ] Record tracking error metrics (RMSE, ITAE, settling time, overshoot)
 - [ ] Record neuromorphic metrics (SyOps, sparsity)
 - [ ] Verify Control Smoothness (TV) metric - SNN must not chatter
+
+### 3.6 (Optional) Hybrid Approach 🔲
+Only if Pure SNN shows issues (voltage drift, instability):
+- [ ] Add DeltaEncodingPreprocessor
+- [ ] Add IntegratorPostprocessor
+- [ ] Train with Δu target instead of absolute voltage
+- [ ] Compare Pure vs Hybrid
 
 
 
@@ -176,30 +179,29 @@ This document helps me to keep the overview on what is left to do in the remaini
 ## Quick Reference: Key Files
 
 | Component | Location | Status |
-|--|-|--|
+|-----------|----------|--------|
 | PMSM Simulation | `pmsm-pem/simulation/simulate_pmsm.py` | ✅ |
 | Metrics Framework | `metrics/benchmark_metrics.py` | ✅ |
 | Benchmark Env | `benchmark/pmsm_env.py` | ✅ |
 | PI Agent | `benchmark/agents.py` | ✅ |
-| SNN Agent | `benchmark/agents.py` | 🔲 Placeholder |
+| SNN Agent | `benchmark/agents.py` | 🔲 Next |
 | Processors (functions) | `benchmark/processors.py` | ✅ Basic |
-| Processors (classes) | `benchmark/processors.py` | 🔲 TODO |
-| ProcessorConfig | `benchmark/config.py` | 🔲 TODO |
-| EpisodeRunner | `benchmark/runner.py` | 🔲 TODO |
 | Benchmark Runner | `benchmark/run_benchmark.py` | ✅ |
-| SNN Models | `snn/models.py` | 🔲 TODO |
-| SNN Training | `snn/train.py` | 🔲 TODO |
-| Training Data | `pmsm-pem/export/train/*.csv` | ✅ |
+| SNN Models | `snn/models.py` | ✅ SimpleSNNController |
+| SNN Dataset | `snn/dataset.py` | ✅ PMSMDataset |
+| SNN Training | `snn/train.py` | ✅ Complete |
+| SNN Architecture Doc | `docs/SNN_ARCHITECTURE.md` | ✅ |
+| Training Data | `pmsm-pem/export/train/*.csv` | ✅ 580+ files |
 
 
 
 ## Progress Tracking
 
 | Work Package | Status | Completion |
-|--|--||
+|--------------|--------|------------|
 | WP1 | ✅ Complete | 100% |
 | WP2 | ✅ Complete | 100% |
-| WP3 | 🔲 Not Started | 0% |
+| WP3 | 🔄 In Progress | ~60% |
 | WP4 | 🔲 Not Started | 0% |
 | WP5 | 🔲 Not Started | 0% |
 
@@ -207,42 +209,48 @@ This document helps me to keep the overview on what is left to do in the remaini
 
 ## Next Priority Tasks
 
-1. **Implement Processor Layer** (WP3.1)
-   - `ProcessorConfig` dataclass in `benchmark/config.py`
-   - Class-based processors in `benchmark/processors.py`
-   - `EpisodeRunner` in `benchmark/runner.py`
+1. **Full Training Run** (WP3.3)
+   - Run `python -m snn.train --epochs 100`
+   - Monitor training curves
+   - Save best model
 
-2. **Create SNN Training Pipeline** (WP3.2-3.3)
-   - Set up `snn/` folder with model definitions
-   - Implement dataset loading for PI trajectories
-   - Train Hybrid SNN with imitation learning
+2. **Closed-Loop Integration** (WP3.4)
+   - Add `SNNControllerAgent` to `benchmark/agents.py`
+   - Test with PMSMEnv
+   - Verify stability
 
-3. **Integrate & Validate** (WP3.4-3.5)
-   - Wrap trained SNN in HybridSNNAgent
-   - Run closed-loop benchmark
-   - Compare to PI baseline
+3. **Benchmark Comparison** (WP3.5)
+   - Generate step response plots (SNN vs PI)
+   - Collect metrics (RMSE, sparsity, etc.)
 
 
 
 ## Architecture Notes
 
-### Hybrid SNN-Integrator (from ARCHITECTURE.md)
+### Pure SNN with Slow-Leak Output (Current Approach)
 
-The SNN uses a **hybrid architecture** to solve the steady-state problem:
-- **SNN**: Learns fast dynamics (like P/D terms) - fires when error *changes*
-- **External Integrator**: Provides memory (like I term) - holds voltage at steady state
+The SNN uses **slow-leak output neurons** to solve the steady-state problem:
+- **Hidden layers**: LIF with β=0.9 (fast dynamics, respond to changes)
+- **Output layer**: LIF with β=0.995 (slow leak = built-in integrator)
+- **Output**: Membrane potential directly encodes voltage
 
 ```
-Environment → DeltaEncoding → SNN → Integrator → Environment
-[i_d,i_q,     [i_d,i_q,        [kick_d,   [u_d,u_q]
- e_d,e_q]      Δe_d,Δe_q]       kick_q]
+Environment → SNN (with slow-leak output) → Environment
+[i_d,i_q,     Hidden (β=0.9) → Output (β=0.995)   [u_d,u_q]
+ e_d,e_q]                       ↓ membrane
 ```
 
 **Key Design Decisions:**
-- SNN predicts Δu per timestep (NOT du/dt) → simpler, avoids dt dependency
-- Integrator accumulates kicks into steady voltage
-- Anti-windup prevents integrator saturation
+- No external integrator needed (simpler pipeline)
+- Fully deployable on neuromorphic hardware (Akida)
+- Training target: absolute voltage [u_d, u_q]
+
+### Hybrid SNN-Integrator (Alternative, if needed)
+
+If Pure SNN shows issues, can add:
+- DeltaEncodingPreprocessor → SNN predicts Δu
+- IntegratorPostprocessor → accumulates kicks
 
 
 
-Last Updated: 2026-01-15
+Last Updated: 2026-01-20

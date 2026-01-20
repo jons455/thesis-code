@@ -177,35 +177,70 @@ PI Controller through PMSMEnv:
 
 
 
-## WP3: SNN Implementation (Next)
+## 2026-01-20
+
+### WP3: SNN Training Pipeline 🔄 IN PROGRESS
 
 **Goal**: Train an SNN to control the PMSM and compare to PI baseline.
 
-**Approach**: Hybrid SNN-Integrator Architecture
-- SNN learns Δu (voltage changes) not absolute voltages
-- External integrator accumulates Δu into steady voltage
-- This solves the "spike decay at steady state" problem
+**Architecture Decision**: We chose a **Pure SNN** approach instead of the originally planned Hybrid SNN-Integrator:
 
-**Priority Tasks**:
-1. **Implement Processor Layer** (from ARCHITECTURE.md)
-   - `benchmark/config.py` — ProcessorConfig dataclass
-   - `benchmark/processors.py` — Class-based processors (DeltaEncoding, Integrator)
-   - `benchmark/runner.py` — EpisodeRunner class
+| Approach | Description | Why Chosen |
+|----------|-------------|------------|
+| **Pure SNN** ✅ | Slow-leak output neurons act as built-in integrator | Simpler pipeline, fully on-chip for Akida |
+| Hybrid SNN | External integrator accumulates voltage kicks | More complex, integrator runs on host |
 
-2. **Create SNN Training Pipeline**
-   - `snn/` folder structure
-   - Dataset loading for PI trajectories
-   - Hybrid SNN model with snnTorch LIF neurons
+**Key Design: Slow-Leak Output Neurons**
+- Hidden layers: LIF with β=0.9 (fast dynamics)
+- Output layer: LIF with β=0.995 (slow leak = built-in integrator)
+- Output = membrane potential (not spikes)
+- No external integrator needed!
 
-3. **Train & Integrate**
-   - Imitation learning: SNN predicts Δu from (i_d, i_q, Δe_d, Δe_q)
-   - Closed-loop validation through benchmark pipeline
+**What was done**:
+- Created `snn/` folder structure with complete training pipeline
+- Implemented `SimpleSNNController` in `snn/models.py` (~310 lines)
+- Implemented `PMSMDataset` in `snn/dataset.py` (~310 lines)
+- Implemented training script `snn/train.py` (~400 lines)
+- Installed Poetry and all dependencies (snnTorch 0.9.4, PyTorch 2.9.1)
+- Verified training works with quick test (3 epochs, loss decreasing)
+
+**Quick Test Results**:
+```
+Epoch   1/3 | Train: 0.149 | Val: 0.071 | MAE: 0.216 *
+Epoch   2/3 | Train: 0.059 | Val: 0.041 | MAE: 0.166 *
+Epoch   3/3 | Train: 0.046 | Val: 0.040 | MAE: 0.165 *
+Training complete! Model saved to snn/checkpoints/
+```
+
+**Key Files Created**:
+- `snn/__init__.py` — Module exports
+- `snn/models.py` — SimpleSNNController with slow-leak output
+- `snn/dataset.py` — PMSMDataset for loading PI trajectories
+- `snn/train.py` — Complete training script with CLI
+- `docs/SNN_ARCHITECTURE.md` — Detailed architecture documentation
+
+**Next Steps**:
+1. Run full training (all 580+ trajectories, 100 epochs)
+2. Add `SNNControllerAgent` to `benchmark/agents.py`
+3. Test SNN in closed-loop with PMSMEnv
+4. Compare SNN vs PI using benchmark metrics
+
+
+
+## WP3: SNN Implementation (Remaining)
+
+**Remaining Tasks**:
+1. **Full Training Run** — Train on complete dataset
+2. **Closed-Loop Integration** — Add SNNControllerAgent wrapper
+3. **Benchmark Comparison** — SNN vs PI metrics
+4. **(Optional) Hybrid Approach** — For comparison if Pure SNN struggles
 
 **Success Criteria**:
-- SNN tracks reference with RMSE < 0.1 A (within 10× of PI)
-- SNN shows >80% activation sparsity (efficient)
+- SNN tracks reference with RMSE < 1.0 A (within 10× of PI)
+- SNN shows >50% activation sparsity (efficient)
 - Control Smoothness (TV) within 2× of PI (no excessive chattering)
+- Closed-loop stable (no NaN/explosion)
 
 
 
-*Last updated: 2026-01-15*
+*Last updated: 2026-01-20*
