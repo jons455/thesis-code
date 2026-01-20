@@ -301,7 +301,9 @@ class SimpleSNNController(nn.Module):
     @classmethod
     def load(cls, path: str, device: str = "cpu") -> "SimpleSNNController":
         """Load model from checkpoint."""
-        checkpoint = torch.load(path, map_location=device)
+        # PyTorch 2.6+ requires weights_only=False for custom classes
+        # or adding them to safe globals
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
         
         model = cls(config=checkpoint["config"])
         model.load_state_dict(checkpoint["state_dict"])
