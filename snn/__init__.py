@@ -24,5 +24,22 @@ Example:
 
 from snn.models import SimpleSNNController
 from snn.dataset import PMSMDataset
+from snn.akida_export import (
+    validate_akida_compatibility,
+    export_to_nir,
+    export_to_onnx,
+    RateCodingOutput,
+    PopulationCodingOutput,
+    AkidaCompatibilityReport,
+)
 
-__all__ = ["SimpleSNNController", "PMSMDataset"]
+__all__ = [
+    "SimpleSNNController",
+    "PMSMDataset",
+    "validate_akida_compatibility",
+    "export_to_nir",
+    "export_to_onnx",
+    "RateCodingOutput",
+    "PopulationCodingOutput",
+    "AkidaCompatibilityReport",
+]

@@ -14,6 +14,9 @@ Usage:
 
     # Or from project root:
     python -m benchmark.run_benchmark
+    
+    # Run with full metrics:
+    python -m benchmark.run_benchmark --full-metrics
 """
 
 import sys
@@ -25,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
+
 try:
     # When running as module: python -m benchmark.run_benchmark
     from benchmark.agents import PIControllerAgent, PIControllerTorchAgent, SNNControllerAgent
@@ -33,6 +38,26 @@ except ImportError:
     # When running directly from benchmark folder
     from agents import PIControllerAgent, PIControllerTorchAgent, SNNControllerAgent
     from pmsm_env import PMSMEnv
+
+# Import comprehensive metrics
+try:
+    from metrics.benchmark_metrics import (
+        compute_accuracy_metrics,
+        compute_dynamics_metrics,
+        compute_efficiency_metrics,
+        compute_safety_metrics,
+        compute_stability_metrics,
+        compute_neuromorphic_metrics_from_spikes,
+        BenchmarkResult,
+        PMSMParameters,
+        AccuracyMetrics,
+        DynamicsMetrics,
+        NeuromorphicMetrics,
+    )
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    print("Warning: benchmark_metrics not found. Using basic metrics only.")
 
 # NeuroBench imports (optional - for full benchmark)
 NEUROBENCH_AVAILABLE = False
@@ -116,11 +141,146 @@ def run_simple_test():
         return False
 
 
-def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt"):
+def episode_data_to_dataframe(episode_data: list, env) -> pd.DataFrame:
+    """Convert episode data list to DataFrame for metrics computation."""
+    df = pd.DataFrame(episode_data)
+    
+    # Add speed column (constant for now)
+    if 'n' not in df.columns:
+        df['n'] = env.n_rpm
+    
+    return df
+
+
+def run_comprehensive_benchmark(
+    agent,
+    agent_name: str,
+    env: PMSMEnv,
+    max_steps: int = 1000,
+    compute_neuromorphic: bool = True,
+) -> dict:
+    """
+    Run comprehensive benchmark with all metrics.
+    
+    Parameters
+    ----------
+    agent : callable
+        Controller agent (PI or SNN)
+    agent_name : str
+        Name for reporting
+    env : PMSMEnv
+        Environment instance
+    max_steps : int
+        Maximum steps to run
+    compute_neuromorphic : bool
+        Whether to compute neuromorphic metrics (SNN only)
+    
+    Returns
+    -------
+    dict
+        Complete benchmark results
+    """
+    if not METRICS_AVAILABLE:
+        print("Warning: Full metrics not available, using basic metrics")
+        return {}
+    
+    # Run episode
+    state, info = env.reset()
+    agent.reset()
+    
+    actions_u_d = []
+    actions_u_q = []
+    
+    for step in range(max_steps):
+        action = agent(state)
+        actions_u_d.append(action[0] * 48.0)  # Denormalize
+        actions_u_q.append(action[1] * 48.0)
+        
+        state, reward, done, truncated, info = env.step(action)
+        
+        if np.isnan(action).any() or np.isnan(state).any():
+            print(f"Warning: NaN detected at step {step}")
+            break
+        
+        if done:
+            break
+    
+    # Get episode data
+    episode_data = env.get_episode_data()
+    df = episode_data_to_dataframe(episode_data, env)
+    
+    # Extract arrays
+    time = np.array([d['time'] for d in episode_data])
+    i_d = np.array([d['i_d'] for d in episode_data])
+    i_q = np.array([d['i_q'] for d in episode_data])
+    i_d_ref = np.array([d['i_d_ref'] for d in episode_data])
+    i_q_ref = np.array([d['i_q_ref'] for d in episode_data])
+    u_d = np.array(actions_u_d[:len(episode_data)])
+    u_q = np.array(actions_u_q[:len(episode_data)])
+    n = np.full_like(time, env.n_rpm)
+    
+    # Compute all metrics
+    accuracy = compute_accuracy_metrics(time, i_d, i_q, i_d_ref, i_q_ref)
+    dynamics = compute_dynamics_metrics(time, i_d, i_q, i_d_ref, i_q_ref)
+    efficiency = compute_efficiency_metrics(time, i_d, i_q, u_d, u_q, n)
+    safety = compute_safety_metrics(time, i_d, i_q, u_d, u_q)
+    stability = compute_stability_metrics(u_d, u_q)
+    
+    # Neuromorphic metrics (SNN only)
+    neuromorphic = None
+    spike_stats = None
+    if compute_neuromorphic and hasattr(agent, 'get_spike_statistics'):
+        spike_stats = agent.get_spike_statistics()
+        
+        # Build NeuromorphicMetrics from spike stats
+        if 'error' not in spike_stats:
+            neuromorphic = NeuromorphicMetrics(
+                total_spikes=spike_stats.get('total_spikes', 0),
+                spikes_per_inference=spike_stats.get('spikes_per_timestep', 0),
+                activation_sparsity=spike_stats.get('mean_sparsity', 0),
+                num_neurons=spike_stats.get('num_neurons', 0),
+                num_synapses=spike_stats.get('num_synapses', 0),
+                num_layers=spike_stats.get('num_layers', 0),
+                inference_latency_mean=spike_stats.get('inference_latency_mean', 0),
+                inference_latency_max=spike_stats.get('inference_latency_max', 0),
+                inference_latency_std=spike_stats.get('inference_latency_std', 0),
+            )
+    
+    # Build result
+    result = BenchmarkResult(
+        controller_name=agent_name,
+        operating_point=f"id={env.i_d_ref:.1f}A, iq={env.i_q_ref:.1f}A @ {env.n_rpm:.0f}rpm",
+        timestamp=datetime.now().isoformat(),
+        speed_rpm=env.n_rpm,
+        i_d_ref=env.i_d_ref,
+        i_q_ref=env.i_q_ref,
+        accuracy=accuracy,
+        dynamics=dynamics,
+        efficiency=efficiency,
+        safety=safety,
+        stability=stability,
+        neuromorphic=neuromorphic,
+    )
+    
+    return {
+        'result': result,
+        'episode_data': episode_data,
+        'spike_stats': spike_stats,
+    }
+
+
+def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt", full_metrics: bool = False):
     """
     Test SNN controller in closed-loop.
     
     Validates that the trained SNN can control the motor without exploding.
+    
+    Parameters
+    ----------
+    checkpoint_path : str
+        Path to model checkpoint
+    full_metrics : bool
+        If True, compute comprehensive metrics using benchmark_metrics.py
     """
     print("\n" + "=" * 60)
     print("SNN Closed-Loop Test")
@@ -146,35 +306,55 @@ def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt"):
         n_rpm=1000,
         i_d_ref=0.0,
         i_q_ref=2.0,
-        max_steps=500,
+        max_steps=1000 if full_metrics else 500,
     )
     
     try:
-        # Create SNN controller
-        agent = SNNControllerAgent(str(checkpoint))
+        # Create SNN controller with spike tracking enabled
+        agent = SNNControllerAgent(str(checkpoint), track_spikes=True)
         print(f"Model loaded successfully!")
         print(f"  Parameters: {agent.model.count_parameters():,}")
+        print(f"  Network: {agent._network_stats}")
         
     except Exception as e:
         print(f"[FAIL] Could not load SNN model: {e}")
+        import traceback
+        traceback.print_exc()
         env.close()
         return False
     
-    # Run episode
+    # Run with full metrics if available
+    if full_metrics and METRICS_AVAILABLE:
+        benchmark_result = run_comprehensive_benchmark(
+            agent, "SNN", env, 
+            max_steps=1000,
+            compute_neuromorphic=True,
+        )
+        
+        if benchmark_result and 'result' in benchmark_result:
+            print("\n" + benchmark_result['result'].summary())
+            
+            # Print additional spike statistics
+            if benchmark_result.get('spike_stats'):
+                stats = benchmark_result['spike_stats']
+                print("\nDetailed Spike Statistics:")
+                print(f"  Total spikes: {stats.get('total_spikes', 'N/A'):,}")
+                print(f"  Spikes/timestep: {stats.get('spikes_per_timestep', 0):.1f}")
+                print(f"  Mean sparsity: {stats.get('mean_sparsity', 0)*100:.1f}%")
+                if 'inference_latency_mean' in stats:
+                    print(f"  Inference latency: {stats['inference_latency_mean']*1e6:.1f} µs (mean)")
+            
+            env.close()
+            return True
+    
+    # Fallback to basic test
     state, info = env.reset()
     agent.reset()
     
     total_reward = 0
-    sparsities = []
     
     for step in range(500):
         action = agent(state)
-        
-        # Track sparsity every 100 steps
-        if step % 100 == 0:
-            sparsity = agent.get_sparsity(state)
-            sparsities.append(sparsity)
-        
         state, reward, done, truncated, info = env.step(action)
         total_reward += reward
         
@@ -190,7 +370,7 @@ def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt"):
     # Get episode data
     episode_data = env.get_episode_data()
     
-    # Compute metrics
+    # Compute basic metrics
     final_e_d = episode_data[-1]["e_d"]
     final_e_q = episode_data[-1]["e_q"]
     final_error = np.sqrt(final_e_d**2 + final_e_q**2)
@@ -199,11 +379,8 @@ def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt"):
     errors = [(d["e_d"]**2 + d["e_q"]**2)**0.5 for d in episode_data]
     rmse = np.sqrt(np.mean([e**2 for e in errors]))
     
-    # Average sparsity
-    avg_sparsity = {}
-    if sparsities:
-        for key in sparsities[0].keys():
-            avg_sparsity[key] = np.mean([s[key] for s in sparsities])
+    # Get spike statistics
+    spike_stats = agent.get_spike_statistics()
     
     print("\nSNN Results:")
     print(f"  Steps completed: {len(episode_data)}")
@@ -214,10 +391,18 @@ def run_snn_test(checkpoint_path: str = "../snn/checkpoints/best_model.pt"):
     print(f"  i_d final: {episode_data[-1]['i_d']:.4f} A (ref: {episode_data[-1]['i_d_ref']:.4f} A)")
     print(f"  i_q final: {episode_data[-1]['i_q']:.4f} A (ref: {episode_data[-1]['i_q_ref']:.4f} A)")
     
-    if avg_sparsity:
-        print("\n  Activation Sparsity (higher = more efficient):")
-        for key, val in avg_sparsity.items():
-            print(f"    {key}: {val*100:.1f}%")
+    # Print spike statistics
+    if 'error' not in spike_stats:
+        print("\n  Neuromorphic Metrics:")
+        print(f"    Total spikes: {spike_stats.get('total_spikes', 'N/A'):,}")
+        print(f"    Spikes/timestep: {spike_stats.get('spikes_per_timestep', 0):.1f}")
+        print(f"    Mean sparsity: {spike_stats.get('mean_sparsity', 0)*100:.1f}%")
+        if spike_stats.get('sparsity_per_layer'):
+            for i, s in enumerate(spike_stats['sparsity_per_layer']):
+                print(f"    Layer {i} sparsity: {s*100:.1f}%")
+        if 'inference_latency_mean' in spike_stats:
+            print(f"    Inference latency: {spike_stats['inference_latency_mean']*1e6:.1f} µs (mean)")
+            print(f"    Inference latency: {spike_stats['inference_latency_max']*1e6:.1f} µs (max)")
     
     env.close()
     
@@ -318,20 +503,125 @@ def run_neurobench_benchmark():
         env.close()
 
 
+def run_full_comparison(output_dir: str = "benchmark/results"):
+    """
+    Run full benchmark comparison between PI and SNN controllers.
+    
+    Saves results to CSV and generates summary.
+    """
+    if not METRICS_AVAILABLE:
+        print("Error: benchmark_metrics module required for full comparison")
+        return
+    
+    from pathlib import Path
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    print("\n" + "=" * 60)
+    print("Full Controller Comparison Benchmark")
+    print("=" * 60)
+    
+    results = []
+    
+    # Test configurations
+    configs = [
+        {'n_rpm': 1000, 'i_d_ref': 0.0, 'i_q_ref': 2.0, 'name': 'low_load'},
+        {'n_rpm': 1000, 'i_d_ref': 0.0, 'i_q_ref': 5.0, 'name': 'medium_load'},
+        {'n_rpm': 500, 'i_d_ref': 0.0, 'i_q_ref': 2.0, 'name': 'low_speed'},
+    ]
+    
+    for cfg in configs:
+        print(f"\nOperating point: {cfg['name']}")
+        print("-" * 40)
+        
+        # PI Controller
+        env = PMSMEnv(
+            n_rpm=cfg['n_rpm'],
+            i_d_ref=cfg['i_d_ref'],
+            i_q_ref=cfg['i_q_ref'],
+            max_steps=1000,
+        )
+        pi_agent = PIControllerAgent()
+        pi_result = run_comprehensive_benchmark(
+            pi_agent, "PI", env, 
+            max_steps=1000,
+            compute_neuromorphic=False,
+        )
+        if pi_result and 'result' in pi_result:
+            results.append(pi_result['result'])
+            print(f"  PI: RMSE_iq = {pi_result['result'].accuracy.RMSE_iq*1000:.2f} mA")
+        env.close()
+        
+        # SNN Controller
+        try:
+            checkpoint = Path(__file__).parent.parent / "snn/checkpoints/best_model.pt"
+            if checkpoint.exists():
+                env = PMSMEnv(
+                    n_rpm=cfg['n_rpm'],
+                    i_d_ref=cfg['i_d_ref'],
+                    i_q_ref=cfg['i_q_ref'],
+                    max_steps=1000,
+                )
+                snn_agent = SNNControllerAgent(str(checkpoint), track_spikes=True)
+                snn_result = run_comprehensive_benchmark(
+                    snn_agent, "SNN", env,
+                    max_steps=1000,
+                    compute_neuromorphic=True,
+                )
+                if snn_result and 'result' in snn_result:
+                    results.append(snn_result['result'])
+                    print(f"  SNN: RMSE_iq = {snn_result['result'].accuracy.RMSE_iq*1000:.2f} mA")
+                env.close()
+        except Exception as e:
+            print(f"  SNN: Failed - {e}")
+    
+    # Save results to CSV
+    if results:
+        from metrics.benchmark_metrics import compare_controllers
+        df = compare_controllers(results, str(output_path))
+        print(f"\nResults saved to: {output_path / 'benchmark_comparison.csv'}")
+        
+        # Print summary table
+        print("\n" + "=" * 60)
+        print("Summary Table")
+        print("=" * 60)
+        summary_cols = ['controller', 'operating_point', 'accuracy_RMSE_iq', 
+                       'dynamics_settling_time_iq', 'stability_TV_total']
+        available_cols = [c for c in summary_cols if c in df.columns]
+        if available_cols:
+            print(df[available_cols].to_string(index=False))
+
+
 def main():
     """Main entry point."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="PMSM Benchmark Runner")
+    parser.add_argument('--full-metrics', action='store_true',
+                       help='Compute comprehensive metrics (requires benchmark_metrics)')
+    parser.add_argument('--compare', action='store_true',
+                       help='Run full PI vs SNN comparison across operating points')
+    parser.add_argument('--output-dir', type=str, default='benchmark/results',
+                       help='Output directory for results')
+    args = parser.parse_args()
+    
     print("\n" + "=" * 60)
     print("PMSM Current Control Benchmark - Validation")
     print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Metrics available: {METRICS_AVAILABLE}")
     print("=" * 60)
+
+    if args.compare:
+        run_full_comparison(args.output_dir)
+        return
 
     # Run PI controller test first (baseline)
     simple_ok = run_simple_test()
 
     # Run SNN controller test
-    snn_ok = run_snn_test()
+    snn_ok = run_snn_test(full_metrics=args.full_metrics)
     
-    if simple_ok:
+    if simple_ok and not args.full_metrics:
         # Try NeuroBench benchmark (may have compatibility issues)
         run_neurobench_benchmark()
 

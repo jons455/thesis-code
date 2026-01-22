@@ -65,57 +65,68 @@ This document helps me to keep the overview on what is left to do in the remaini
 
 ### 3.1 Architecture Decision ✅
 
-**Decision**: Use **Pure SNN** approach instead of Hybrid SNN-Integrator.
+**Decision**: Use **Behavioral Cloning** with membrane potential readout (Rate-coded PI approach).
 
-- [x] Evaluate architecture options (Pure SNN vs Hybrid)
-- [x] Choose Pure SNN with slow-leak output neurons (β=0.995)
+- [x] Evaluate architecture options (Direct Mapping vs Behavioral Cloning)
+- [x] Choose Behavioral Cloning from PI trajectories [Stroobants2022, Zaidel2021]
+- [x] Membrane potential readout (not spike count) for continuous control [Zaidel2021]
 - [x] Document architecture in `docs/SNN_ARCHITECTURE.md`
 
-**Rationale**: Pure SNN is simpler (no external integrator) and fully deployable on neuromorphic hardware (Akida).
+**Scientific Basis** (from literature review):
+- Stroobants et al. (2022): Position-coded N-PI on Loihi, 93 neurons [arXiv:2109.10199]
+- Zaidel et al. (2021): Rate-coded NEF PI for robotics [PMC7887770]
+- van Breukelen (2025): Multiple inference cycles per control step [IMAVS 2025/17]
 
 ### 3.2 SNN Model Development ✅
 - [x] Create `snn/` folder structure
   - [x] `snn/__init__.py` - Module exports
-  - [x] `snn/models.py` - SimpleSNNController (~310 lines)
+  - [x] `snn/models.py` - SimpleSNNController (~440 lines)
   - [x] `snn/dataset.py` - PMSMDataset (~310 lines)
-  - [x] `snn/train.py` - Training script with CLI (~400 lines)
+  - [x] `snn/train.py` - Training script with CLI (~430 lines)
 - [x] Design LIF network using snnTorch
   - [x] Input layer: 4 neurons (i_d, i_q, e_d, e_q)
   - [x] Hidden layers: 64 neurons each, LIF with β=0.9
-  - [x] Output layer: 2 neurons, LIF with β=0.995 (slow-leak = integrator)
-- [x] Output = membrane potential (not spikes) → continuous voltage
-- [x] Training target: absolute voltage [u_d, u_q] (not Δu)
+  - [x] Output layer: 2 neurons, LIF with β=0.995, reset_mechanism="none"
+- [x] Output = membrane potential (not spikes) → continuous voltage [Zaidel2021]
+- [x] Training target: absolute voltage [u_d, u_q] (behavioral cloning)
+- [x] Multi-timestep inference: configurable `num_inference_steps` [van Breukelen2025]
 
-### 3.3 Imitation Learning ✅ PIPELINE READY
-- [x] Load PI-controller trajectory data from `pmsm-pem/export/train/`
-- [x] Preprocess data (normalization, windowing)
-- [x] Define loss function (MSE on output voltage)
-- [x] Implement training loop with validation split
-- [x] Quick test: 3 epochs, 5 files → loss decreasing ✅
-- [ ] **Full training run** (1000 files, 100 epochs) ← 🔄 IN PROGRESS
+### 3.3 Training Data & Imitation Learning ✅
+- [x] Original data: `pmsm-pem/export/train/` (580 files) — CORRUPTED (88% wrong sign)
+- [x] **Root cause identified**: PI controller state not reset on GEM env reset
+- [x] **Clean data generated**: `pmsm-pem/export/train_v2/` (1000 files) ✅
+  - Mean tracking error: 0.000000 A
+  - Max tracking error: 0.000001 A  
+  - 100% correct sign (vs 12% in old data)
+- [x] Validation script: `scripts/validate_data.py`
+- [ ] **Full training run** with clean data ← 🔲 READY
 
 ### 3.4 Closed-Loop Integration ✅ COMPLETE
 - [x] Implement `SNNControllerAgent` in `benchmark/agents.py`
   - [x] Load trained model from checkpoint
   - [x] Stateful membrane potential across timesteps
+  - [x] `num_inference_steps` parameter (Option B from literature)
   - [x] `__call__(state) -> action` interface
   - [x] `reset()` for neuron state initialization
+  - [x] `get_spike_statistics()` for neuromorphic metrics
 - [x] Test with PMSMEnv in closed loop
 - [x] Verify closed-loop stability (no NaN/explosion)
-- [x] Compare step response: SNN vs PI (preliminary, full results after training)
 
-### 3.5 Initial Results 🔄 PARTIAL
-- [ ] Generate step response comparison plots
-- [x] Record tracking error metrics (RMSE, ITAE, settling time, overshoot) — Framework ready
-- [x] Record neuromorphic metrics (SyOps, sparsity) — 80-90% sparsity observed!
-- [ ] Verify Control Smoothness (TV) metric - SNN must not chatter
+### 3.5 Benchmark API ✅ COMPLETE
+- [x] Create `benchmark/controller_interface.py`
+  - [x] `ControllerInterface` protocol (structural typing)
+  - [x] `ControllerAgent` abstract base class
+  - [x] `BenchmarkConfig` dataclass
+  - [x] `BenchmarkResults` dataclass with `.summary()` and `.to_dict()`
+  - [x] `run_benchmark()` main entry point
+- [x] Test with PI controller: RMSE=78mA, settling=2.4ms
+- [x] NeuroBench-compatible interface
 
-### 3.6 (Optional) Hybrid Approach 🔲
-Only if Pure SNN shows issues (voltage drift, instability):
-- [ ] Add DeltaEncodingPreprocessor
-- [ ] Add IntegratorPostprocessor
-- [ ] Train with Δu target instead of absolute voltage
-- [ ] Compare Pure vs Hybrid
+### 3.6 (Optional) Architecture Variants 🔲
+If single-network approach shows issues:
+- [ ] Two separate SNNs (one per axis) — matches classical PI structure
+- [ ] Shared backbone + separate heads — best of both worlds
+- [ ] IWTA integration neurons [Stroobants2023, arXiv:2304.08778]
 
 
 
@@ -183,15 +194,19 @@ Only if Pure SNN shows issues (voltage drift, instability):
 | PMSM Simulation | `pmsm-pem/simulation/simulate_pmsm.py` | ✅ |
 | Metrics Framework | `metrics/benchmark_metrics.py` | ✅ |
 | Benchmark Env | `benchmark/pmsm_env.py` | ✅ |
+| Benchmark API | `benchmark/controller_interface.py` | ✅ NEW |
 | PI Agent | `benchmark/agents.py` | ✅ |
-| SNN Agent | `benchmark/agents.py` | 🔲 Next |
+| SNN Agent | `benchmark/agents.py` | ✅ Multi-timestep |
 | Processors (functions) | `benchmark/processors.py` | ✅ Basic |
 | Benchmark Runner | `benchmark/run_benchmark.py` | ✅ |
 | SNN Models | `snn/models.py` | ✅ SimpleSNNController |
 | SNN Dataset | `snn/dataset.py` | ✅ PMSMDataset |
-| SNN Training | `snn/train.py` | ✅ Complete |
+| SNN Training | `snn/train.py` | ✅ Uses train_v2 |
 | SNN Architecture Doc | `docs/SNN_ARCHITECTURE.md` | ✅ |
-| Training Data | `pmsm-pem/export/train/*.csv` | ✅ 580+ files |
+| Training Data (OLD) | `pmsm-pem/export/train/*.csv` | ⚠️ CORRUPTED |
+| Training Data (CLEAN) | `pmsm-pem/export/train_v2/*.csv` | ✅ 1000 files |
+| Data Validation | `scripts/validate_data.py` | ✅ NEW |
+| Data Generator | `scripts/generate_training_data.py` | ✅ NEW |
 
 
 
@@ -201,57 +216,129 @@ Only if Pure SNN shows issues (voltage drift, instability):
 |--------------|--------|------------|
 | WP1 | ✅ Complete | 100% |
 | WP2 | ✅ Complete | 100% |
-| WP3 | 🔄 In Progress | ~80% |
+| WP3 | 🔄 In Progress | ~90% |
 | WP4 | 🔲 Not Started | 0% |
 | WP5 | 🔲 Not Started | 0% |
+
+### Session 2026-01-21: Key Accomplishments
+
+1. **Identified Training Data Corruption** 
+   - Old data had 88% wrong sign (i_q negative when ref positive)
+   - Root cause: PI integrator not reset on GEM env reset
+   
+2. **Generated Clean Training Data**
+   - 1000 files in `train_v2/` with 100% correct tracking
+   - Validation script created
+
+3. **Implemented Multi-Timestep Inference (Option B)**
+   - `num_inference_steps` parameter in SNNControllerAgent
+   - Follows literature recommendation [van Breukelen 2025]
+
+4. **Created Clean Benchmark API**
+   - `benchmark/controller_interface.py`
+   - NeuroBench-compatible `run_benchmark()` function
+   - Tested with PI controller: 78mA RMSE, 2.4ms settling
 
 
 
 ## Next Priority Tasks
 
-1. ~~**Full Training Run** (WP3.3)~~ ← 🔄 RUNNING
-   - Command: `python -m snn.train --epochs 100`
-   - Loading 1000 trajectory files
-   - Will save best model to `snn/checkpoints/`
+1. **Full Training Run with Clean Data** (WP3.3)
+   - Command: `poetry run python -m snn.train --epochs 100`
+   - Uses clean `train_v2/` data (1000 files, 0.000000A error)
 
-2. ~~**Closed-Loop Integration** (WP3.4)~~ ← ✅ DONE
-   - `SNNControllerAgent` added to `benchmark/agents.py`
-   - Tested with PMSMEnv — stable, no NaN
-   - 77/77 unit tests passing
+2. **Benchmark Comparison** (WP4) ← READY
+   - Command: `poetry run python -m benchmark.run_benchmark --compare`
+   - PI baseline validated, SNN awaiting training
 
-3. **Benchmark Comparison** (WP3.5) ← NEXT (after training)
-   - Generate step response plots (SNN vs PI)
-   - Collect metrics (RMSE, sparsity, TV)
-   - Update EXPERIMENT_LOG.md with E002 results
+3. **Document Results for Thesis**
+   - Step response plots
+   - Metrics tables
+   - Neuromorphic efficiency analysis
 
 
 
 ## Architecture Notes
 
-### Pure SNN with Slow-Leak Output (Current Approach)
+### Rate-Coded PI with Membrane Potential Readout (Current Approach)
 
-The SNN uses **slow-leak output neurons** to solve the steady-state problem:
+Following Zaidel et al. (2021) [PMC7887770], the SNN uses **membrane potential readout** for continuous control output:
+
 - **Hidden layers**: LIF with β=0.9 (fast dynamics, respond to changes)
-- **Output layer**: LIF with β=0.995 (slow leak = built-in integrator)
-- **Output**: Membrane potential directly encodes voltage
+- **Output layer**: LIF with β=0.995, reset_mechanism="none" (no spike, membrane = output)
+- **Output**: Membrane potential directly encodes voltage (no rate decoding needed)
 
 ```
-Environment → SNN (with slow-leak output) → Environment
-[i_d,i_q,     Hidden (β=0.9) → Output (β=0.995)   [u_d,u_q]
- e_d,e_q]                       ↓ membrane
+Environment → SNN (membrane readout) → Environment
+[i_d,i_q,     Hidden (β=0.9) → Output (β=0.995, no reset)   [u_d,u_q]
+ e_d,e_q]                       ↓ membrane potential
 ```
 
-**Key Design Decisions:**
-- No external integrator needed (simpler pipeline)
-- Fully deployable on neuromorphic hardware (Akida)
-- Training target: absolute voltage [u_d, u_q]
+### Key Design Decisions (with References)
 
-### Hybrid SNN-Integrator (Alternative, if needed)
+| Decision | Choice | Reference |
+|----------|--------|-----------|
+| Training paradigm | Behavioral Cloning (imitation) | Stroobants et al. (2022) [arXiv:2109.10199] |
+| Output encoding | Membrane potential readout | Zaidel et al. (2021) [PMC7887770] |
+| Network size | 64 hidden neurons (vs 60-80 in literature) | Stroobants (2023) [ACM 10.1145/3546790] |
+| Multi-output | Single network, 2 outputs | Standard multi-output regression |
+| Inference timesteps | Configurable (1-N per control step) | van Breukelen (2025) [IMAVS 2025/17] |
+| Time constants | β=0.9 hidden, β=0.995 output | Tuned for 10kHz control loop |
 
-If Pure SNN shows issues, can add:
-- DeltaEncodingPreprocessor → SNN predicts Δu
-- IntegratorPostprocessor → accumulates kicks
+### Alternative Architectures (If Needed)
 
+From literature review, if single-network approach shows issues:
 
+1. **Two Separate Networks** [matches classical PI structure]
+   - SNN_d: [i_d, e_d] → u_d
+   - SNN_q: [i_q, e_q] → u_q
+   - Advantage: Decoupled, easier to train
 
-Last Updated: 2026-01-20
+2. **IWTA Integration** [Stroobants 2023, arXiv:2304.08778]
+   - Input-Weighted Threshold Adaptation for precise integration
+   - 10 neurons vs 30 for position-coded integrator
+
+3. **Position-Coded Output** [Stroobants 2022, arXiv:2109.10199]
+   - 15 neurons encode discrete voltage levels
+   - WTA decoding for output
+   - Used on Loihi for quadrotor altitude control
+
+---
+
+## References
+
+### Primary Papers (PI-to-SNN Imitation Learning)
+
+1. **Stroobants, S. et al. (2022)**. "Parsimonious Neuromorphic PID for Quadrotor Altitude Control."
+   - arXiv:2109.10199
+   - 93 neurons, position-coded, Loihi deployment
+   - Demonstrated 100× energy savings vs ARM Cortex-M4
+
+2. **Stroobants, S. et al. (2023)**. "Design and implementation of N-PID on Loihi."
+   - ACM doi:10.1145/3546790.3546799
+   - IWTA mechanism for integration
+   - Hardware implementation details
+
+3. **Zaidel, Y. et al. (2021)**. "Neuromorphic NEF-Based Inverse Kinematics and PID Control."
+   - PMC7887770 (Front. Neurorobot.)
+   - Rate-coded PI with membrane potential readout
+   - 250-500 neurons per axis
+
+4. **van Breukelen Castillo, M.F. (2025)**. "SNNs for High-Speed Continuous Control."
+   - IMAVS 2025, Paper 17
+   - Multiple integration cycles per control step
+   - Hybrid spike-rate decoding
+
+### Supporting Papers
+
+5. **Burgers, T. et al. (2023)**. "Evolving SNNs to Mimic PID Control for Autonomous Blimps."
+   - arXiv:2309.12937
+   - Evolutionary approach to SNN control
+
+6. **Paredes-Vallés, F. et al. (2024)**. "Fully Neuromorphic Vision and Control."
+   - Science Robotics, doi:10.1126/scirobotics.adi0591
+   - End-to-end neuromorphic drone control
+
+---
+
+Last Updated: 2026-01-21

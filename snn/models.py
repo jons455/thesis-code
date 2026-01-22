@@ -206,7 +206,8 @@ class SimpleSNNController(nn.Module):
         self,
         x: torch.Tensor,
         state: Optional[Tuple[torch.Tensor, ...]] = None,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        return_spikes: bool = False,
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, ...], Optional[dict]]:
         """
         Forward pass for a single timestep.
         
@@ -217,6 +218,8 @@ class SimpleSNNController(nn.Module):
             Values should be normalized to approximately [-1, 1]
         state : tuple of tensors, optional
             Previous membrane states. If None, initializes to zeros.
+        return_spikes : bool
+            If True, returns spike activity dict for neuromorphic metrics.
         
         Returns
         -------
@@ -225,6 +228,11 @@ class SimpleSNNController(nn.Module):
             Normalized to [-1, 1] via tanh
         new_state : tuple of tensors
             Updated membrane states for next timestep
+        spike_info : dict, optional
+            Only returned if return_spikes=True. Contains:
+            - 'spikes': list of spike tensors per layer [batch, neurons]
+            - 'spike_counts': list of spike counts per layer
+            - 'total_spikes': total spike count across all layers
         """
         batch_size = x.shape[0]
         
@@ -236,12 +244,18 @@ class SimpleSNNController(nn.Module):
         *hidden_mems, mem_out = state
         new_mems = []
         
+        # Track spikes if requested
+        spike_tensors = [] if return_spikes else None
+        
         # Process through hidden layers
         spk = x
         for i, (layer, neuron) in enumerate(zip(self.layers, self.neurons)):
             cur = layer(spk)
             spk, mem = neuron(cur, hidden_mems[i])
             new_mems.append(mem)
+            
+            if return_spikes:
+                spike_tensors.append(spk.detach())
         
         # Output layer - read membrane potential
         cur_out = self.fc_out(spk)
@@ -251,13 +265,25 @@ class SimpleSNNController(nn.Module):
         # Scale and clip output to [-1, 1]
         voltage = torch.tanh(mem_out * self.output_scale)
         
-        return voltage, tuple(new_mems)
+        # Build spike info dict if requested
+        if return_spikes:
+            spike_counts = [s.sum().item() for s in spike_tensors]
+            spike_info = {
+                'spikes': spike_tensors,
+                'spike_counts': spike_counts,
+                'total_spikes': sum(spike_counts),
+                'layer_sparsities': [1.0 - s.mean().item() for s in spike_tensors],
+            }
+            return voltage, tuple(new_mems), spike_info
+        
+        return voltage, tuple(new_mems), None
     
     def forward_sequence(
         self,
         x: torch.Tensor,
         state: Optional[Tuple[torch.Tensor, ...]] = None,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, ...]]:
+        return_spikes: bool = False,
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, ...], Optional[dict]]:
         """
         Forward pass for a sequence of timesteps.
         
@@ -267,6 +293,8 @@ class SimpleSNNController(nn.Module):
             Input tensor of shape [batch, time, 4]
         state : tuple of tensors, optional
             Initial membrane states
+        return_spikes : bool
+            If True, returns aggregated spike statistics.
         
         Returns
         -------
@@ -274,6 +302,8 @@ class SimpleSNNController(nn.Module):
             Output voltages [batch, time, 2]
         final_state : tuple of tensors
             Final membrane states
+        spike_info : dict, optional
+            Aggregated spike statistics over entire sequence
         """
         batch_size, seq_len, _ = x.shape
         
@@ -281,11 +311,33 @@ class SimpleSNNController(nn.Module):
             state = self.init_state(batch_size, x.device)
         
         voltages = []
-        for t in range(seq_len):
-            voltage, state = self.forward(x[:, t, :], state)
-            voltages.append(voltage)
+        all_spike_counts = []
+        all_sparsities = []
         
-        return torch.stack(voltages, dim=1), state
+        for t in range(seq_len):
+            voltage, state, spike_info = self.forward(x[:, t, :], state, return_spikes)
+            voltages.append(voltage)
+            
+            if return_spikes and spike_info is not None:
+                all_spike_counts.append(spike_info['spike_counts'])
+                all_sparsities.append(spike_info['layer_sparsities'])
+        
+        # Aggregate spike stats
+        aggregated_spike_info = None
+        if return_spikes and all_spike_counts:
+            import numpy as np
+            spike_counts_array = np.array(all_spike_counts)  # [time, layers]
+            sparsities_array = np.array(all_sparsities)
+            
+            aggregated_spike_info = {
+                'total_spikes': int(spike_counts_array.sum()),
+                'spikes_per_timestep': spike_counts_array.sum(axis=1).tolist(),
+                'spikes_per_layer': spike_counts_array.sum(axis=0).tolist(),
+                'mean_sparsity_per_layer': sparsities_array.mean(axis=0).tolist(),
+                'overall_sparsity': float(sparsities_array.mean()),
+            }
+        
+        return torch.stack(voltages, dim=1), state, aggregated_spike_info
     
     def save(self, path: str) -> None:
         """Save model checkpoint."""
@@ -344,6 +396,49 @@ class SimpleSNNController(nn.Module):
             sparsities[f"hidden_{i}"] = sparsity
         
         return sparsities
+    
+    def get_weight_matrix(self) -> torch.Tensor:
+        """
+        Get concatenated weight matrix for neuromorphic metrics.
+        
+        Returns a single matrix with all weights for SyOps calculation.
+        """
+        weights = []
+        for layer in self.layers:
+            weights.append(layer.weight.data.cpu().numpy())
+        weights.append(self.fc_out.weight.data.cpu().numpy())
+        
+        # Return flattened for simple analysis
+        import numpy as np
+        return np.concatenate([w.flatten() for w in weights])
+    
+    def get_network_stats(self) -> dict:
+        """
+        Get network architecture statistics for neuromorphic metrics.
+        
+        Returns dict with neuron counts, synapse counts, etc.
+        """
+        total_neurons = 0
+        total_synapses = 0
+        
+        # Hidden layers
+        for layer in self.layers:
+            total_neurons += layer.out_features
+            total_synapses += layer.weight.numel()
+        
+        # Output layer
+        total_neurons += self.fc_out.out_features
+        total_synapses += self.fc_out.weight.numel()
+        
+        return {
+            'num_neurons': total_neurons,
+            'num_synapses': total_synapses,
+            'num_layers': len(self.layers) + 1,
+            'hidden_size': self.config.hidden_size,
+            'num_hidden_layers': self.config.num_hidden_layers,
+            'input_size': self.config.input_size,
+            'output_size': self.config.output_size,
+        }
 
 
 # Alias for convenience

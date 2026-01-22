@@ -42,7 +42,7 @@ class TrainConfig:
     """Training configuration."""
     
     # Data
-    data_dir: str = "pmsm-pem/export/train"
+    data_dir: str = "pmsm-pem/export/train_v2"  # Clean training data (100% PI tracking)
     window_size: int = 100
     stride: int = 50
     val_split: float = 0.2
@@ -66,6 +66,8 @@ class TrainConfig:
     # Checkpoints
     checkpoint_dir: str = "snn/checkpoints"
     save_every: int = 10  # Save checkpoint every N epochs
+    resume_from: Optional[str] = None  # Path to checkpoint to resume from
+    start_epoch: int = 1  # Starting epoch (for resume)
     
     # Debugging
     max_files: Optional[int] = None  # Limit files for quick testing
@@ -93,7 +95,7 @@ def train_epoch(
         optimizer.zero_grad()
         
         # Forward pass through sequence
-        outputs, _ = model.forward_sequence(inputs)
+        outputs, _, _ = model.forward_sequence(inputs)
         
         # MSE loss on voltage predictions
         loss = F.mse_loss(outputs, targets)
@@ -130,7 +132,7 @@ def validate(
         inputs = inputs.to(device)
         targets = targets.to(device)
         
-        outputs, _ = model.forward_sequence(inputs)
+        outputs, _, _ = model.forward_sequence(inputs)
         
         loss = F.mse_loss(outputs, targets)
         total_loss += loss.item() * inputs.shape[0]
@@ -216,19 +218,24 @@ def train(config: TrainConfig) -> SimpleSNNController:
     
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     
-    # Create model
-    print("\nCreating model...")
-    snn_config = SNNConfig(
-        hidden_size=config.hidden_size,
-        num_hidden_layers=config.num_hidden_layers,
-        beta_hidden=config.beta_hidden,
-        beta_output=config.beta_output,
-    )
-    
-    model = SimpleSNNController(config=snn_config)
-    model = model.to(config.device)
-    
-    print(f"Parameters: {model.count_parameters():,}")
+    # Create or load model
+    if config.resume_from:
+        print(f"\nResuming from checkpoint: {config.resume_from}")
+        model = SimpleSNNController.load(config.resume_from, device=config.device)
+        print(f"Loaded model with {model.count_parameters():,} parameters")
+    else:
+        print("\nCreating model...")
+        snn_config = SNNConfig(
+            hidden_size=config.hidden_size,
+            num_hidden_layers=config.num_hidden_layers,
+            beta_hidden=config.beta_hidden,
+            beta_output=config.beta_output,
+        )
+        
+        model = SimpleSNNController(config=snn_config)
+        model = model.to(config.device)
+        
+        print(f"Parameters: {model.count_parameters():,}")
     
     # Optimizer
     optimizer = torch.optim.AdamW(
@@ -254,7 +261,17 @@ def train(config: TrainConfig) -> SimpleSNNController:
     best_val_loss = float("inf")
     history = {"train_loss": [], "val_loss": [], "val_mae": []}
     
-    for epoch in range(1, config.epochs + 1):
+    # Load existing history if resuming
+    history_path = checkpoint_dir / "history.json"
+    if config.resume_from and history_path.exists():
+        import json
+        with open(history_path) as f:
+            history = json.load(f)
+        print(f"Loaded history with {len(history['train_loss'])} previous epochs")
+        if history["val_loss"]:
+            best_val_loss = min(history["val_loss"])
+    
+    for epoch in range(config.start_epoch, config.epochs + 1):
         # Train
         train_loss = train_epoch(
             model, train_loader, optimizer, config.device, config.grad_clip
@@ -280,15 +297,15 @@ def train(config: TrainConfig) -> SimpleSNNController:
         
         # Print progress
         lr = optimizer.param_groups[0]["lr"]
-        print(
+        msg = (
             f"Epoch {epoch:3d}/{config.epochs} | "
             f"Train: {train_loss:.6f} | "
             f"Val: {val_metrics['loss']:.6f} | "
             f"MAE: {val_metrics['mae']:.4f} | "
             f"LR: {lr:.2e}"
-            + (" *" if is_best else ""),
-            flush=True
+            + (" *" if is_best else "")
         )
+        print(msg, flush=True)
         
         # Periodic checkpoint
         if epoch % config.save_every == 0:
@@ -325,8 +342,8 @@ def main():
     
     # Data arguments
     parser.add_argument(
-        "--data_dir", type=str, default="pmsm-pem/export/train",
-        help="Directory with training CSV files"
+        "--data_dir", type=str, default="pmsm-pem/export/train_v2",
+        help="Directory with training CSV files (train_v2 = clean data)"
     )
     parser.add_argument(
         "--window_size", type=int, default=100,
@@ -375,6 +392,16 @@ def main():
         help="Device (cuda/cpu)"
     )
     
+    # Resume arguments
+    parser.add_argument(
+        "--resume", type=str, default=None,
+        help="Path to checkpoint to resume training from"
+    )
+    parser.add_argument(
+        "--start_epoch", type=int, default=1,
+        help="Starting epoch number (for resume)"
+    )
+    
     args = parser.parse_args()
     
     # Create config from arguments
@@ -389,6 +416,8 @@ def main():
         batch_size=args.batch_size,
         learning_rate=args.lr,
         max_files=args.max_files,
+        resume_from=args.resume,
+        start_epoch=args.start_epoch,
     )
     
     if args.device:
