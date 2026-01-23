@@ -28,6 +28,12 @@ experiments/
 logs/
 *.log
 
+# Model checkpoints (too large for git)
+snn/checkpoints/
+checkpoints/
+*.pt
+*.pth
+
 # MATLAB
 *.asv
 *.slxc

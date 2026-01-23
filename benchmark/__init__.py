@@ -9,21 +9,28 @@ Components:
 -----------
 - PMSMEnv: Gymnasium-compatible wrapper for GEM PMSM environment
 - PIControllerAgent: Baseline PI controller as NeuroBench agent
-- SNNControllerAgent: Spiking neural network controller (future)
+- SNNControllerAgent: Spiking neural network controller
 
 Usage:
 ------
-    from benchmark import PMSMEnv, PIControllerAgent
+    from benchmark import PMSMEnv, PIControllerAgent, SNNControllerAgent
     from neurobench.benchmarks import BenchmarkClosedLoop
 
     env = PMSMEnv()
-    agent = PIControllerAgent(env)
+    agent = PIControllerAgent()
+    # or: agent = SNNControllerAgent("snn/checkpoints/best_model.pt")
 
     benchmark = BenchmarkClosedLoop(agent, env, ...)
     results = benchmark.run()
 """
 
-from .agents import PIControllerAgent, PIControllerTorchAgent, PIParameters
+from .agents import (
+    PIControllerAgent,
+    PIControllerTorchAgent,
+    PIParameters,
+    SNNControllerAgent,
+    SNNControllerTorchAgent,
+)
 from .pmsm_env import PMSMEnv
 
 __all__ = [
@@ -31,4 +38,6 @@ __all__ = [
     "PIControllerAgent",
     "PIControllerTorchAgent",
     "PIParameters",
+    "SNNControllerAgent",
+    "SNNControllerTorchAgent",
 ]

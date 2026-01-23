@@ -296,25 +296,287 @@ class PIControllerTorchAgent(nn.Module):
 
 
 # =============================================================================
-# Placeholder for Future SNN Controller
+# SNN Controller Agent
 # =============================================================================
 
 
 class SNNControllerAgent:
     """
-    Placeholder for SNN controller.
-
-    This will be implemented in WP3 using snnTorch with LIF neurons.
-    The architecture will be:
-    - Input: [i_d, i_q, e_d, e_q] (rate-encoded or direct)
-    - Hidden: 1-2 layers of LIF neurons
-    - Output: [u_d, u_q] (from membrane potentials)
-
-    Training: Imitation learning from PI controller trajectories.
+    Spiking Neural Network controller for PMSM current control.
+    
+    Uses a trained SimpleSNNController model from snn/models.py.
+    The SNN uses slow-leak LIF output neurons whose membrane potential
+    directly encodes the voltage command (no external integrator needed).
+    
+    Following NeuroBench/literature recommendations, this agent supports
+    multiple internal SNN timesteps per control step for proper spike
+    integration (Option B from literature review).
+    
+    Parameters
+    ----------
+    checkpoint_path : str
+        Path to trained model checkpoint (.pt file)
+    device : str
+        Device for inference ('cpu' or 'cuda')
+    track_spikes : bool
+        Whether to track spike activity for neuromorphic metrics
+    num_inference_steps : int
+        Number of SNN timesteps per control step (default 1).
+        Higher values allow better spike integration but increase latency.
+        Literature recommends 5-20 for control tasks.
+    
+    Example
+    -------
+        agent = SNNControllerAgent("snn/checkpoints/best_model.pt", num_inference_steps=10)
+        state, _ = env.reset()
+        agent.reset()  # Reset neuron states for new episode
+        action = agent(state)  # Returns normalized [u_d, u_q]
+        
+        # After episode, get spike statistics
+        spike_stats = agent.get_spike_statistics()
     """
+    
+    def __init__(
+        self,
+        checkpoint_path: str = "snn/checkpoints/best_model.pt",
+        device: str = "cpu",
+        track_spikes: bool = True,
+        num_inference_steps: int = 1,
+    ):
+        # Import SNN model here to avoid circular imports
+        import sys
+        from pathlib import Path
+        
+        # Add project root to path if needed
+        project_root = Path(__file__).parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        
+        from snn.models import SimpleSNNController
+        
+        self.device = torch.device(device)
+        self.checkpoint_path = checkpoint_path
+        self.track_spikes = track_spikes
+        self.num_inference_steps = num_inference_steps
+        
+        # Load trained model
+        self.model = SimpleSNNController.load(checkpoint_path, device=device)
+        self.model.eval()
+        
+        # SNN state (membrane potentials) - persists across timesteps
+        self._snn_state: Optional[tuple] = None
+        
+        # Spike tracking for neuromorphic metrics
+        self._spike_counts_per_step: list = []  # List of spike counts per timestep
+        self._sparsities_per_step: list = []    # List of sparsities per timestep
+        self._inference_times: list = []         # Inference latencies
+        self._total_spikes: int = 0
+        self._total_control_steps: int = 0       # For spikes per control step
+        
+        # Network stats (cached)
+        self._network_stats = self.model.get_network_stats()
+    
+    def reset(self):
+        """Reset neuron membrane potentials and spike tracking for new episode."""
+        self._snn_state = None
+        self._spike_counts_per_step = []
+        self._sparsities_per_step = []
+        self._inference_times = []
+        self._total_spikes = 0
+        self._total_control_steps = 0
+    
+    def __call__(self, state: np.ndarray) -> np.ndarray:
+        """
+        Compute SNN control action.
+        
+        Runs the SNN for num_inference_steps internal timesteps per control step.
+        This allows proper spike integration following NeuroBench recommendations.
+        
+        Parameters
+        ----------
+        state : np.ndarray
+            Normalized state [i_d, i_q, e_d, e_q] from PMSMEnv
+        
+        Returns
+        -------
+        np.ndarray
+            Normalized voltage command [u_d, u_q] in [-1, 1]
+        """
+        import time
+        
+        # Handle torch tensor input
+        if isinstance(state, torch.Tensor):
+            state_tensor = state.float().to(self.device)
+        else:
+            state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
+        
+        # Ensure shape is [batch, features]
+        if state_tensor.dim() == 1:
+            state_tensor = state_tensor.unsqueeze(0)
+        
+        # Forward pass through SNN with timing
+        # Run multiple internal timesteps per control step
+        t_start = time.perf_counter()
+        step_spikes = 0
+        step_sparsities = []
+        
+        with torch.no_grad():
+            for _ in range(self.num_inference_steps):
+                voltage, self._snn_state, spike_info = self.model(
+                    state_tensor, 
+                    self._snn_state, 
+                    return_spikes=self.track_spikes
+                )
+                
+                # Aggregate spike info across internal steps
+                if self.track_spikes and spike_info is not None:
+                    step_spikes += spike_info['total_spikes']
+                    step_sparsities.append(spike_info['layer_sparsities'])
+        
+        t_end = time.perf_counter()
+        
+        # Track spike activity (aggregated per control step)
+        if self.track_spikes and spike_info is not None:
+            self._spike_counts_per_step.append([step_spikes])
+            if step_sparsities:
+                # Average sparsity across internal steps
+                avg_sparsity = np.mean(step_sparsities, axis=0).tolist()
+                self._sparsities_per_step.append(avg_sparsity)
+            self._total_spikes += step_spikes
+            self._inference_times.append(t_end - t_start)
+            self._total_control_steps += 1
+        
+        # Convert to numpy and ensure shape
+        action = voltage.cpu().numpy().flatten()
+        
+        # Clip to valid range (should already be in [-1, 1] due to tanh)
+        action = np.clip(action, -1.0, 1.0)
+        
+        return action.astype(np.float32)
+    
+    def get_sparsity(self, state: np.ndarray) -> dict:
+        """
+        Get activation sparsity for neuromorphic metrics.
+        
+        Returns fraction of neurons that did NOT spike (higher = more efficient).
+        """
+        if isinstance(state, torch.Tensor):
+            state_tensor = state.float().to(self.device)
+        else:
+            state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
+        
+        if state_tensor.dim() == 1:
+            state_tensor = state_tensor.unsqueeze(0)
+        
+        return self.model.get_sparsity(state_tensor, self._snn_state)
+    
+    def get_spike_statistics(self) -> dict:
+        """
+        Get aggregated spike statistics for neuromorphic metrics.
+        
+        Returns
+        -------
+        dict
+            Contains:
+            - total_spikes: total spikes across all timesteps
+            - spikes_per_control_step: average spikes per control step
+            - mean_sparsity: average activation sparsity
+            - inference_latency_mean/max/std: timing statistics
+            - network_stats: neuron/synapse counts
+            - num_inference_steps: internal SNN steps per control step
+        """
+        if not self._spike_counts_per_step:
+            return {'error': 'No spike data collected. Enable track_spikes=True'}
+        
+        spike_counts = np.array(self._spike_counts_per_step)
+        sparsities = np.array(self._sparsities_per_step) if self._sparsities_per_step else np.array([[0.0]])
+        
+        stats = {
+            # Spike counts
+            'total_spikes': int(self._total_spikes),
+            'num_control_steps': self._total_control_steps,
+            'num_inference_steps_per_control': self.num_inference_steps,
+            'spikes_per_control_step': float(self._total_spikes / max(1, self._total_control_steps)),
+            
+            # Sparsity
+            'mean_sparsity': float(sparsities.mean()) if sparsities.size > 0 else 0.0,
+            'sparsity_per_layer': sparsities.mean(axis=0).tolist() if sparsities.size > 0 else [],
+            
+            # Network architecture
+            **self._network_stats,
+        }
+        
+        # Timing statistics
+        if self._inference_times:
+            times = np.array(self._inference_times)
+            stats.update({
+                'inference_latency_mean_s': float(times.mean()),
+                'inference_latency_max_s': float(times.max()),
+                'inference_latency_std_s': float(times.std()),
+                'inference_latency_p99_s': float(np.percentile(times, 99)),
+                'control_frequency_hz': float(1.0 / times.mean()) if times.mean() > 0 else 0.0,
+            })
+        
+        return stats
+    
+    def get_weight_matrix(self) -> np.ndarray:
+        """Get weight matrix for neuromorphic metrics calculation."""
+        return self.model.get_weight_matrix()
+    
+    def reset_hooks(self):
+        """NeuroBench compatibility: reset any registered hooks."""
+        pass
 
-    def __init__(self):
-        raise NotImplementedError(
-            "SNNControllerAgent will be implemented in WP3. "
-            "Use PIControllerAgent for baseline testing."
+
+class SNNControllerTorchAgent(nn.Module):
+    """
+    PyTorch wrapper around SNN controller for NeuroBench TorchAgent compatibility.
+    
+    Parameters
+    ----------
+    checkpoint_path : str
+        Path to trained model checkpoint
+    device : str
+        Device for inference
+    num_inference_steps : int
+        Number of internal SNN timesteps per control step
+    """
+    
+    def __init__(
+        self,
+        checkpoint_path: str = "snn/checkpoints/best_model.pt",
+        device: str = "cpu",
+        num_inference_steps: int = 1,
+    ):
+        super().__init__()
+        self.snn_controller = SNNControllerAgent(
+            checkpoint_path, device, track_spikes=True, num_inference_steps=num_inference_steps
         )
+        
+        # Dummy parameter so PyTorch recognizes this as a module
+        self.dummy_param = nn.Parameter(torch.zeros(1), requires_grad=False)
+    
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        """Forward pass - compute control action."""
+        # Handle batch dimension
+        if state.dim() == 1:
+            action = self.snn_controller(state.cpu().numpy())
+            return torch.tensor(action, dtype=torch.float32).unsqueeze(0)
+        elif state.dim() == 2:
+            # Batched input - process each sample
+            batch_size = state.shape[0]
+            actions = []
+            for i in range(batch_size):
+                action = self.snn_controller(state[i].cpu().numpy())
+                actions.append(action)
+            return torch.tensor(np.stack(actions), dtype=torch.float32)
+        else:
+            raise ValueError(f"Expected 1D or 2D input, got {state.dim()}D")
+    
+    def reset(self):
+        """Reset controller state."""
+        self.snn_controller.reset()
+    
+    def get_spike_statistics(self) -> dict:
+        """Get spike statistics from underlying SNN controller."""
+        return self.snn_controller.get_spike_statistics()
