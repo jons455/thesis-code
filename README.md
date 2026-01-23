@@ -166,15 +166,64 @@ poetry run pytest tests/test_regression.py  # Regression tests
 ## Code Quality
 
 ```bash
-# Format code
-poetry run black .
+# Format code (using ruff formatter, black-compatible)
+poetry run ruff format .
 
 # Lint code
 poetry run ruff check .
 poetry run ruff check --fix .  # Auto-fix issues
 
 # Type check
-poetry run mypy benchmark metrics utils
+poetry run mypy benchmark metrics utils snn
+```
+
+## Contributing
+
+This project follows [NeuroBench contribution guidelines](https://neurobench.readthedocs.io/en/latest/contributing.html) for compatibility with future framework integration.
+
+### Code Style
+
+- **Formatting**: Ruff formatter (Black-compatible), 88-character line length
+- **Linting**: Ruff with pycodestyle (E, W), Pyflakes (F), isort (I), and more
+- **Type Hints**: Encouraged, checked with mypy
+- **Docstrings**: [Google format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
+- **Testing**: pytest with tests in `tests/`, `benchmark/tests/`, `metrics/tests/`
+
+### Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality before commits:
+
+```bash
+# Install pre-commit (one-time setup)
+pip install pre-commit
+pre-commit install
+
+# Run hooks on staged files
+pre-commit run
+
+# Run hooks on all files
+pre-commit run --all-files
+```
+
+### Development Workflow
+
+1. Create a feature branch from `main`
+2. Make changes following the code style guidelines
+3. Write tests for new features in the appropriate test directory
+4. Run pre-commit hooks and fix any issues
+5. Submit a pull request
+
+### Testing Your Changes
+
+```bash
+# Run all tests
+poetry run pytest
+
+# Run with coverage
+poetry run pytest --cov=benchmark --cov=metrics --cov=utils --cov=snn
+
+# Run specific module tests
+poetry run pytest benchmark/tests/
 ```
 
 ## Validation Results

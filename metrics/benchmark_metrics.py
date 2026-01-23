@@ -1,31 +1,19 @@
-"""
-Comprehensive Benchmark Metrics for Neuromorphic PMSM Current Control
-======================================================================
+"""Comprehensive benchmark metrics for neuromorphic PMSM current control.
 
-This module provides a structured framework for evaluating both:
-1. Control Performance Metrics (adapted for Current Control, CC)
-2. Neuromorphic-Specific Metrics (based on NeuroBench and recent literature)
+This module provides a structured framework for evaluating control performance
+metrics (adapted for current control) and neuromorphic-specific metrics based
+on NeuroBench and recent literature. Architecture follows ISO/IEC 25010
+quality model adapted for control systems.
 
-Architecture follows ISO/IEC 25010 quality model adapted for control systems.
-
-References:
------------
-[1] NeuroBench: A Framework for Benchmarking Neuromorphic Computing Algorithms
-    and Systems (arXiv:2304.04640, 2023)
-[2] Metrics for Evaluating Quality of Control in Electric Drives
-    (IEEE Trans. Ind. Electron., 2021)
-[3] Energy-Efficient Neuromorphic Computing: From Devices to Architectures
-    (Nature Electronics, 2022)
-[4] Spiking Neural Networks for Motor Control Applications
-    (Frontiers in Neuroscience, 2023)
-
-Author: Thesis Project
-Last Updated: January 2026
+Note:
+    Key references for metric definitions:
+        - NeuroBench Framework (arXiv:2304.04640, 2023)
+        - Metrics for Evaluating Quality of Control in Electric Drives
+          (IEEE Trans. Ind. Electron., 2021)
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -877,7 +865,7 @@ def compute_neuromorphic_metrics_from_spikes(
     spike_trains: np.ndarray,  # Shape: (num_neurons, num_timesteps)
     weights: np.ndarray,  # Shape: (post, pre) or sparse matrix
     dt_snn: float,  # SNN simulation timestep [s]
-    inference_times: Optional[np.ndarray] = None,  # Measured inference latencies
+    inference_times: np.ndarray | None = None,  # Measured inference latencies
     platform_energy_per_syop: float = 1e-12,  # pJ per SyOp (platform-dependent)
     static_power_platform: float = 0.0,  # Static power consumption [W]
 ) -> NeuromorphicMetrics:
@@ -913,7 +901,7 @@ def compute_neuromorphic_metrics_from_spikes(
     # Spike statistics
     total_spikes = int(np.sum(spike_trains))
     spikes_per_neuron = np.sum(spike_trains, axis=1)
-    spikes_per_timestep = np.sum(spike_trains, axis=0)
+    _spikes_per_timestep = np.sum(spike_trains, axis=0)  # noqa: F841
 
     # Firing rates
     duration = num_timesteps * dt_snn
@@ -926,7 +914,9 @@ def compute_neuromorphic_metrics_from_spikes(
 
     # Connection sparsity (fraction of zero weights)
     if hasattr(weights, "nnz"):  # Sparse matrix
-        connection_sparsity = 1.0 - (weights.nnz / (weights.shape[0] * weights.shape[1]))
+        connection_sparsity = 1.0 - (
+            weights.nnz / (weights.shape[0] * weights.shape[1])
+        )
     else:
         connection_sparsity = np.sum(weights == 0) / weights.size
 
@@ -1046,7 +1036,7 @@ class BenchmarkResult:
     efficiency: EfficiencyMetrics = field(default_factory=EfficiencyMetrics)
     safety: SafetyMetrics = field(default_factory=SafetyMetrics)
     stability: StabilityMetrics = field(default_factory=StabilityMetrics)
-    neuromorphic: Optional[NeuromorphicMetrics] = None
+    neuromorphic: NeuromorphicMetrics | None = None
 
     def to_dict(self) -> dict[str, any]:
         """Convert to flat dictionary for CSV export."""
@@ -1059,7 +1049,13 @@ class BenchmarkResult:
         }
 
         # Add all metrics from dataclasses
-        for category_name in ["accuracy", "dynamics", "efficiency", "safety", "stability"]:
+        for category_name in [
+            "accuracy",
+            "dynamics",
+            "efficiency",
+            "safety",
+            "stability",
+        ]:
             category = getattr(self, category_name)
             for field_name, value in category.__dict__.items():
                 result[f"{category_name}_{field_name}"] = value
@@ -1187,7 +1183,7 @@ def run_benchmark(
 
 
 def compare_controllers(
-    results: list[BenchmarkResult], output_dir: Optional[str] = None
+    results: list[BenchmarkResult], output_dir: str | None = None
 ) -> pd.DataFrame:
     """
     Compare multiple controller benchmark results.

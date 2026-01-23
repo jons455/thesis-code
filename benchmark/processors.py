@@ -1,12 +1,11 @@
-"""
-Pre/Post-processors for PMSM Control Benchmark
-===============================================
+"""Pre/post-processors for PMSM control benchmark.
 
 Processors for spike encoding/decoding and signal transformation
 for neuromorphic controllers.
 
-Note: These will be expanded when implementing the SNN controller.
-For the PI baseline, no processors are needed.
+Note:
+    These will be expanded when implementing the SNN controller.
+    For the PI baseline, no processors are needed.
 """
 
 import numpy as np
@@ -17,22 +16,15 @@ def normalize_state(
     i_max: float = 10.8,
     u_max: float = 48.0,
 ) -> np.ndarray:
-    """
-    Normalize PMSM state for neural network input.
+    """Normalize PMSM state for neural network input.
 
-    Parameters
-    ----------
-    state : np.ndarray
-        Raw state vector [i_d, i_q, e_d, e_q] or similar
-    i_max : float
-        Maximum current for normalization [A]
-    u_max : float
-        Maximum voltage for normalization [V]
+    Args:
+        state: Raw state vector [i_d, i_q, e_d, e_q] or similar.
+        i_max: Maximum current for normalization [A].
+        u_max: Maximum voltage for normalization [V].
 
-    Returns
-    -------
-    np.ndarray
-        Normalized state in range [-1, 1] or [0, 1]
+    Returns:
+        Normalized state in range [-1, 1] or [0, 1].
     """
     # Simple normalization by limits
     # Currents and errors normalized by i_max
@@ -44,20 +36,14 @@ def denormalize_action(
     action: np.ndarray,
     u_max: float = 48.0,
 ) -> np.ndarray:
-    """
-    Denormalize neural network output to voltage commands.
+    """Denormalize neural network output to voltage commands.
 
-    Parameters
-    ----------
-    action : np.ndarray
-        Normalized action in range [-1, 1]
-    u_max : float
-        Maximum voltage [V]
+    Args:
+        action: Normalized action in range [-1, 1].
+        u_max: Maximum voltage [V].
 
-    Returns
-    -------
-    np.ndarray
-        Voltage command [u_d, u_q] in physical units
+    Returns:
+        Voltage command [u_d, u_q] in physical units.
     """
     return action * u_max
 
@@ -75,29 +61,21 @@ def rate_encode(
     max_rate: float = 100.0,  # Hz
     dt: float = 1e-4,  # 100us timestep
 ) -> np.ndarray:
-    """
-    Rate coding: Convert continuous value to spike probability.
+    """Rate coding: Convert continuous value to spike probability.
 
     The value is mapped to a firing rate, and spikes are generated
     stochastically based on that rate.
 
-    Parameters
-    ----------
-    value : float
-        Continuous input value
-    min_val, max_val : float
-        Range of input values
-    num_neurons : int
-        Number of encoding neurons (population coding)
-    max_rate : float
-        Maximum firing rate [Hz]
-    dt : float
-        Simulation timestep [s]
+    Args:
+        value: Continuous input value.
+        min_val: Minimum of input value range.
+        max_val: Maximum of input value range.
+        num_neurons: Number of encoding neurons (population coding).
+        max_rate: Maximum firing rate [Hz].
+        dt: Simulation timestep [s].
 
-    Returns
-    -------
-    np.ndarray
-        Binary spike vector of shape (num_neurons,)
+    Returns:
+        Binary spike vector of shape (num_neurons,).
     """
     # Normalize to [0, 1]
     normalized = (value - min_val) / (max_val - min_val)
@@ -120,22 +98,17 @@ def population_decode(
     min_val: float,
     max_val: float,
 ) -> float:
-    """
-    Decode spike train back to continuous value.
+    """Decode spike train back to continuous value.
 
     Simple mean-rate decoding from population activity.
 
-    Parameters
-    ----------
-    spikes : np.ndarray
-        Spike counts or rates from decoding neurons
-    min_val, max_val : float
-        Range of output values
+    Args:
+        spikes: Spike counts or rates from decoding neurons.
+        min_val: Minimum of output value range.
+        max_val: Maximum of output value range.
 
-    Returns
-    -------
-    float
-        Decoded continuous value
+    Returns:
+        Decoded continuous value.
     """
     # Mean activity normalized to output range
     mean_activity = np.mean(spikes)
