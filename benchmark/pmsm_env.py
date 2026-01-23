@@ -1,35 +1,31 @@
-"""
-PMSMEnv: Gymnasium-compatible Wrapper for GEM PMSM Simulation
-=============================================================
+"""Gymnasium-compatible wrapper for GEM PMSM simulation.
 
 This module provides the interface layer between gym-electric-motor (GEM)
-and the NeuroBench closed-loop benchmark framework.
-
-The wrapper:
-- Creates a GEM PMSM current control environment
-- Generates current references (step responses, sweeps)
-- Normalizes observations for neural network input
-- Tracks control quality metrics (time in target, errors)
-- Provides standard Gymnasium interface (reset, step)
+and the NeuroBench closed-loop benchmark framework. The wrapper creates a
+GEM PMSM current control environment, generates current references,
+normalizes observations, and tracks control quality metrics.
 
 Example:
---------
-    env = PMSMEnv(n_rpm=1000, scenario='step_response')
-    state, info = env.reset()
+    Create and run a PMSM current control environment::
 
-    for _ in range(1000):
-        action = agent(state)  # u_d, u_q normalized
-        state, reward, terminal, truncated, info = env.step(action)
+        env = PMSMEnv(n_rpm=1000, scenario="step_response")
+        state, info = env.reset()
+
+        for _ in range(1000):
+            action = agent(state)  # u_d, u_q normalized
+            state, reward, terminal, truncated, info = env.step(action)
 """
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import gym_electric_motor as gem
 import gymnasium as gym
 import numpy as np
-from gym_electric_motor.physical_systems.electric_motors import PermanentMagnetSynchronousMotor
+from gym_electric_motor.physical_systems.electric_motors import (
+    PermanentMagnetSynchronousMotor,
+)
 from gym_electric_motor.physical_systems.mechanical_loads import ConstantSpeedLoad
 from gymnasium import spaces
 
@@ -59,7 +55,7 @@ class PMSMConfig:
 
     @property
     def motor_parameter(self) -> dict:
-        return dict(
+        return dict(  # noqa: C408
             p=self.p,
             r_s=self.r_s,
             l_d=self.l_d,
@@ -69,7 +65,7 @@ class PMSMConfig:
 
     @property
     def limit_values(self) -> dict:
-        return dict(
+        return dict(  # noqa: C408
             i=self.i_max,
             u=self.u_max,
             omega=self.omega_max,
@@ -145,7 +141,7 @@ class PMSMEnv(gym.Env):
         step_time: float = 0.0,  # When to apply step (0 = immediate)
         max_steps: int = 2000,
         settling_threshold: float = 0.02,  # 2% of reference
-        config: Optional[PMSMConfig] = None,
+        config: PMSMConfig | None = None,
     ):
         super().__init__()
 
@@ -172,7 +168,9 @@ class PMSMEnv(gym.Env):
 
         # Define spaces (normalized to [-1, 1])
         # Observation: [i_d, i_q, e_d, e_q]
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(4,), dtype=np.float32
+        )
 
         # Action: [u_d, u_q] normalized
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
@@ -218,7 +216,7 @@ class PMSMEnv(gym.Env):
 
     def _get_current_reference(self) -> tuple[float, float]:
         """Get current reference based on scenario and time."""
-        t = self.current_step * self.config.tau
+        _t = self.current_step * self.config.tau  # noqa: F841 (kept for future use)
         step_k = int(self.step_time / self.config.tau) if self.step_time > 0 else 0
 
         if self.scenario == "step_response":
@@ -254,8 +252,12 @@ class PMSMEnv(gym.Env):
 
     def _extract_state(self, gem_state: np.ndarray) -> tuple[float, float]:
         """Extract and denormalize currents from GEM state."""
-        i_d = float(gem_state[self._idx_i_d]) * self._limits.get("i_sd", self.config.i_max)
-        i_q = float(gem_state[self._idx_i_q]) * self._limits.get("i_sq", self.config.i_max)
+        i_d = float(gem_state[self._idx_i_d]) * self._limits.get(
+            "i_sd", self.config.i_max
+        )
+        i_q = float(gem_state[self._idx_i_q]) * self._limits.get(
+            "i_sq", self.config.i_max
+        )
         return i_d, i_q
 
     def _normalize_observation(
@@ -308,7 +310,7 @@ class PMSMEnv(gym.Env):
         return np.array([u_a, u_b, u_c], dtype=np.float32)
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
+        self, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """Reset the environment."""
         super().reset(seed=seed)
@@ -337,7 +339,9 @@ class PMSMEnv(gym.Env):
 
         return obs, info
 
-    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(
+        self, action: np.ndarray
+    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """
         Execute one control step.
 
@@ -461,4 +465,6 @@ def make_pmsm_env(
     PMSMEnv
         Configured environment instance
     """
-    return PMSMEnv(n_rpm=n_rpm, i_d_ref=i_d_ref, i_q_ref=i_q_ref, scenario=scenario, **kwargs)
+    return PMSMEnv(
+        n_rpm=n_rpm, i_d_ref=i_d_ref, i_q_ref=i_q_ref, scenario=scenario, **kwargs
+    )
