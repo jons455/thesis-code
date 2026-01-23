@@ -1,6 +1,6 @@
 # Implementation Checklist
 
-This document helps me to keep the overview on what is left to do in the remaining time to achieve the goal of developing a MVP like end-to-end pipeline. 
+This document helps me to keep the overview on what is left to do in the remaining time to achieve the goal of developing a MVP like end-to-end pipeline.
 
 > Extracted from Work Packages - Implementation tasks only (no writing/documentation)
 
@@ -91,15 +91,14 @@ This document helps me to keep the overview on what is left to do in the remaini
 - [x] Training target: absolute voltage [u_d, u_q] (behavioral cloning)
 - [x] Multi-timestep inference: configurable `num_inference_steps` [van Breukelen2025]
 
-### 3.3 Training Data & Imitation Learning ✅
-- [x] Original data: `pmsm-pem/export/train/` (580 files) — CORRUPTED (88% wrong sign)
+### 3.3 Training Data & Imitation Learning ⚠️ NEEDS DATA GENERATION
+- [x] Original data: `pmsm-pem/export/train/` — was CORRUPTED, now deleted
 - [x] **Root cause identified**: PI controller state not reset on GEM env reset
-- [x] **Clean data generated**: `pmsm-pem/export/train_v2/` (1000 files) ✅
-  - Mean tracking error: 0.000000 A
-  - Max tracking error: 0.000001 A  
-  - 100% correct sign (vs 12% in old data)
-- [x] Validation script: `scripts/validate_data.py`
-- [ ] **Full training run** with clean data ← 🔲 READY
+- [ ] **Clean data**: `pmsm-pem/export/train_v2/` — ❌ DOES NOT EXIST (needs generation)
+  - Script ready: `scripts/generate_training_data.py`
+  - Command: `poetry run python scripts/generate_training_data.py --num-files 500`
+- [x] Validation script: `scripts/validate_data.py` ✅ Ready
+- [ ] **Full training run** with clean data ← 🔲 BLOCKED (needs data first)
 
 ### 3.4 Closed-Loop Integration ✅ COMPLETE
 - [x] Implement `SNNControllerAgent` in `benchmark/agents.py`
@@ -134,9 +133,9 @@ If single-network approach shows issues:
 
 ### 4.1 Benchmark Scenarios
 - [ ] **Step Response**: Multiple reference step sizes
-- [ ] **Operating Point Sweep**: 
+- [ ] **Operating Point Sweep**:
   - [ ] Low speed (500 rpm)
-  - [ ] Medium speed (1500 rpm)  
+  - [ ] Medium speed (1500 rpm)
   - [ ] High speed (2500 rpm)
   - [ ] Field-weakening region (>2500 rpm)
 - [ ] **Disturbance Rejection**: Load torque steps
@@ -201,12 +200,13 @@ If single-network approach shows issues:
 | Benchmark Runner | `benchmark/run_benchmark.py` | ✅ |
 | SNN Models | `snn/models.py` | ✅ SimpleSNNController |
 | SNN Dataset | `snn/dataset.py` | ✅ PMSMDataset |
-| SNN Training | `snn/train.py` | ✅ Uses train_v2 |
+| SNN Training | `snn/train.py` | ✅ Ready |
 | SNN Architecture Doc | `docs/SNN_ARCHITECTURE.md` | ✅ |
-| Training Data (OLD) | `pmsm-pem/export/train/*.csv` | ⚠️ CORRUPTED |
-| Training Data (CLEAN) | `pmsm-pem/export/train_v2/*.csv` | ✅ 1000 files |
-| Data Validation | `scripts/validate_data.py` | ✅ NEW |
-| Data Generator | `scripts/generate_training_data.py` | ✅ NEW |
+| Training Data (OLD) | `pmsm-pem/export/train/*.csv` | ❌ Deleted (was corrupted) |
+| Training Data (CLEAN) | `pmsm-pem/export/train_v2/*.csv` | ❌ MISSING (needs generation) |
+| SNN Checkpoints | `snn/checkpoints/*.pt` | ❌ MISSING (needs training) |
+| Data Validation | `scripts/validate_data.py` | ✅ Ready |
+| Data Generator | `scripts/generate_training_data.py` | ✅ Ready |
 
 
 
@@ -216,16 +216,16 @@ If single-network approach shows issues:
 |--------------|--------|------------|
 | WP1 | ✅ Complete | 100% |
 | WP2 | ✅ Complete | 100% |
-| WP3 | 🔄 In Progress | ~90% |
+| WP3 | ⚠️ Blocked | ~70% (code ready, needs data + training) |
 | WP4 | 🔲 Not Started | 0% |
 | WP5 | 🔲 Not Started | 0% |
 
 ### Session 2026-01-21: Key Accomplishments
 
-1. **Identified Training Data Corruption** 
+1. **Identified Training Data Corruption**
    - Old data had 88% wrong sign (i_q negative when ref positive)
    - Root cause: PI integrator not reset on GEM env reset
-   
+
 2. **Generated Clean Training Data**
    - 1000 files in `train_v2/` with 100% correct tracking
    - Validation script created
@@ -341,4 +341,4 @@ From literature review, if single-network approach shows issues:
 
 ---
 
-Last Updated: 2026-01-21
+Last Updated: 2026-01-23
