@@ -120,40 +120,41 @@ class PIControllerAgent:
         # action: [u_d, u_q] normalized
 ```
 
-#### SNN Controller (Hybrid SNN-Integrator Architecture)
+#### SNN Controller (Biological SNN Architecture)
 
-The SNN uses a **hybrid architecture** to solve the steady-state problem:
+The SNN uses a **biological architecture** to solve the steady-state problem:
 - **SNN**: Learns fast dynamics (like P/D terms) - fires when error *changes*
-- **External Integrator**: Provides memory (like I term) - holds voltage at steady state
+- **Implicit Integrator**: Output neurons use **Slow-Leak LIF** dynamics ($\beta \approx 1.0$) to effectively integrate spikes and hold voltage at steady state.
 
 ```python
-class HybridSNNAgent:
+class SNNControllerAgent:
     """
-    Hybrid SNN-Integrator for PMSM current control.
+    Biological SNN for PMSM current control.
     
-    The SNN predicts 'kicks' (Δu per timestep).
-    The integrator accumulates these into steady voltage.
+    Architecture:
+    Input [4] ──▶ Hidden [64] ──▶ Output [2] (Slow-Leak LIF) ──▶ Voltage
+       (Spikes)      (Spikes)           (Membrane Potential)
+       
+    The Output neurons act as the "Integrator".
     
-    Training: Imitation learning from PI trajectories.
-    Target: Δu = u[t] - u[t-1] (NOT du/dt!)
+    Temporal Upsampling:
+    Runs N internal inference steps (e.g., 10) for every 1 control step
+    to allow spike propagation and settling.
     """
-    
-    def __init__(self, snn_model):
-        self.snn = snn_model  # snnTorch LIF network
-        # Integrator state handled by PostProcessor
     
     def __call__(self, state) -> np.ndarray:
-        # state: [i_d, i_q, Δe_d, Δe_q] (delta-encoded by PreProcessor)
-        # output: [kick_d, kick_q] (integrated by PostProcessor)
+        # 1. Expand input for temporal dimension
+        # 2. Run SNN for N steps
+        # 3. Return final membrane potential as continuous action
         return self.snn(state)
 ```
 
-**Why Hybrid?**
-| Problem | Pure SNN Issue | Hybrid Solution |
+**Why Biological?**
+| Problem | Hybrid Issue | Biological Solution |
 |||--|
-| Steady state | Spikes decay → output drifts | Integrator holds voltage |
-| Sparsity | Always spiking to maintain output | Silent at steady state (Δe=0) |
-| Training | Must learn absolute values | Only learns changes |
+| Complexity | External math block adds "non-neural" code | All-neural implementation |
+| Steady state | Drift if integrator is separate | Membrane potential naturally holds state |
+| Efficiency | Two separate blocks | Unified network |
 
 ### 2.4 Processor Layer (Pre/Post Processing)
 
@@ -217,6 +218,13 @@ class ProcessorConfig:
 ```
 
 ### 2.5 Design Decisions & Gotchas
+
+#### ✅ Decision: Temporal Upsampling (Sub-stepping)
+The SNN needs time to settle, but the control loop is fixed at 10kHz (100µs).
+**Solution**: Run **N=10 inference steps** for every 1 control step.
+- Input is repeated for 10 ticks.
+- Spikes propagate through layers.
+- Output membrane potential is read at the 10th tick.
 
 #### ⚠️ Gotcha 1: Integrator Time Trap
 
@@ -293,7 +301,7 @@ Different controllers require different processor chains:
 | Controller | Preprocessor | Postprocessor | Notes |
 ||--||-|
 | PI (baseline) | Identity | Identity | Direct state→action |
-| Hybrid SNN | DeltaEncoding | Integrator | Δe input, kick output |
+| Biological SNN | Normalization | Identity | Direct voltage output |
 | Fully Spiking SNN | SpikeEncoding | SpikeDecoding | All-spike pathway |
 | ANN (baseline) | Identity | Identity | Fair DL comparison |
 
@@ -423,12 +431,12 @@ thesis-code/
 │         │                         action                                 │  │
 │         └────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
-│   Example: Hybrid SNN Pipeline                                              │
-│   ┌─────────────┐   ┌──────────────┐   ┌──────────┐   ┌──────────────┐     │
-│   │[i_d,i_q,    │   │ DeltaEncoding│   │   SNN    │   │  Integrator  │     │
-│   │ e_d,e_q]    │──▶│ [i_d,i_q,    │──▶│ kick_d,  │──▶│  u_d,u_q     │     │
-│   │             │   │  Δe_d,Δe_q]  │   │ kick_q   │   │  (accumulated)│    │
-│   └─────────────┘   └──────────────┘   └──────────┘   └──────────────┘     │
+│   Example: SNN Pipeline                                                     │
+│   ┌─────────────┐   ┌──────────────┐   ┌──────────┐                         │
+│   │[i_d,i_q,    │   │ Normalization│   │   SNN    │                         │
+│   │ e_d,e_q]    │──▶│ (Implicit)   │──▶│ u_d,u_q  │                         │
+│   │             │   │              │   │ (Direct) │                         │
+│   └─────────────┘   └──────────────┘   └──────────┘                         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -450,14 +458,14 @@ thesis-code/
 **Preprocessed State** (depends on preprocessor):
 ```
 Identity:      [i_d, i_q, e_d, e_q]      ← for PI controller
-DeltaEncoding: [i_d, i_q, Δe_d, Δe_q]    ← for Hybrid SNN
+Normalization: [i_d, i_q, e_d, e_q]      ← for Biological SNN
 SpikeEncoding: [spikes × 4×N neurons]    ← for Fully Spiking SNN
 ```
 
 **Agent Output** (depends on agent type):
 ```
 PI/ANN:     [u_d, u_q]         ← direct voltage
-Hybrid SNN: [kick_d, kick_q]    ← voltage change per step
+Biological SNN: [u_d, u_q]      ← direct voltage (slow-leak integration)
 Spiking:    [spikes × 2×M]      ← spike trains
 ```
 
@@ -505,16 +513,16 @@ Always: [u_d, u_q] normalized to [-1, 1]
 
 ### 7.1 Implement Processor Layer
 
-**Status**: Design complete, implementation pending
+**Status**: Implicitly implemented, Refactoring to explicit classes pending (see METHODOLOGY.md)
 
 | File | Purpose | Status |
 |||--|
 | `benchmark/config.py` | ProcessorConfig dataclass | 🔜 TODO |
-| `benchmark/processors.py` | Pre/Postprocessors (class-based) | 🔜 TODO (expand existing functions) |
+| `benchmark/processors.py` | Explicit Pre/Postprocessor classes | 🔜 Refactor needed |
 | `benchmark/runner.py` | EpisodeRunner class | 🔜 TODO |
 
-**Existing**: `benchmark/processors.py` has basic functions (`normalize_state`, `rate_encode`, etc.)
-**Needed**: Class-based processors (IdentityPreprocessor, DeltaEncodingPreprocessor, IntegratorPostprocessor)
+**Existing**: Normalization currently fused in `PMSMEnv`.
+**Needed**: Extract to `NormalizationPreprocessor`.
 
 ### 7.2 SNN Development
 
@@ -523,11 +531,11 @@ The pipeline accepts any pre-trained `.pt` model file.
 
 | Component | Description | Status |
 |--|-|--|
-| SNN Architecture | Hybrid SNN-Integrator (snnTorch LIF) | ✅ Design done |
-| Training Target | Δu = u[t] - u[t-1] per timestep | ✅ Decided |
+| SNN Architecture | Biological SNN (Slow-Leak LIF) | ✅ Implemented |
+| Training Target | Direct Voltage Control | ✅ Decided |
 | Training Data | 580+ PI trajectories in `pmsm-pem/export/train/` | ✅ Available |
-| SNN Folder | `snn/` directory structure | 🔜 TODO |
-| Training Script | `snn/train.py` | 🔜 TODO |
+| SNN Folder | `snn/` directory structure | 🔜 Cleanup needed |
+| Training Script | `snn/train.py` | ✅ Basic version |
 
 ### 7.3 Benchmark Execution (WP4)
 
@@ -540,7 +548,7 @@ Once the processor layer and a trained SNN are available:
 
 2. **Run all controllers**
    - PI baseline (IdentityPreprocessor + IdentityPostprocessor)
-   - Hybrid SNN (DeltaEncodingPreprocessor + IntegratorPostprocessor)
+   - Biological SNN (NormalizationPreprocessor + IdentityPostprocessor)
    - Optional: ANN baseline (fair comparison)
 
 3. **Collect metrics**

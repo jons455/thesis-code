@@ -12,6 +12,7 @@ returning an action and ``reset()`` for stateful agents.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
@@ -450,6 +451,29 @@ class SNNControllerAgent:
         action = np.clip(action, -1.0, 1.0)
 
         return action.astype(np.float32)
+
+    def get_info(self) -> dict[str, Any]:
+        """Return controller metadata for benchmark reporting.
+
+        Returns
+        -------
+        dict
+            Controller metadata including:
+            - name: Controller identifier
+            - type: Controller type ('snn')
+            - checkpoint: Path to model checkpoint
+            - hidden_size: Number of neurons per hidden layer
+            - num_layers: Total number of layers
+            - parameters: Total trainable parameters
+        """
+        return {
+            "name": "SNN-PI-Imitation",
+            "type": "snn",
+            "checkpoint": str(self.checkpoint_path),
+            "hidden_size": self._network_stats["hidden_size"],
+            "num_layers": self._network_stats["num_layers"],
+            "parameters": self.model.count_parameters(),
+        }
 
     def get_sparsity(self, state: np.ndarray) -> dict:
         """
