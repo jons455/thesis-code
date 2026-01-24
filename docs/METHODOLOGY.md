@@ -77,8 +77,36 @@ To align the codebase with the clean architecture, the following refactoring ste
 2.  **`snn/training/`**: specific training scripts (currently `train.py` is root).
 3.  **`snn/checkpoints/`**: formalized location for `.pt` files.
 
-### 3.3 Configuration Management
-**Goal**: Centralize "Magic Numbers" (Limits, Gains, Timesteps).
+### 3.3 Configuration Management (Single Source of Truth)
+**Goal**: Centralize "Magic Numbers" (Limits, Gains, Timesteps) to prevent drift between Env, PI, and SNN.
 
-1.  **`config.py`**: Create a global config object that is shared by `PMSMEnv`, `PIController`, and `SNNController`.
-2.  Ensure `dt` (100µs) is defined in **one place** and propagated everywhere.
+1.  **`config.py`**: Create a global config object (or YAML loader).
+2.  **Scope**:
+    *   Motor Plant (R, L, Flux)
+    *   Control Limits (I_max, U_max)
+    *   Timing (dt, Simulation steps)
+3.  **Benefit**: Changing `R_s` in one place updates the Simulation, the PI Tuning (Technical Optimum), and the SNN Normalization automatically.
+
+### 3.4 Testing Consolidation
+**Goal**: Centralize scattered tests.
+
+1.  **Move**: `benchmark/tests/` -> `tests/benchmark/`
+2.  **Move**: `metrics/tests/` -> `tests/metrics/`
+3.  **Move**: `scripts/test_*.py` -> `tests/integration/`
+4.  **Benefit**: A single `pytest` command validates the entire thesis codebase.
+
+### 3.5 Data Pipeline Standardization
+**Goal**: Clear separation of raw vs. processed data.
+
+1.  **`data/raw/`**: Simulation outputs (CSVs from GEM).
+2.  **`data/processed/`**: Normalized datasets for PyTorch `DataLoader`.
+3.  **`results/`**: Benchmark artifacts (plots, tables).
+
+### 3.6 CLI Entry Points
+**Goal**: Simplify execution.
+
+1.  Create `main.py` (or `cli.py`) with `argparse` or `typer`.
+2.  Commands:
+    *   `python main.py train --epochs 100`
+    *   `python main.py benchmark --agent pi`
+    *   `python main.py visualize --run-id latest`
