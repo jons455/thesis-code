@@ -11,7 +11,8 @@ Example:
 
         from evaluation.snn.akida_export import export_to_nir, validate_akida_compatibility
 
-        model = SimpleSNNController.load("models/checkpoints/best_model.pt")
+        from evaluation.snn.models import load_snn_model
+        model = load_snn_model("models/checkpoints/best_model.pt")
 
         # Check compatibility
         report = validate_akida_compatibility(model)
@@ -256,152 +257,6 @@ def export_to_onnx(
 
 
 # =============================================================================
-# Alternative Output Architectures for Akida
-# =============================================================================
-
-
-class RateCodingOutput(nn.Module):
-    """
-    Alternative output layer using rate coding.
-
-    Instead of reading membrane potential, count spikes over a time window
-    and decode to continuous values. More Akida-compatible.
-
-    Output = (spike_count / time_steps) * scale - offset
-    """
-
-    def __init__(
-        self,
-        input_size: int,
-        output_size: int,
-        time_steps: int = 10,
-        scale: float = 2.0,
-        offset: float = 1.0,
-    ):
-        super().__init__()
-        self.fc = nn.Linear(input_size, output_size)
-        self.time_steps = time_steps
-        self.scale = scale
-        self.offset = offset
-
-        # Import snnTorch
-        import snntorch as snn
-        from snntorch import surrogate
-
-        # Standard LIF for spike output
-        self.lif = snn.Leaky(
-            beta=0.9,
-            spike_grad=surrogate.fast_sigmoid(slope=25),
-            reset_mechanism="subtract",  # Akida-compatible
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        mem: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass accumulating spikes over time_steps.
-
-        Args:
-            x: Input from previous layer [batch, features].
-            mem: Previous membrane state.
-
-        Returns:
-            Tuple of (output, mem) where output is decoded continuous
-            value [batch, output_size] and mem is updated membrane state.
-        """
-        batch_size = x.shape[0]
-        device = x.device
-
-        if mem is None:
-            mem = torch.zeros(batch_size, self.fc.out_features, device=device)
-
-        # Accumulate spikes
-        spike_count = torch.zeros(batch_size, self.fc.out_features, device=device)
-
-        for _ in range(self.time_steps):
-            cur = self.fc(x)
-            spk, mem = self.lif(cur, mem)
-            spike_count += spk
-
-        # Decode: rate → continuous value
-        rate = spike_count / self.time_steps
-        output = rate * self.scale - self.offset
-
-        return output, mem
-
-
-class PopulationCodingOutput(nn.Module):
-    """Alternative output layer using population coding.
-
-    Multiple neurons per output dimension, each tuned to a different value.
-    The population activity is decoded to a continuous value.
-    More robust and Akida-compatible than membrane readout.
-    """
-
-    def __init__(
-        self,
-        input_size: int,
-        output_size: int,
-        neurons_per_output: int = 10,
-        value_range: tuple[float, float] = (-1.0, 1.0),
-    ):
-        super().__init__()
-        self.output_size = output_size
-        self.neurons_per_output = neurons_per_output
-        self.value_range = value_range
-
-        # Total output neurons
-        total_neurons = output_size * neurons_per_output
-        self.fc = nn.Linear(input_size, total_neurons)
-
-        # Preferred values for each neuron (evenly spaced)
-        values = torch.linspace(value_range[0], value_range[1], neurons_per_output)
-        self.register_buffer("preferred_values", values)
-
-        import snntorch as snn
-        from snntorch import surrogate
-
-        self.lif = snn.Leaky(
-            beta=0.9,
-            spike_grad=surrogate.fast_sigmoid(slope=25),
-            reset_mechanism="subtract",
-        )
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        mem: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass with population decoding.
-        """
-        batch_size = x.shape[0]
-        device = x.device
-
-        if mem is None:
-            mem = torch.zeros(
-                batch_size, self.output_size * self.neurons_per_output, device=device
-            )
-
-        cur = self.fc(x)
-        spk, mem = self.lif(cur, mem)
-
-        # Reshape to [batch, output_size, neurons_per_output]
-        spk_reshaped = spk.view(batch_size, self.output_size, self.neurons_per_output)
-
-        # Population decoding: weighted average of preferred values
-        # Normalize spike activity per output dimension
-        spk_sum = spk_reshaped.sum(dim=-1, keepdim=True) + 1e-8
-        weights = spk_reshaped / spk_sum
-
-        # Decode
-        output = (weights * self.preferred_values).sum(dim=-1)
-
-        return output, mem
-
-
-# =============================================================================
 # Quantization Utilities
 # =============================================================================
 
@@ -475,10 +330,10 @@ def main():
     args = parser.parse_args()
 
     # Load model
-    from evaluation.snn.models import SimpleSNNController
+    from evaluation.snn.models import load_snn_model
 
     print(f"Loading model from: {args.checkpoint}")
-    model = SimpleSNNController.load(args.checkpoint)
+    model = load_snn_model(args.checkpoint)
 
     # Validate compatibility
     report = validate_akida_compatibility(model)

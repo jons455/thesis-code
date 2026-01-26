@@ -8,7 +8,7 @@ While `ARCHITECTURE.md` describes the logical layers, the actual implementation 
 
 ### 1.1 Biological Integration (Implicit Integrator)
 The initial design proposed a "Hybrid" architecture with an external mathematical integrator ($u_{acc} += kick$).
-The **current implementation** (`evaluation/snn/models.py` -> `SimpleSNNController`) achieves this *biologically* using **Slow-Leak LIF Neurons** in the output layer.
+The **current implementation** (`evaluation/snn/models.py` -> `MembraneSNNController`) achieves this *biologically* using **Slow-Leak LIF Neurons** in the output layer.
 
 *   **Mechanism**: The output neurons have a very high decay factor ($\beta \approx 0.995$).
 *   **Behavior**: They effectively integrate spikes over time and hold the membrane potential constant when input ceases (steady state).
@@ -73,7 +73,7 @@ To align the codebase with the clean architecture, the following refactoring ste
 ### 3.2 SNN Folder Structure
 **Goal**: Standardize the `snn/` directory.
 
-1.  **`evaluation/snn/inference/`**: Move `SimpleSNNController` here (or keep in `models.py` but clean up imports).
+1.  **`evaluation/snn/inference/`**: Move `MembraneSNNController` here (or keep in `models.py` but clean up imports).
 2.  **`evaluation/snn/training/`**: specific training scripts (currently `train.py` is root).
 3.  **`models/checkpoints/`**: formalized location for `.pt` files.
 

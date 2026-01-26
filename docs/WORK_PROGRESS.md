@@ -198,7 +198,7 @@ PI Controller through PMSMEnv:
 
 **What was done**:
 - Created `snn/` folder structure with complete training pipeline
-- Implemented `SimpleSNNController` in `snn/models.py` (~310 lines)
+- Implemented `MembraneSNNController` in `snn/models.py` (~310 lines)
 - Implemented `PMSMDataset` in `snn/dataset.py` (~310 lines)
 - Implemented training script `snn/train.py` (~400 lines)
 - Installed Poetry and all dependencies (snnTorch 0.9.4, PyTorch 2.9.1)
@@ -214,7 +214,7 @@ Training complete! Model saved to snn/checkpoints/
 
 **Key Files Created**:
 - `snn/__init__.py` — Module exports
-- `snn/models.py` — SimpleSNNController with slow-leak output
+- `snn/models.py` — MembraneSNNController with slow-leak output
 - `snn/dataset.py` — PMSMDataset for loading PI trajectories
 - `snn/train.py` — Complete training script with CLI
 - `docs/SNN_ARCHITECTURE.md` — Detailed architecture documentation

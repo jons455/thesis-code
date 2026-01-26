@@ -107,7 +107,7 @@ The output neuron acts as a **storage** for the accumulated error (the integral)
 
 ```
 Environment State          SNN                    Action
-[i_d, i_q, e_d, e_q] ──▶ SimpleSNNController ──▶ [u_d, u_q]
+[i_d, i_q, e_d, e_q] ──▶ MembraneSNNController ──▶ [u_d, u_q]
    (normalized)           (membrane readout)     (normalized)
    
 Where:
@@ -131,7 +131,8 @@ Where:
 ```
 snn/
 ├── __init__.py
-├── models.py         # SimpleSNNController (~440 lines) ✅
+├── models.py         # Membrane/Population/LearnedLinear/Delta ✅
+├── output_layers.py  # Output decoders (pop/learned/delta) ✅
 ├── dataset.py        # PMSMDataset (~310 lines) ✅
 └── train.py          # Training script (~430 lines) ✅
 
@@ -176,6 +177,22 @@ This allows proper spike integration before output readout.
 
 ---
 
+## Output Coding Options (5 Total)
+
+This repo now supports four implemented output strategies plus one conceptual option:
+
+| Option | Output Type | Where Implemented | Akida Compatibility |
+|--------|-------------|-------------------|---------------------|
+| **Membrane Readout** | Membrane potential | `MembraneSNNController` | Low (host readout) |
+| **Population Coding** | Spikes + fixed tuning curves | `PopulationSNNController` | High |
+| **Learned Linear Decoding** | Spikes + learned dense readout | `LearnedLinearSNNController` | High |
+| **Delta (Incremental) Coding** | Up/Down spikes per axis | `DeltaSNNController` | High |
+| **Direct PWM** | Spike trains → duty cycles | Concept only | Experimental |
+
+Notes:
+- **Delta Coding** uses an internal accumulator during training and can be mapped to a host-side counter on Akida.
+- **Learned Linear** trades fixed preferred values for a trainable decoder (often lower MSE).
+
 ## Alternative Architectures (If Pure SNN Has Issues)
 
 ### Comparison of Approaches
@@ -194,8 +211,8 @@ If the single network struggles to learn both outputs, split into two:
 # Matches classical PI structure exactly
 class TwoAxisSNNController:
     def __init__(self):
-        self.snn_d = SimpleSNNController(input_size=2, output_size=1)  # [i_d, e_d] → u_d
-        self.snn_q = SimpleSNNController(input_size=2, output_size=1)  # [i_q, e_q] → u_q
+        self.snn_d = MembraneSNNController(input_size=2, output_size=1)  # [i_d, e_d] → u_d
+        self.snn_q = MembraneSNNController(input_size=2, output_size=1)  # [i_q, e_q] → u_q
     
     def __call__(self, state):
         i_d, i_q, e_d, e_q = state
@@ -242,7 +259,7 @@ Advantage: Decoupled training (each axis learns independently).
 | Task | Status | Notes |
 |------|--------|-------|
 | Create folder structure | ✅ | `snn/` with 4 files |
-| SimpleSNNController | ✅ | 440 lines, membrane readout |
+| MembraneSNNController | ✅ | 440 lines, membrane readout |
 | PMSMDataset | ✅ | 310 lines, windowed sequences |
 | Training script | ✅ | 430 lines, CLI args |
 | Clean training data | ✅ | `train_v2/` (1000 files, 0A error) |
@@ -278,10 +295,10 @@ Advantage: Decoupled training (each axis learns independently).
 
 ## Implementation Details (Actual Code)
 
-### SimpleSNNController (snn/models.py)
+### MembraneSNNController (snn/models.py)
 
 ```python
-class SimpleSNNController(nn.Module):
+class MembraneSNNController(nn.Module):
     """
     Pure SNN controller with built-in integration (membrane potential readout).
     
@@ -333,7 +350,7 @@ class SNNControllerAgent:
     """
     
     def __init__(self, checkpoint_path, num_inference_steps=1):
-        self.model = SimpleSNNController.load(checkpoint_path)
+        self.model = MembraneSNNController.load(checkpoint_path)
         self.num_inference_steps = num_inference_steps
         self._snn_state = None
     

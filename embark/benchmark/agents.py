@@ -5,7 +5,7 @@ interface for closed-loop control benchmarks.
 
 Available agents:
     - PIControllerAgent: Classical PI controller (baseline)
-    - SNNControllerAgent: Spiking neural network controller
+    - SNNControllerAgent: Spiking neural network controller (Membrane or Population)
 
 All agents implement the NeuroBench agent interface with ``__call__(state)``
 returning an action and ``reset()`` for stateful agents.
@@ -300,9 +300,12 @@ class SNNControllerAgent:
     """
     Spiking Neural Network controller for PMSM current control.
 
-    Uses a trained SimpleSNNController model from evaluation/snn/models.py.
+    Uses a trained SNN model (MembraneSNNController or PopulationSNNController)
+    from evaluation/snn/models.py.
+
     The SNN uses slow-leak LIF output neurons whose membrane potential
-    directly encodes the voltage command (no external integrator needed).
+    directly encodes the voltage command (no external integrator needed),
+    OR a population-coded output layer for Akida compatibility.
 
     Following NeuroBench/literature recommendations, this agent supports
     multiple internal SNN timesteps per control step for proper spike
@@ -351,15 +354,15 @@ class SNNControllerAgent:
         if str(project_root) not in sys.path:
             sys.path.insert(0, str(project_root))
 
-        from evaluation.snn.models import SimpleSNNController
+        from evaluation.snn.models import load_snn_model
 
         self.device = torch.device(device)
         self.checkpoint_path = checkpoint_path
         self.track_spikes = track_spikes
         self.num_inference_steps = num_inference_steps
 
-        # Load trained model
-        self.model = SimpleSNNController.load(checkpoint_path, device=device)
+        # Load trained model (detects type automatically)
+        self.model = load_snn_model(checkpoint_path, device=device)
         self.model.eval()
 
         # SNN state (membrane potentials) - persists across timesteps
@@ -464,6 +467,7 @@ class SNNControllerAgent:
             - hidden_size: Number of neurons per hidden layer
             - num_layers: Total number of layers
             - parameters: Total trainable parameters
+            - model_class: The class name of the loaded model
         """
         return {
             "name": "SNN-PI-Imitation",
@@ -472,6 +476,7 @@ class SNNControllerAgent:
             "hidden_size": self._network_stats["hidden_size"],
             "num_layers": self._network_stats["num_layers"],
             "parameters": self.model.count_parameters(),
+            "model_class": self.model.__class__.__name__,
         }
 
     def get_sparsity(self, state: np.ndarray) -> dict:

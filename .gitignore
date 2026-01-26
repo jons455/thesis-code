@@ -33,7 +33,8 @@ snn/checkpoints/
 checkpoints/
 *.pt
 *.pth
-*.csv.png
+*.csv
+*.png
 
 # MATLAB
 *.asv

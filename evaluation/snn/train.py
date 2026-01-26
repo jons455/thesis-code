@@ -1,23 +1,21 @@
 """Training script for PMSM SNN controller.
 
-Trains a SimpleSNNController to imitate PI controller behavior using
-supervised learning on trajectory data.
+Trains a SNN controller to imitate PI controller behavior using
+supervised learning on trajectory data. Supports membrane, population,
+learned-linear, and delta-coded output variants.
 
 Example:
-    Basic training::
+    Train original membrane-readout model:
+        python -m evaluation.snn.train --model_type membrane
 
-        python -m evaluation.snn.train
+    Train population-coded Akida model:
+        python -m evaluation.snn.train --model_type population --neurons_per_output 50
 
-    With custom parameters::
+    Train delta-coded model:
+        python -m evaluation.snn.train --model_type delta --delta_scale 0.01
 
+    With custom parameters:
         python -m evaluation.snn.train --epochs 100 --batch_size 64 --hidden_size 128
-
-    Quick test run::
-
-        python -m evaluation.snn.train --epochs 5 --max_files 10
-
-The script loads PI controller trajectories, trains the SNN to predict
-voltage commands, saves the best checkpoint, and generates training curves.
 """
 
 import argparse
@@ -36,7 +34,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from embark.utils.paths import DATA_RAW_DIR, MODELS_CHECKPOINTS_DIR  # noqa: E402
 from evaluation.snn.dataset import PMSMDataset, create_dataloaders  # noqa: E402
-from evaluation.snn.models import SimpleSNNController, SNNConfig  # noqa: E402
+from evaluation.snn.models import (  # noqa: E402
+    DeltaSNNController,
+    LearnedLinearSNNController,
+    MembraneSNNController,
+    PopulationSNNController,
+    SNNConfig,
+    load_snn_model,
+)
 
 
 @dataclass
@@ -52,10 +57,15 @@ class TrainConfig:
     val_split: float = 0.2
 
     # Model
+    model_type: str = "membrane"  # "membrane", "population", "learned_linear", "delta"
     hidden_size: int = 64
     num_hidden_layers: int = 2
     beta_hidden: float = 0.9
     beta_output: float = 0.995
+    neurons_per_output: int = 50  # For population coding
+    delta_scale: float = 0.01  # For delta coding
+    delta_beta: float = 0.8  # For delta coding
+    output_scale: float = 0.1  # For membrane/learned linear output scaling
 
     # Training
     epochs: int = 100
@@ -81,7 +91,7 @@ class TrainConfig:
 
 
 def train_epoch(
-    model: SimpleSNNController,
+    model: nn.Module,
     dataloader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: str,
@@ -121,7 +131,7 @@ def train_epoch(
 
 @torch.no_grad()
 def validate(
-    model: SimpleSNNController,
+    model: nn.Module,
     dataloader: DataLoader,
     device: str,
 ) -> dict:
@@ -157,21 +167,26 @@ def validate(
     }
 
 
-def train(config: TrainConfig) -> SimpleSNNController:
+def train(config: TrainConfig) -> nn.Module:
     """Main training function.
 
     Args:
         config: Training configuration.
 
     Returns:
-        Trained SimpleSNNController model.
+        Trained SNN model.
     """
     print("=" * 60)
     print("PMSM SNN Controller Training")
     print("=" * 60)
     print(f"Device: {config.device}")
     print(f"Data: {config.data_dir}")
+    print(f"Model Type: {config.model_type}")
     print(f"Hidden size: {config.hidden_size}")
+    if config.model_type in {"population", "learned_linear"}:
+        print(f"Neurons/Output: {config.neurons_per_output}")
+    if config.model_type == "delta":
+        print(f"Delta scale: {config.delta_scale}")
     print(f"Epochs: {config.epochs}")
     print("=" * 60)
 
@@ -219,8 +234,10 @@ def train(config: TrainConfig) -> SimpleSNNController:
     # Create or load model
     if config.resume_from:
         print(f"\nResuming from checkpoint: {config.resume_from}")
-        model = SimpleSNNController.load(config.resume_from, device=config.device)
-        print(f"Loaded model with {model.count_parameters():,} parameters")
+        model = load_snn_model(config.resume_from, device=config.device)
+        print(
+            f"Loaded model with {sum(p.numel() for p in model.parameters() if p.requires_grad):,} parameters"
+        )
     else:
         print("\nCreating model...")
         snn_config = SNNConfig(
@@ -228,12 +245,24 @@ def train(config: TrainConfig) -> SimpleSNNController:
             num_hidden_layers=config.num_hidden_layers,
             beta_hidden=config.beta_hidden,
             beta_output=config.beta_output,
+            neurons_per_output=config.neurons_per_output,
+            delta_scale=config.delta_scale,
+            delta_beta=config.delta_beta,
+            output_scale=config.output_scale,
         )
 
-        model = SimpleSNNController(config=snn_config)
+        if config.model_type == "population":
+            model = PopulationSNNController(config=snn_config)
+        elif config.model_type == "learned_linear":
+            model = LearnedLinearSNNController(config=snn_config)
+        elif config.model_type == "delta":
+            model = DeltaSNNController(config=snn_config)
+        else:
+            model = MembraneSNNController(config=snn_config)
+
         model = model.to(config.device)
 
-        print(f"Parameters: {model.count_parameters():,}")
+        print(f"Parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
     # Optimizer
     optimizer = torch.optim.AdamW(
@@ -323,9 +352,22 @@ def train(config: TrainConfig) -> SimpleSNNController:
     print("=" * 60)
 
     # Load best model for return
-    model = SimpleSNNController.load(
-        checkpoint_dir / "best_model.pt", device=config.device
-    )
+    if config.model_type == "population":
+        model = PopulationSNNController.load(
+            checkpoint_dir / "best_model.pt", device=config.device
+        )
+    elif config.model_type == "learned_linear":
+        model = LearnedLinearSNNController.load(
+            checkpoint_dir / "best_model.pt", device=config.device
+        )
+    elif config.model_type == "delta":
+        model = DeltaSNNController.load(
+            checkpoint_dir / "best_model.pt", device=config.device
+        )
+    else:
+        model = MembraneSNNController.load(
+            checkpoint_dir / "best_model.pt", device=config.device
+        )
 
     return model
 
@@ -353,12 +395,45 @@ def main():
     parser.add_argument("--stride", type=int, default=50, help="Stride between windows")
 
     # Model arguments
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        default="membrane",
+        choices=["membrane", "population", "learned_linear", "delta"],
+        help=(
+            "Model architecture: membrane, population, learned_linear, or delta"
+        ),
+    )
     parser.add_argument("--hidden_size", type=int, default=64, help="Hidden layer size")
     parser.add_argument(
         "--num_layers", type=int, default=2, help="Number of hidden layers"
     )
     parser.add_argument(
         "--beta_output", type=float, default=0.995, help="Output layer decay rate"
+    )
+    parser.add_argument(
+        "--neurons_per_output",
+        type=int,
+        default=50,
+        help="Neurons per output dimension (population/learned_linear)",
+    )
+    parser.add_argument(
+        "--delta_scale",
+        type=float,
+        default=0.01,
+        help="Voltage increment per net spike (delta model)",
+    )
+    parser.add_argument(
+        "--delta_beta",
+        type=float,
+        default=0.8,
+        help="Output decay for delta spikes (delta model)",
+    )
+    parser.add_argument(
+        "--output_scale",
+        type=float,
+        default=0.1,
+        help="Output scaling (membrane/learned_linear)",
     )
 
     # Training arguments
@@ -396,9 +471,14 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         window_size=args.window_size,
         stride=args.stride,
+        model_type=args.model_type,
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         beta_output=args.beta_output,
+        neurons_per_output=args.neurons_per_output,
+        delta_scale=args.delta_scale,
+        delta_beta=args.delta_beta,
+        output_scale=args.output_scale,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,

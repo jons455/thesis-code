@@ -80,7 +80,7 @@ This document helps me to keep the overview on what is left to do in the remaini
 ### 3.2 SNN Model Development ✅
 - [x] Create `snn/` folder structure
   - [x] `snn/__init__.py` - Module exports
-  - [x] `snn/models.py` - SimpleSNNController (~440 lines)
+  - [x] `snn/models.py` - MembraneSNNController (~440 lines)
   - [x] `snn/dataset.py` - PMSMDataset (~310 lines)
   - [x] `snn/train.py` - Training script with CLI (~430 lines)
 - [x] Design LIF network using snnTorch
@@ -198,7 +198,7 @@ If single-network approach shows issues:
 | SNN Agent | `benchmark/agents.py` | ✅ Multi-timestep |
 | Processors (functions) | `benchmark/processors.py` | ✅ Basic |
 | Benchmark Runner | `benchmark/run_benchmark.py` | ✅ |
-| SNN Models | `snn/models.py` | ✅ SimpleSNNController |
+| SNN Models | `snn/models.py` | ✅ MembraneSNNController |
 | SNN Dataset | `snn/dataset.py` | ✅ PMSMDataset |
 | SNN Training | `snn/train.py` | ✅ Ready |
 | SNN Architecture Doc | `docs/SNN_ARCHITECTURE.md` | ✅ |
