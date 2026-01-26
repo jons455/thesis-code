@@ -33,6 +33,7 @@ snn/checkpoints/
 checkpoints/
 *.pt
 *.pth
+*.csv.png
 
 # MATLAB
 *.asv
@@ -45,9 +46,11 @@ slprj/
 .ipynb_checkpoints
 
 # Data files (too large for git)
-data-preperation/data/
+data/
+models/
+evaluation/data-preperation/data/
 pmsm-matlab/export/
-pmsm-pem/export/
+embark/pmsm-pem/export/
 edge_impulse_data/
 
 # IDEs

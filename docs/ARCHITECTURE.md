@@ -1,6 +1,6 @@
 # System Architecture: Neuromorphic PMSM Control Benchmark
 
-This document helps me keeping track if the architectural aspects of my software. There is also a [draw.io model](https://app.diagrams.net/#G1W4HkU8qH2lNLPS4p-ilH75E5m6x5HMOT#%7B%22pageId%22%3A%22fyiX_BZgRGonI7MBzxk7%22%7D). 
+This document helps me keeping track if the architectural aspects of my software. There is also a [draw.io model](https://app.diagrams.net/#G1W4HkU8qH2lNLPS4p-ilH75E5m6x5HMOT#%7B%22pageId%22%3A%22fyiX_BZgRGonI7MBzxk7%22%7D).
 
 
 ## 1. High-Level Architecture
@@ -77,13 +77,13 @@ limit_values = {
 
 ### 2.2 Environment Wrapper (PMSMEnv)
 
-**File**: `benchmark/pmsm_env.py`
+**File**: `embark/benchmark/pmsm_env.py`
 **Purpose**: Bridge between GEM and NeuroBench
 
 ```
 PMSMEnv (Gymnasium Interface)
-├── Observation Space: [i_d, i_q, e_d, e_q] normalized to [-1, 1]
-├── Action Space: [u_d, u_q] normalized to [-1, 1]
+├── Observation Space: [i_d, i_q, e_d, e_q] in physical units [A]
+├── Action Space: [u_d, u_q] in physical units [V]
 ├── Reference Generator: Step response, operating point sweep
 ├── Coordinate Transform: dq ↔ abc (Park/Clarke)
 └── Metrics Tracking: time_in_range, episode_data
@@ -91,18 +91,18 @@ PMSMEnv (Gymnasium Interface)
 
 **Data Flow**:
 ```
-Agent Output        PMSMEnv              GEM Environment
-[u_d, u_q]  ──────▶ dq→abc ──────────▶  Motor Physics
-(normalized)        transform           (state update)
-                                              │
-                                              ▼
-[i_d, i_q,  ◀────── Normalize ◀──────────  [i_sd, i_sq, ...]
+Agent Output        Processor Chain       PMSMEnv              GEM Environment
+[u_d, u_q]  ──────▶ dq→abc ─────────────▶  Motor Physics
+(physical)          + scaling             (state update)
+                                             │
+                                             ▼
+[i_d, i_q,  ◀────── Preprocess ◀──────────  [i_sd, i_sq, ...]
  e_d, e_q]          + Errors               (14 state values)
 ```
 
 ### 2.3 Controller Agents
 
-**File**: `benchmark/agents.py`
+**File**: `embark/benchmark/agents.py`
 
 #### PI Controller (Baseline)
 
@@ -116,8 +116,8 @@ class PIControllerAgent:
     With decoupling and anti-windup.
     """
     def __call__(self, state) -> action:
-        # state: [i_d, i_q, e_d, e_q] normalized
-        # action: [u_d, u_q] normalized
+        # state: [i_d, i_q, e_d, e_q] in physical units
+        # action: [u_d, u_q] in physical units
 ```
 
 #### SNN Controller (Biological SNN Architecture)
@@ -130,18 +130,18 @@ The SNN uses a **biological architecture** to solve the steady-state problem:
 class SNNControllerAgent:
     """
     Biological SNN for PMSM current control.
-    
+
     Architecture:
     Input [4] ──▶ Hidden [64] ──▶ Output [2] (Slow-Leak LIF) ──▶ Voltage
        (Spikes)      (Spikes)           (Membrane Potential)
-       
+
     The Output neurons act as the "Integrator".
-    
+
     Temporal Upsampling:
     Runs N internal inference steps (e.g., 10) for every 1 control step
     to allow spike propagation and settling.
     """
-    
+
     def __call__(self, state) -> np.ndarray:
         # 1. Expand input for temporal dimension
         # 2. Run SNN for N steps
@@ -158,7 +158,7 @@ class SNNControllerAgent:
 
 ### 2.4 Processor Layer (Pre/Post Processing)
 
-**File**: `benchmark/processors.py`
+**File**: `embark/benchmark/processors.py`
 
 Processors transform data between the environment and agent. This enables:
 - Different encoding schemes (direct, delta, spike)
@@ -171,7 +171,7 @@ Processors transform data between the environment and agent. This enables:
 │                                                                          │
 │  Environment           Preprocessor           Agent           Postprocessor          Environment
 │  [i_d,i_q,e_d,e_q] ──▶ DeltaEncoding ──▶ SNN ──▶ Integrator ──▶ [u_d,u_q]
-│                        [i_d,i_q,Δe_d,Δe_q]    [kick_d,kick_q]           
+│                        [i_d,i_q,Δe_d,Δe_q]    [kick_d,kick_q]
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -198,20 +198,20 @@ Processors transform data between the environment and agent. This enables:
 @dataclass
 class ProcessorConfig:
     """Centralized configuration to avoid magic numbers."""
-    
+
     # Motor limits
     i_max: float = 10.8      # Maximum current [A]
     u_max: float = 48.0      # Maximum voltage [V]
-    
+
     # Timing
     dt: float = 1e-4         # Control timestep [s]
-    
+
     # Preprocessing
     max_delta: float = None  # Optional delta clamping
-    
+
     # Postprocessing (Integrator)
     anti_windup: bool = True
-    
+
     # Spike encoding
     num_neurons_per_input: int = 10
     max_spike_rate: float = 100.0  # Hz
@@ -331,52 +331,30 @@ runner_snn = EpisodeRunner(
 
 ```
 thesis-code/
-├── benchmark/                   # NeuroBench integration (standalone)
-│   ├── __init__.py
-│   ├── pmsm_env.py             # PMSMEnv Gymnasium wrapper
-│   ├── agents.py               # PI baseline, SNN wrapper
-│   ├── processors.py           # Pre/Post processors (encoding, integrator)
-│   ├── runner.py               # EpisodeRunner orchestration
-│   ├── config.py               # ProcessorConfig, BenchmarkConfig
-│   └── run_benchmark.py        # Validation script
+├── embark/                      # Benchmarking pipeline
+│   ├── benchmark/               # NeuroBench integration
+│   ├── metrics/                 # Metrics framework
+│   ├── utils/                   # Shared utilities
+│   ├── pmsm-pem/                # GEM PMSM simulation
+│   │   ├── simulation/          # GEM simulation scripts
+│   │   ├── validation/          # MATLAB comparison
+│   │   └── export/              # Simulation results
+│   └── tests/                   # Integration & regression tests
 │
-├── metrics/                     # Metrics framework (standalone)
-│   ├── __init__.py
-│   ├── benchmark_metrics.py    # ~1100 lines of metrics
-│   ├── test_metrics.py         # Unit tests
-│   └── METRICS_DOCUMENTATION.md
-│
-├── snn/                         # SNN models (external training)
-│   ├── __init__.py
-│   ├── models.py               # snnTorch network definitions
-│   ├── dataset.py              # PyTorch Dataset for PI trajectories
-│   └── train.py                # Training script (imitation learning)
-│
-├── pmsm-pem/                    # GEM PMSM simulation
-│   ├── simulation/              # GEM simulation scripts
-│   │   ├── simulate_pmsm.py    # GEM standard controller
-│   │   └── run_operating_point_tests.py
-│   │
-│   ├── validation/              # MATLAB comparison
-│   │   ├── compare_simulations.py
-│   │   └── compare_operating_points.py
-│   │
-│   ├── export/                  # Simulation results
-│   │   ├── gem_standard/       # GEM controller data
-│   │   ├── train/              # 580+ PI trajectories
-│   │   └── archive/            # Archived runs
-│   │
-│   └── venv/                    # Python virtual environment
+├── evaluation/                  # Training & evaluation
+│   ├── core/                    # Evaluation scripts
+│   ├── snn/                     # SNN models and training
+│   └── data-preperation/        # Data preparation scripts
 │
 ├── pmsm-matlab/                 # MATLAB reference implementation
-│   ├── foc_pmsm.slx            # Simulink model
+│   ├── foc_pmsm.slx             # Simulink model
 │   └── export/validation/       # MATLAB validation data
 │
 └── docs/                        # Documentation
-    ├── README.md               # Docs overview
-    ├── ARCHITECTURE.md         # This file
-    ├── BENCHMARK_METRICS.md    # Metrics documentation
-    ├── SIMULATION.md           # GEM configuration & validation
+    ├── README.md                # Docs overview
+    ├── ARCHITECTURE.md          # This file
+    ├── BENCHMARK_METRICS.md     # Metrics documentation
+    └── GEM_SIMULATION.md        # GEM configuration & validation
     ├── WORK_PROGRESS.md        # Progress log
     └── archive/                # Old/superseded docs
 ```

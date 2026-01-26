@@ -42,7 +42,7 @@ ipykernel = ">=6.25.0"
 # Pytest Configuration
 # =============================================================================
 [tool.pytest.ini_options]
-testpaths = ["tests", "benchmark/tests", "metrics/tests"]
+testpaths = ["embark/tests"]
 python_files = ["test_*.py"]
 addopts = ["-v", "--tb=short"]
 filterwarnings = [
@@ -65,6 +65,7 @@ exclude = [
     "*.egg-info",
     ".mypy_cache",
     ".pytest_cache",
+    "evaluation/data-preperation/data_exploration.ipynb",
 ]
 
 [tool.ruff.lint]
@@ -85,7 +86,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["benchmark", "metrics", "utils", "snn"]
+known-first-party = ["embark", "evaluation"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -102,7 +103,7 @@ warn_unused_configs = true
 ignore_missing_imports = true
 no_strict_optional = true
 exclude = [
-    "tests/",
+    "embark/tests/",
     "docs/",
     "build/",
 ]

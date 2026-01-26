@@ -8,7 +8,7 @@ While `ARCHITECTURE.md` describes the logical layers, the actual implementation 
 
 ### 1.1 Biological Integration (Implicit Integrator)
 The initial design proposed a "Hybrid" architecture with an external mathematical integrator ($u_{acc} += kick$).
-The **current implementation** (`snn/models.py` -> `SimpleSNNController`) achieves this *biologically* using **Slow-Leak LIF Neurons** in the output layer.
+The **current implementation** (`evaluation/snn/models.py` -> `SimpleSNNController`) achieves this *biologically* using **Slow-Leak LIF Neurons** in the output layer.
 
 *   **Mechanism**: The output neurons have a very high decay factor ($\beta \approx 0.995$).
 *   **Behavior**: They effectively integrate spikes over time and hold the membrane potential constant when input ceases (steady state).
@@ -37,7 +37,7 @@ Currently, the "Processor Layer" (Pre/Post processing) is **implicit**:
 
 We employ a hybrid validation strategy to satisfy both Control Theory and Neuromorphic Engineering requirements.
 
-### 2.1 Why a Custom Loop? (`benchmark/run_benchmark.py`)
+### 2.1 Why a Custom Loop? (`embark/benchmark/run_benchmark.py`)
 Standard RL runners (including NeuroBench's default) are insufficient for strict Power Electronics validation because:
 1.  **Physics-Based Metrics**: We need to calculate **ITAE** (Integral Time-Absolute Error) and **Total Variation** (Chattering). These require access to the full trajectory data, not just scalar rewards.
 2.  **Safety & Constraints**: We need frame-by-frame checks for NaN divergence and voltage limit violations to abort dangerous runs immediately.
@@ -73,9 +73,9 @@ To align the codebase with the clean architecture, the following refactoring ste
 ### 3.2 SNN Folder Structure
 **Goal**: Standardize the `snn/` directory.
 
-1.  **`snn/inference/`**: Move `SimpleSNNController` here (or keep in `models.py` but clean up imports).
-2.  **`snn/training/`**: specific training scripts (currently `train.py` is root).
-3.  **`snn/checkpoints/`**: formalized location for `.pt` files.
+1.  **`evaluation/snn/inference/`**: Move `SimpleSNNController` here (or keep in `models.py` but clean up imports).
+2.  **`evaluation/snn/training/`**: specific training scripts (currently `train.py` is root).
+3.  **`models/checkpoints/`**: formalized location for `.pt` files.
 
 ### 3.3 Configuration Management (Single Source of Truth)
 **Goal**: Centralize "Magic Numbers" (Limits, Gains, Timesteps) to prevent drift between Env, PI, and SNN.
@@ -90,9 +90,9 @@ To align the codebase with the clean architecture, the following refactoring ste
 ### 3.4 Testing Consolidation
 **Goal**: Centralize scattered tests.
 
-1.  **Move**: `benchmark/tests/` -> `tests/benchmark/`
-2.  **Move**: `metrics/tests/` -> `tests/metrics/`
-3.  **Move**: `scripts/test_*.py` -> `tests/integration/`
+1.  **Move**: `embark/benchmark/tests/` -> `embark/tests/benchmark/`
+2.  **Move**: `embark/metrics/tests/` -> `embark/tests/metrics/`
+3.  **Move**: `scripts/test_*.py` -> `embark/tests/integration/`
 4.  **Benefit**: A single `pytest` command validates the entire thesis codebase.
 
 ### 3.5 Data Pipeline Standardization

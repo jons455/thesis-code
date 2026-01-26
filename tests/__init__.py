@@ -1,2 +1,0 @@
-# Integration and regression tests
-

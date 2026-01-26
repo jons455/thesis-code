@@ -56,37 +56,28 @@ The framework is designed as a **modular pipeline** where each component can be 
 
 ```
 thesis-code/
-├── benchmark/                # NeuroBench integration        → README.md
-│   ├── pmsm_env.py          # Gymnasium wrapper for GEM
-│   ├── agents.py            # PI controller, SNN placeholder
-│   ├── processors.py        # Spike encoding utilities
-│   └── tests/               # Unit tests
+├── embark/                   # Benchmarking pipeline
+│   ├── benchmark/            # NeuroBench integration        → README.md
+│   ├── metrics/              # Metrics framework             → METRICS_DOCUMENTATION.md
+│   ├── utils/                # Shared utilities
+│   ├── pmsm-pem/             # GEM PMSM simulation           → README.md
+│   └── tests/                # Integration & regression tests
 │
-├── metrics/                  # Benchmark metrics framework   → METRICS_DOCUMENTATION.md
-│   ├── benchmark_metrics.py # ~1100 lines of metrics
-│   └── tests/               # Metric tests
-│
-├── utils/                    # Utility modules
-│   └── reproducibility.py   # Seed management, experiment tracking
-│
-├── pmsm-pem/                 # GEM PMSM simulation           → README.md
-│   ├── simulation/          # Simulation scripts
-│   ├── validation/          # MATLAB comparison
-│   └── export/              # Results (CSV, plots)
+├── evaluation/               # Training & evaluation
+│   ├── core/                 # Evaluation scripts
+│   ├── snn/                  # SNN models, training, export
+│   └── data-preperation/     # Data preparation scripts
 │
 ├── pmsm-matlab/              # MATLAB/Simulink reference     → README.md
 │   ├── foc_pmsm.slx         # Simulink FOC model
 │   └── pmsm_init.m          # Motor parameters
 │
-├── data-preperation/         # Data processing (legacy)      → README.md
-│   └── data_exploration.ipynb
-│
+├── docs/                     # Project documentation
 │   ├── ARCHITECTURE.md      # System architecture
 │   ├── BENCHMARK_METRICS.md # Metrics documentation
-│   └── SIMULATION.md        # GEM configuration
+│   └── GEM_SIMULATION.md    # GEM configuration
 │
-├── tests/                    # Integration & regression tests
-└── pyproject.toml           # Project & tool configuration (Poetry)
+└── pyproject.toml            # Project & tool configuration (Poetry)
 ```
 
 This modularity allows swapping components (e.g., different controllers, encoding schemes) without changing the overall pipeline.
@@ -109,8 +100,8 @@ This modularity allows swapping components (e.g., different controllers, encodin
 ### Running the Benchmark
 
 ```python
-from benchmark import PMSMEnv, PIControllerAgent
-from metrics import run_benchmark
+from embark.benchmark import PMSMEnv, PIControllerAgent
+from embark.metrics import run_benchmark
 import pandas as pd
 
 # Create environment and agent
@@ -134,7 +125,7 @@ print(result.summary())
 ### Reproducible Experiments
 
 ```python
-from utils import set_seed, ExperimentConfig
+from embark.utils import set_seed, ExperimentConfig
 
 # Set all random seeds
 set_seed(42)
@@ -155,12 +146,12 @@ config.save("experiments/exp_001.yaml")
 poetry run pytest
 
 # Run with coverage report
-poetry run pytest --cov=benchmark --cov=metrics --cov=utils --cov-report=html
+poetry run pytest --cov=embark --cov-report=html
 
 # Run specific test categories
 poetry run pytest -m "not slow"           # Skip slow tests
 poetry run pytest -m integration          # Integration tests only
-poetry run pytest tests/test_regression.py  # Regression tests
+poetry run pytest embark/tests/test_regression.py  # Regression tests
 ```
 
 ## Code Quality
@@ -174,7 +165,7 @@ poetry run ruff check .
 poetry run ruff check --fix .  # Auto-fix issues
 
 # Type check
-poetry run mypy benchmark metrics utils snn
+poetry run mypy embark evaluation
 ```
 
 ## Contributing
@@ -187,7 +178,7 @@ This project follows [NeuroBench contribution guidelines](https://neurobench.rea
 - **Linting**: Ruff with pycodestyle (E, W), Pyflakes (F), isort (I), and more
 - **Type Hints**: Encouraged, checked with mypy
 - **Docstrings**: [Google format](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
-- **Testing**: pytest with tests in `tests/`, `benchmark/tests/`, `metrics/tests/`
+- **Testing**: pytest with tests in `embark/tests/`
 
 ### Pre-commit Hooks
 
