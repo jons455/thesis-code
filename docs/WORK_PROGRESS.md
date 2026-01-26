@@ -330,17 +330,22 @@ These criteria define what "success" looks like for the SNN controller:
 
 ### Current State Assessment
 
-**⚠️ CRITICAL: Training data and model checkpoints are missing!**
+**⚠️ Training data and model checkpoints need to be generated**
 
-After verification, the following issues were found:
+| Component | Expected Location | Status |
+|-----------|-------------------|--------|
+| Training data | `data/raw/train/` | ✅ Generated (276 files) |
+| Trained model | `models/checkpoints/best_model.pt` | ⏳ Training in progress (Delta model) |
 
-| Component | Expected | Actual Status |
-|-----------|----------|---------------|
-| Clean training data | `pmsm-pem/export/train_v2/` | ❌ Does NOT exist |
-| Trained model | `snn/checkpoints/best_model.pt` | ❌ Does NOT exist |
-| Original training data | `pmsm-pem/export/train/` | ❌ Does NOT exist |
+**To generate training data:**
+```bash
+poetry run python scripts/generate_training_data.py --num-files 1000
+```
 
-**Root Cause**: The training data generation and training runs from previous sessions were not persisted. The files may have been generated in a temporary location or the process was interrupted.
+**To train the SNN:**
+```bash
+poetry run python -m evaluation.snn.train --epochs 100
+```
 
 ### What IS Working
 

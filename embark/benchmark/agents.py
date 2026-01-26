@@ -311,6 +311,10 @@ class SNNControllerAgent:
     multiple internal SNN timesteps per control step for proper spike
     integration (Option B from literature review).
 
+    IMPORTANT: The SNN is trained on normalized data (inputs divided by i_max,
+    outputs divided by u_max). This agent handles normalization/denormalization
+    internally so it can interface with PMSMEnv which uses physical units.
+
     Parameters
     ----------
     checkpoint_path : str
@@ -323,20 +327,26 @@ class SNNControllerAgent:
         Number of SNN timesteps per control step (default 1).
         Higher values allow better spike integration but increase latency.
         Literature recommends 5-20 for control tasks.
+    i_max : float
+        Maximum current for normalization [A]. Should match training data.
+    u_max : float
+        Maximum voltage for denormalization [V]. Should match training data.
 
     Example
     -------
         agent = SNNControllerAgent("snn/checkpoints/best_model.pt", num_inference_steps=10)
         state, _ = env.reset()
         agent.reset()  # Reset neuron states for new episode
-        action = agent(state)  # Returns normalized [u_d, u_q]
+        action = agent(state)  # Returns physical [u_d, u_q] in Volts
 
         # After episode, get spike statistics
         spike_stats = agent.get_spike_statistics()
     """
 
-    INPUT_SPACE = "normalized"
-    OUTPUT_SPACE = "normalized"
+    # Agent interface: accepts physical units, outputs physical units
+    # (normalization/denormalization handled internally)
+    INPUT_SPACE = "physical"
+    OUTPUT_SPACE = "physical"
 
     def __init__(
         self,
@@ -344,6 +354,8 @@ class SNNControllerAgent:
         device: str = "cpu",
         track_spikes: bool = True,
         num_inference_steps: int = 1,
+        i_max: float = DEFAULT_PMSM.i_max,
+        u_max: float = DEFAULT_PMSM.u_max,
     ):
         # Import SNN model here to avoid circular imports
         import sys
@@ -360,6 +372,10 @@ class SNNControllerAgent:
         self.checkpoint_path = checkpoint_path
         self.track_spikes = track_spikes
         self.num_inference_steps = num_inference_steps
+
+        # Normalization parameters (must match training data!)
+        self.i_max = i_max  # For normalizing inputs (currents and errors)
+        self.u_max = u_max  # For denormalizing outputs (voltages)
 
         # Load trained model (detects type automatically)
         self.model = load_snn_model(checkpoint_path, device=device)
@@ -397,20 +413,31 @@ class SNNControllerAgent:
         Parameters
         ----------
         state : np.ndarray
-            Normalized state [i_d, i_q, e_d, e_q] from PMSMEnv
+            Physical state [i_d, i_q, e_d, e_q] from PMSMEnv in Amps
 
         Returns
         -------
         np.ndarray
-            Normalized voltage command [u_d, u_q] in [-1, 1]
+            Physical voltage command [u_d, u_q] in Volts
         """
         import time
 
         # Handle torch tensor input
         if isinstance(state, torch.Tensor):
-            state_tensor = state.float().to(self.device)
+            state_np = state.cpu().numpy().flatten()
         else:
-            state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
+            state_np = np.asarray(state).flatten()
+
+        # === NORMALIZE INPUTS ===
+        # State from env is [i_d, i_q, e_d, e_q] in physical units [A]
+        # SNN expects normalized inputs in approximately [-1, 1]
+        # All 4 values are current-related, so normalize by i_max
+        state_normalized = state_np / self.i_max
+
+        # Convert to tensor
+        state_tensor = torch.tensor(
+            state_normalized, dtype=torch.float32, device=self.device
+        )
 
         # Ensure shape is [batch, features]
         if state_tensor.dim() == 1:
@@ -424,7 +451,7 @@ class SNNControllerAgent:
 
         with torch.no_grad():
             for _ in range(self.num_inference_steps):
-                voltage, self._snn_state, spike_info = self.model(
+                voltage_normalized, self._snn_state, spike_info = self.model(
                     state_tensor, self._snn_state, return_spikes=self.track_spikes
                 )
 
@@ -447,12 +474,17 @@ class SNNControllerAgent:
             self._total_control_steps += 1
 
         # Convert to numpy and ensure shape
-        action = voltage.cpu().numpy().flatten()
+        # SNN outputs normalized voltage in [-1, 1] (due to tanh)
+        action_normalized = voltage_normalized.cpu().numpy().flatten()
 
-        # Clip to valid range (should already be in [-1, 1] due to tanh)
-        action = np.clip(action, -1.0, 1.0)
+        # Clip to valid normalized range
+        action_normalized = np.clip(action_normalized, -1.0, 1.0)
 
-        return action.astype(np.float32)
+        # === DENORMALIZE OUTPUTS ===
+        # Convert from normalized [-1, 1] to physical voltage [V]
+        action_physical = action_normalized * self.u_max
+
+        return action_physical.astype(np.float32)
 
     def get_info(self) -> dict[str, Any]:
         """Return controller metadata for benchmark reporting.
@@ -484,11 +516,23 @@ class SNNControllerAgent:
         Get activation sparsity for neuromorphic metrics.
 
         Returns fraction of neurons that did NOT spike (higher = more efficient).
+
+        Parameters
+        ----------
+        state : np.ndarray
+            Physical state [i_d, i_q, e_d, e_q] in Amps
         """
+        # Handle torch tensor input
         if isinstance(state, torch.Tensor):
-            state_tensor = state.float().to(self.device)
+            state_np = state.cpu().numpy().flatten()
         else:
-            state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
+            state_np = np.asarray(state).flatten()
+
+        # Normalize input (same as __call__)
+        state_normalized = state_np / self.i_max
+        state_tensor = torch.tensor(
+            state_normalized, dtype=torch.float32, device=self.device
+        )
 
         if state_tensor.dim() == 1:
             state_tensor = state_tensor.unsqueeze(0)
@@ -575,6 +619,10 @@ class SNNControllerTorchAgent(nn.Module):
         Device for inference
     num_inference_steps : int
         Number of internal SNN timesteps per control step
+    i_max : float
+        Maximum current for normalization [A]
+    u_max : float
+        Maximum voltage for denormalization [V]
     """
 
     def __init__(
@@ -582,6 +630,8 @@ class SNNControllerTorchAgent(nn.Module):
         checkpoint_path: str = "models/checkpoints/best_model.pt",
         device: str = "cpu",
         num_inference_steps: int = 1,
+        i_max: float = DEFAULT_PMSM.i_max,
+        u_max: float = DEFAULT_PMSM.u_max,
     ):
         super().__init__()
         self.snn_controller = SNNControllerAgent(
@@ -589,6 +639,8 @@ class SNNControllerTorchAgent(nn.Module):
             device,
             track_spikes=True,
             num_inference_steps=num_inference_steps,
+            i_max=i_max,
+            u_max=u_max,
         )
 
         self.INPUT_SPACE = self.snn_controller.INPUT_SPACE

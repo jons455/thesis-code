@@ -91,14 +91,14 @@ This document helps me to keep the overview on what is left to do in the remaini
 - [x] Training target: absolute voltage [u_d, u_q] (behavioral cloning)
 - [x] Multi-timestep inference: configurable `num_inference_steps` [van Breukelen2025]
 
-### 3.3 Training Data & Imitation Learning ⚠️ NEEDS DATA GENERATION
-- [x] Original data: `pmsm-pem/export/train/` — was CORRUPTED, now deleted
-- [x] **Root cause identified**: PI controller state not reset on GEM env reset
-- [ ] **Clean data**: `pmsm-pem/export/train_v2/` — ❌ DOES NOT EXIST (needs generation)
-  - Script ready: `scripts/generate_training_data.py`
-  - Command: `poetry run python scripts/generate_training_data.py --num-files 500`
-- [x] Validation script: `scripts/validate_data.py` ✅ Ready
-- [ ] **Full training run** with clean data ← 🔲 BLOCKED (needs data first)
+### 3.3 Training Data & Imitation Learning ✅ READY
+- [x] Data generation script: `scripts/generate_training_data.py`
+  - Uses stable PI controller from `embark/benchmark/agents.py`
+  - Generates to `data/raw/train/` by default
+  - Command: `poetry run python scripts/generate_training_data.py --num-files 1000`
+- [x] Validation script: `scripts/validate_data.py`
+- [ ] **Generate training data**: Run `scripts/generate_training_data.py`
+- [ ] **Full training run** with generated data
 
 ### 3.4 Closed-Loop Integration ✅ COMPLETE
 - [x] Implement `SNNControllerAgent` in `benchmark/agents.py`
@@ -202,8 +202,7 @@ If single-network approach shows issues:
 | SNN Dataset | `snn/dataset.py` | ✅ PMSMDataset |
 | SNN Training | `snn/train.py` | ✅ Ready |
 | SNN Architecture Doc | `docs/SNN_ARCHITECTURE.md` | ✅ |
-| Training Data (OLD) | `pmsm-pem/export/train/*.csv` | ❌ Deleted (was corrupted) |
-| Training Data (CLEAN) | `pmsm-pem/export/train_v2/*.csv` | ❌ MISSING (needs generation) |
+| Training Data | `data/raw/train/*.csv` | Generate with `scripts/generate_training_data.py` |
 | SNN Checkpoints | `snn/checkpoints/*.pt` | ❌ MISSING (needs training) |
 | Data Validation | `scripts/validate_data.py` | ✅ Ready |
 | Data Generator | `scripts/generate_training_data.py` | ✅ Ready |
@@ -223,11 +222,12 @@ If single-network approach shows issues:
 ### Session 2026-01-21: Key Accomplishments
 
 1. **Identified Training Data Corruption**
-   - Old data had 88% wrong sign (i_q negative when ref positive)
+   - Old data had issues with PI controller state not resetting
    - Root cause: PI integrator not reset on GEM env reset
 
-2. **Generated Clean Training Data**
-   - 1000 files in `train_v2/` with 100% correct tracking
+2. **Training Data Generation Script**
+   - `scripts/generate_training_data.py` ready
+   - Generates to `data/raw/train/` by default
    - Validation script created
 
 3. **Implemented Multi-Timestep Inference (Option B)**
@@ -243,9 +243,12 @@ If single-network approach shows issues:
 
 ## Next Priority Tasks
 
-1. **Full Training Run with Clean Data** (WP3.3)
-   - Command: `poetry run python -m snn.train --epochs 100`
-   - Uses clean `train_v2/` data (1000 files, 0.000000A error)
+1. **Generate Training Data** (WP3.3)
+   - Command: `poetry run python scripts/generate_training_data.py --num-files 1000`
+   - Output: `data/raw/train/` (1000 CSV files)
+
+2. **Full Training Run** (WP3.3)
+   - Command: `poetry run python -m evaluation.snn.train --epochs 100`
 
 2. **Benchmark Comparison** (WP4) ← READY
    - Command: `poetry run python -m benchmark.run_benchmark --compare`

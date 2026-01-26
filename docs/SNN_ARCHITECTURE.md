@@ -158,7 +158,7 @@ scripts/
 | Sequence | BPTT through time | 100-step windows |
 | Batch size | 32 trajectories | ~950 batches/epoch |
 | Learning rate | 1e-3 (Adam) | Cosine annealing |
-| Data | `train_v2/` (1000 files) | 100% clean tracking |
+| Data | `data/raw/train/` (generated) | PI controller trajectories |
 
 ### Multi-Timestep Inference (Option B)
 
@@ -262,7 +262,7 @@ Advantage: Decoupled training (each axis learns independently).
 | MembraneSNNController | ✅ | 440 lines, membrane readout |
 | PMSMDataset | ✅ | 310 lines, windowed sequences |
 | Training script | ✅ | 430 lines, CLI args |
-| Clean training data | ✅ | `train_v2/` (1000 files, 0A error) |
+| Clean training data | ✅ | `data/raw/train/` (generated via scripts/generate_training_data.py) |
 
 ### Phase 2: Closed-Loop Integration ✅ COMPLETE
 
@@ -459,7 +459,7 @@ Key packages:
 
 | Risk | Symptom | Mitigation |
 |------|---------|------------|
-| Training data corrupted | Wrong polarity outputs | Use `train_v2/` (clean data) ✅ FIXED |
+| Training data corrupted | Wrong polarity outputs | Regenerate with scripts/generate_training_data.py |
 | Training doesn't converge | Loss plateaus high | Increase hidden size, tune beta |
 | Closed-loop unstable | NaN, explosion | Gradient clipping, reduce lr |
 | Poor steady-state | Final error > 0.5 A | Increase β → 0.999 |
