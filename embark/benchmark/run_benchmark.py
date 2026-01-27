@@ -305,7 +305,7 @@ def run_snn_test(
     if not checkpoint.exists():
         print(f"[SKIP] No checkpoint found at {checkpoint}")
         print(
-            "Run training first: poetry run python -m evaluation.snn.train --epochs 100"
+            "Run training first: poetry run python -m evaluation.snn.utils.train --epochs 100"
         )
         return None
 

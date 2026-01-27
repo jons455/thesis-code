@@ -301,7 +301,7 @@ class SNNControllerAgent:
     Spiking Neural Network controller for PMSM current control.
 
     Uses a trained SNN model (MembraneSNNController or PopulationSNNController)
-    from evaluation/snn/models.py.
+    from evaluation.snn.models.
 
     The SNN uses slow-leak LIF output neurons whose membrane potential
     directly encodes the voltage command (no external integrator needed),

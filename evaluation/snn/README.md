@@ -33,7 +33,12 @@ Implemented model variants
    - Matches integral control behavior, Akida friendly.
    - Use num_inference_steps=1 or scale delta_scale accordingly.
 
-5. Direct PWM (concept only)
+5. TTFSSNNController
+   - Time-to-first-spike coding at the output layer.
+   - Single spike per output neuron per control cycle.
+   - Voltage decoded from spike latency within a short window.
+
+6. Direct PWM (concept only)
    - Spike trains map directly to inverter duty cycles.
    - Not implemented (requires different training).
 
@@ -76,3 +81,6 @@ Learned linear:
 
 Delta:
   python -m evaluation.snn.train --model_type delta --delta_scale 0.01 --delta_beta 0.8
+
+TTFS:
+  python -m evaluation.snn.train --model_type ttfs --ttfs_time_window 20 --ttfs_beta_output 0.9 --ttfs_learn_beta

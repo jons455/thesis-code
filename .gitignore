@@ -48,7 +48,7 @@ slprj/
 
 # Data files (too large for git)
 data/
-models/
+trained_models/
 evaluation/data-preperation/data/
 pmsm-matlab/export/
 embark/pmsm-pem/export/

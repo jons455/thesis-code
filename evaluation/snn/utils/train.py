@@ -1,23 +1,3 @@
-"""Training script for PMSM SNN controller.
-
-Trains a SNN controller to imitate PI controller behavior using
-supervised learning on trajectory data. Supports membrane, population,
-learned-linear, and delta-coded output variants.
-
-Example:
-    Train original membrane-readout model:
-        python -m evaluation.snn.train --model_type membrane
-
-    Train population-coded Akida model:
-        python -m evaluation.snn.train --model_type population --neurons_per_output 50
-
-    Train delta-coded model:
-        python -m evaluation.snn.train --model_type delta --delta_scale 0.01
-
-    With custom parameters:
-        python -m evaluation.snn.train --epochs 100 --batch_size 64 --hidden_size 128
-"""
-
 import argparse
 import sys
 from dataclasses import dataclass
@@ -28,19 +8,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from embark.utils.paths import DATA_RAW_DIR, MODELS_CHECKPOINTS_DIR  # noqa: E402
-from evaluation.snn.dataset import PMSMDataset, create_dataloaders  # noqa: E402
+from evaluation.snn.utils.dataset import PMSMDataset, create_dataloaders  # noqa: E402
 from evaluation.snn.models import (  # noqa: E402
     DeltaSNNController,
     LearnedLinearSNNController,
     MembraneSNNController,
     PopulationSNNController,
     SNNConfig,
-    load_snn_model,
+    TTFSSNNController,
+    RecurrentSNNController,
 )
 
 
@@ -57,7 +38,7 @@ class TrainConfig:
     val_split: float = 0.2
 
     # Model
-    model_type: str = "membrane"  # "membrane", "population", "learned_linear", "delta"
+    model_type: str = "membrane"  # "membrane", "population", "learned_linear", "delta", "ttfs", "recurrent"
     hidden_size: int = 64
     num_hidden_layers: int = 2
     beta_hidden: float = 0.9
@@ -66,6 +47,9 @@ class TrainConfig:
     delta_scale: float = 0.01  # For delta coding
     delta_beta: float = 0.8  # For delta coding
     output_scale: float = 0.1  # For membrane/learned linear output scaling
+    ttfs_time_window: int = 20  # For TTFS coding
+    ttfs_beta_output: float = 0.9  # For TTFS output neurons
+    ttfs_learn_beta: bool = True  # For TTFS learnable decay
 
     # Training
     epochs: int = 100
@@ -78,6 +62,7 @@ class TrainConfig:
     scheduler: str = "cosine"  # "cosine", "step", or "none"
 
     # Checkpoints
+    # Will be updated in main() to include model_type subdirectory
     checkpoint_dir: str = str(MODELS_CHECKPOINTS_DIR)
     save_every: int = 10  # Save checkpoint every N epochs
     resume_from: str | None = None  # Path to checkpoint to resume from
@@ -176,23 +161,43 @@ def train(config: TrainConfig) -> nn.Module:
     Returns:
         Trained SNN model.
     """
+    # Create checkpoint directory with model type subdirectory
+    # We update it here to ensure it uses the specific model type folder
+    base_checkpoint_dir = Path(config.checkpoint_dir)
+    # Check if 'trained_models' is already in the path or if we need to add it
+    # The config default is MODELS_CHECKPOINTS_DIR, which usually points to a generic location.
+    # The user request is specifically "trained_models/{model_type}".
+    # Let's construct it cleanly.
+
+    # Assuming standard project structure where we want trained_models at root or similar.
+    # But using the passed checkpoint_dir as base is safer.
+    # If checkpoint_dir ends with 'checkpoints', we might want to step up or just append.
+    # Let's just append model_type to keep it organized.
+
+    # However, user said "safed in the trained_models/ and then the name of the model_type".
+    # Let's try to honor that path structure relative to project root if possible,
+    # or just use the provided checkpoint dir + model_type.
+
+    # Let's enforce the subdirectory structure:
+    model_dir = base_checkpoint_dir / config.model_type
+    model_dir.mkdir(parents=True, exist_ok=True)
+
     print("=" * 60)
     print("PMSM SNN Controller Training")
     print("=" * 60)
     print(f"Device: {config.device}")
     print(f"Data: {config.data_dir}")
     print(f"Model Type: {config.model_type}")
+    print(f"Checkpoint Dir: {model_dir}")
     print(f"Hidden size: {config.hidden_size}")
     if config.model_type in {"population", "learned_linear"}:
         print(f"Neurons/Output: {config.neurons_per_output}")
     if config.model_type == "delta":
         print(f"Delta scale: {config.delta_scale}")
+    if config.model_type == "ttfs":
+        print(f"TTFS window: {config.ttfs_time_window}")
     print(f"Epochs: {config.epochs}")
     print("=" * 60)
-
-    # Create checkpoint directory
-    checkpoint_dir = Path(config.checkpoint_dir)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Load data
     print("\nLoading data...")
@@ -234,35 +239,50 @@ def train(config: TrainConfig) -> nn.Module:
     # Create or load model
     if config.resume_from:
         print(f"\nResuming from checkpoint: {config.resume_from}")
-        model = load_snn_model(config.resume_from, device=config.device)
-        print(
-            f"Loaded model with {sum(p.numel() for p in model.parameters() if p.requires_grad):,} parameters"
-        )
+        checkpoint = torch.load(config.resume_from, map_location=config.device)
+        # We rely on the config to instantiate the right class
+        # Ideally we'd use the checkpoint config, but for resume we often want to
+        # keep command line args or mix.
+        # Let's instantiate fresh and load state dict.
+        pass
+
+    print("\nCreating model...")
+    snn_config = SNNConfig(
+        hidden_size=config.hidden_size,
+        num_hidden_layers=config.num_hidden_layers,
+        beta_hidden=config.beta_hidden,
+        beta_output=config.beta_output,
+        neurons_per_output=config.neurons_per_output,
+        delta_scale=config.delta_scale,
+        delta_beta=config.delta_beta,
+        output_scale=config.output_scale,
+        ttfs_time_window=config.ttfs_time_window,
+        ttfs_beta_output=config.ttfs_beta_output,
+        ttfs_learn_beta=config.ttfs_learn_beta,
+    )
+
+    if config.model_type == "population":
+        model = PopulationSNNController(config=snn_config)
+    elif config.model_type == "learned_linear":
+        model = LearnedLinearSNNController(config=snn_config)
+    elif config.model_type == "delta":
+        model = DeltaSNNController(config=snn_config)
+    elif config.model_type == "ttfs":
+        model = TTFSSNNController(config=snn_config)
+    elif config.model_type == "recurrent":
+        model = RecurrentSNNController(config=snn_config)
     else:
-        print("\nCreating model...")
-        snn_config = SNNConfig(
-            hidden_size=config.hidden_size,
-            num_hidden_layers=config.num_hidden_layers,
-            beta_hidden=config.beta_hidden,
-            beta_output=config.beta_output,
-            neurons_per_output=config.neurons_per_output,
-            delta_scale=config.delta_scale,
-            delta_beta=config.delta_beta,
-            output_scale=config.output_scale,
-        )
+        model = MembraneSNNController(config=snn_config)
 
-        if config.model_type == "population":
-            model = PopulationSNNController(config=snn_config)
-        elif config.model_type == "learned_linear":
-            model = LearnedLinearSNNController(config=snn_config)
-        elif config.model_type == "delta":
-            model = DeltaSNNController(config=snn_config)
-        else:
-            model = MembraneSNNController(config=snn_config)
+    model = model.to(config.device)
 
-        model = model.to(config.device)
+    print(
+        f"Parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}"
+    )
 
-        print(f"Parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    if config.resume_from:
+        checkpoint = torch.load(config.resume_from, map_location=config.device)
+        model.load_state_dict(checkpoint["state_dict"])
 
     # Optimizer
     optimizer = torch.optim.AdamW(
@@ -287,7 +307,7 @@ def train(config: TrainConfig) -> nn.Module:
     history = {"train_loss": [], "val_loss": [], "val_mae": []}
 
     # Load existing history if resuming
-    history_path = checkpoint_dir / "history.json"
+    history_path = model_dir / "history.json"
     if config.resume_from and history_path.exists():
         import json
 
@@ -319,7 +339,7 @@ def train(config: TrainConfig) -> nn.Module:
         is_best = val_metrics["loss"] < best_val_loss
         if is_best:
             best_val_loss = val_metrics["loss"]
-            model.save(checkpoint_dir / "best_model.pt")
+            model.save(model_dir / "best_model.pt")
 
         # Print progress
         lr = optimizer.param_groups[0]["lr"]
@@ -334,40 +354,22 @@ def train(config: TrainConfig) -> nn.Module:
 
         # Periodic checkpoint
         if epoch % config.save_every == 0:
-            model.save(checkpoint_dir / f"epoch_{epoch:03d}.pt")
+            model.save(model_dir / f"epoch_{epoch:03d}.pt")
 
     # Save final model
-    model.save(checkpoint_dir / "final_model.pt")
+    model.save(model_dir / "final_model.pt")
 
     # Save training history
     import json
 
-    with open(checkpoint_dir / "history.json", "w") as f:
+    with open(model_dir / "history.json", "w") as f:
         json.dump(history, f, indent=2)
 
     print("\n" + "=" * 60)
     print("Training complete!")
     print(f"Best validation loss: {best_val_loss:.6f}")
-    print(f"Checkpoints saved to: {checkpoint_dir}")
+    print(f"Checkpoints saved to: {model_dir}")
     print("=" * 60)
-
-    # Load best model for return
-    if config.model_type == "population":
-        model = PopulationSNNController.load(
-            checkpoint_dir / "best_model.pt", device=config.device
-        )
-    elif config.model_type == "learned_linear":
-        model = LearnedLinearSNNController.load(
-            checkpoint_dir / "best_model.pt", device=config.device
-        )
-    elif config.model_type == "delta":
-        model = DeltaSNNController.load(
-            checkpoint_dir / "best_model.pt", device=config.device
-        )
-    else:
-        model = MembraneSNNController.load(
-            checkpoint_dir / "best_model.pt", device=config.device
-        )
 
     return model
 
@@ -383,11 +385,12 @@ def main():
         default=str(DATA_RAW_DIR / "train"),
         help="Directory with training CSV files (generated by scripts/generate_training_data.py)",
     )
+    # Changed default to trained_models
     parser.add_argument(
         "--checkpoint-dir",
         type=str,
-        default=str(MODELS_CHECKPOINTS_DIR),
-        help="Directory to save checkpoints",
+        default="trained_models",
+        help="Directory to save checkpoints (subfolder per model type will be created)",
     )
     parser.add_argument(
         "--window_size", type=int, default=100, help="Timesteps per training window"
@@ -399,9 +402,16 @@ def main():
         "--model_type",
         type=str,
         default="membrane",
-        choices=["membrane", "population", "learned_linear", "delta"],
+        choices=[
+            "membrane",
+            "population",
+            "learned_linear",
+            "delta",
+            "ttfs",
+            "recurrent",
+        ],
         help=(
-            "Model architecture: membrane, population, learned_linear, or delta"
+            "Model architecture: membrane, population, learned_linear, delta, ttfs, or recurrent"
         ),
     )
     parser.add_argument("--hidden_size", type=int, default=64, help="Hidden layer size")
@@ -434,6 +444,24 @@ def main():
         type=float,
         default=0.1,
         help="Output scaling (membrane/learned_linear)",
+    )
+    parser.add_argument(
+        "--ttfs_time_window",
+        type=int,
+        default=20,
+        help="Internal TTFS time window per control cycle",
+    )
+    parser.add_argument(
+        "--ttfs_beta_output",
+        type=float,
+        default=0.9,
+        help="Output decay rate for TTFS",
+    )
+    parser.add_argument(
+        "--ttfs_learn_beta",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable learnable TTFS output decay",
     )
 
     # Training arguments
@@ -479,6 +507,9 @@ def main():
         delta_scale=args.delta_scale,
         delta_beta=args.delta_beta,
         output_scale=args.output_scale,
+        ttfs_time_window=args.ttfs_time_window,
+        ttfs_beta_output=args.ttfs_beta_output,
+        ttfs_learn_beta=args.ttfs_learn_beta,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,

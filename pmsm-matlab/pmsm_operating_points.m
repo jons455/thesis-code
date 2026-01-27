@@ -55,7 +55,7 @@ n_ref = 1500;  % RPM (vorher 1000)
 % Run 003: Andere Kombinationen für breitere Validierung
 operating_points = {
     0.0, 1.0, 'very_low_load';        % Sehr geringe Last
-    0.0, 3.5, 'mid_low_load';         % Niedrige-mittlere Last  
+    0.0, 3.5, 'mid_low_load';         % Niedrige-mittlere Last
     0.0, 6.0, 'mid_high_load';        % Mittlere-hohe Last
     -2.0, 3.0, 'fw_light';            % Leichte Feldschwächung
     -4.0, 4.0, 'fw_balanced';         % Balancierte Feldschwächung
@@ -76,13 +76,13 @@ for idx = 1:n_tests
     iq_val = operating_points{idx, 2};
     name = operating_points{idx, 3};
     i_total = sqrt(id_val^2 + iq_val^2);
-    
+
     if i_total > I_max
         status = '✗ ÜBERSCHRITTEN';
     else
         status = '✓';
     end
-    
+
     fprintf('  %s %s: id=%+.1f A, iq=%.1f A, |I|=%.2f A\n', ...
         status, name, id_val, iq_val, i_total);
 end
@@ -109,7 +109,7 @@ for idx_case = 1:n_tests
     id_ref = operating_points{idx_case, 1};
     iq_ref = operating_points{idx_case, 2};
     op_name = operating_points{idx_case, 3};
-    
+
     fprintf('-------------------------------------------------------\n');
     fprintf('Case %d/%d: id_ref = %+.1f A, iq_ref = %.1f A (%s)\n', ...
         idx_case, n_tests, id_ref, iq_ref, op_name);
@@ -191,7 +191,7 @@ for idx_case = 1:n_tests
     iq_steady = mean(T.i_q(ss_mask));
     id_error = id_steady - id_ref;
     iq_error = iq_steady - iq_ref;
-    
+
     fprintf('Steady-State: id=%.4f A (Δ=%+.4f), iq=%.4f A (Δ=%+.4f)\n', ...
         id_steady, id_error, iq_steady, iq_error);
 
@@ -215,7 +215,7 @@ for idx_case = 1:n_tests
     else
         iq_str = sprintf('%03d', round(iq_ref));
     end
-    
+
     filename = fullfile(out_dir, sprintf('validation_op_n%04d_id%s_iq%s.csv', ...
         n_ref, id_str, iq_str));
     writetable(T, filename);
@@ -262,7 +262,7 @@ for idx = 1:n_tests
     id_ref = summary_results{idx, 1};
     iq_ref = summary_results{idx, 2};
     err = summary_results{idx, 6};
-    
+
     % Farbe basierend auf Fehler
     if err < 0.01
         c = [0, 0.7, 0];  % Grün
@@ -271,7 +271,7 @@ for idx = 1:n_tests
     else
         c = [1, 0, 0];    % Rot
     end
-    
+
     scatter(id_ref, iq_ref, 150, c, 'filled', 'MarkerEdgeColor', 'k');
     text(id_ref + 0.3, iq_ref, sprintf('%.3f', err), 'FontSize', 8);
 end
@@ -290,10 +290,10 @@ legend('Testpunkte', 'I_{max}', 'Location', 'southwest');
 % Subplot 2-6: Zeitverläufe (für jeden Arbeitspunkt)
 for idx = 1:min(5, n_tests)
     subplot(2, 3, idx + 1);
-    
+
     id_ref = operating_points{idx, 1};
     iq_ref = operating_points{idx, 2};
-    
+
     % Datei laden
     if id_ref >= 0
         id_str = sprintf('+%02d', round(id_ref));
@@ -305,24 +305,24 @@ for idx = 1:min(5, n_tests)
     else
         iq_str = sprintf('%03d', round(iq_ref));
     end
-    
+
     filename = fullfile(out_dir, sprintf('validation_op_n%04d_id%s_iq%s.csv', ...
         n_ref, id_str, iq_str));
-    
+
     if exist(filename, 'file')
         T_plot = readtable(filename);
-        
+
         yyaxis left;
         plot(T_plot.time * 1000, T_plot.i_d, 'b-', 'LineWidth', 1);
         hold on;
         yline(id_ref, 'b--', 'LineWidth', 0.5);
         ylabel('i_d [A]');
-        
+
         yyaxis right;
         plot(T_plot.time * 1000, T_plot.i_q, 'r-', 'LineWidth', 1);
         yline(iq_ref, 'r--', 'LineWidth', 0.5);
         ylabel('i_q [A]');
-        
+
         xlabel('Zeit [ms]');
         title(sprintf('id=%+.0f, iq=%.0f', id_ref, iq_ref));
         grid on;
@@ -335,4 +335,3 @@ sgtitle(sprintf('MATLAB Arbeitspunkt-Variation @ %d rpm', n_ref), 'FontWeight', 
 plot_filename = fullfile(out_dir, sprintf('operating_points_overview_n%04d.png', n_ref));
 saveas(gcf, plot_filename);
 fprintf('✓ Übersichts-Plot gespeichert: %s\n', plot_filename);
-

@@ -19,12 +19,12 @@ model = "foc_pmsm";
 open_system(model);
 
 % ==================== Simulationen ====================
-number_of_simulations = 1;  
+number_of_simulations = 1;
 ergebnisse = cell(1, number_of_simulations);
 setpoints = zeros(number_of_simulations, 3);
 
 for i = 1:number_of_simulations
-%    id_ref = rand * I_nenn;  
+%    id_ref = rand * I_nenn;
 %    iq_ref = rand * I_nenn;
 %    n_ref  = rand * n_nenn;
 % Feste Test-Werte:

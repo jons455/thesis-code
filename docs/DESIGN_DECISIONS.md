@@ -22,7 +22,7 @@ Use this for the thesis Implementation and Discussion chapters.
 
 ## D1: GEM (Python) over MATLAB for Simulation (estimated)
 
-**Date**: ~December 2025  
+**Date**: ~December 2025
 **Category**: Simulation Environment
 
 ### Context
@@ -56,7 +56,7 @@ GEM simulation matched MATLAB/Simulink with tracking error < 1e-11 A at steady s
 
 ## D2: NeuroBench Framework Integration
 
-**Date**: 2026-01-13  
+**Date**: 2026-01-13
 **Category**: Benchmarking Framework
 
 ### Context
@@ -88,7 +88,7 @@ Need standardized metrics for neuromorphic controller evaluation.
 
 ## D3: Gymnasium Wrapper Design
 
-**Date**: 2026-01-13  
+**Date**: 2026-01-13
 **Category**: Interface Design
 
 ### Context
@@ -112,7 +112,7 @@ GEM environment needs to be wrapped for NeuroBench compatibility.
 
 ## D4: Pure SNN vs Hybrid SNN-Integrator
 
-**Date**: 2026-01-20  
+**Date**: 2026-01-20
 **Category**: SNN Architecture (Critical Decision)
 
 ### Context
@@ -148,7 +148,7 @@ BrainChip Akida supports LIF neurons with configurable time constants → slow-l
 
 ## D5: Slow-Leak Output Neuron Parameters
 
-**Date**: 2026-01-20  
+**Date**: 2026-01-20
 **Category**: Neuron Dynamics
 
 ### Context
@@ -179,7 +179,7 @@ After 100 steps: V = V(0) * 0.995^100 ≈ 0.6 * V(0)
 
 ## D6: Direct Voltage Target (not Δu)
 
-**Date**: 2026-01-20  
+**Date**: 2026-01-20
 **Category**: Training Target
 
 ### Context
@@ -205,7 +205,7 @@ Hybrid approach uses Δu (voltage change) as target. What should Pure SNN use?
 
 ## D7: snnTorch Framework
 
-**Date**: 2026-01-20  
+**Date**: 2026-01-20
 **Category**: SNN Framework
 
 ### Context
@@ -238,7 +238,7 @@ Need a framework for implementing and training SNNs.
 ```markdown
 ## DX: [Decision Title]
 
-**Date**: YYYY-MM-DD  
+**Date**: YYYY-MM-DD
 **Category**: [Architecture/Training/Evaluation/etc.]
 
 ### Context

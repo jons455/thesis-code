@@ -181,4 +181,3 @@ fprintf('   cd pmsm-pem && python simulate_pmsm.py --n-rpm <n>\n');
 fprintf('   cd pmsm-pem && python simulate_pmsm_matlab_match.py --n-rpm <n>\n');
 fprintf('2. Vergleich fahren (MATLAB CSV auswählen / Pfad im Vergleichsskript setzen)\n');
 fprintf('=======================================================\n');
-

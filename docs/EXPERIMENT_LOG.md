@@ -25,8 +25,8 @@ Use this for the thesis Results chapter.
 
 ## E001: Quick Test (Pipeline Validation)
 
-**Date**: 2026-01-20  
-**Goal**: Verify training pipeline works end-to-end  
+**Date**: 2026-01-20
+**Goal**: Verify training pipeline works end-to-end
 **Status**: ✅ Complete
 
 ### Configuration
@@ -77,8 +77,8 @@ poetry run python -m snn.train --epochs 3 --max_files 5
 
 ## E001b: Closed-Loop Verification
 
-**Date**: 2026-01-20  
-**Goal**: Verify SNN can run in closed-loop with GEM simulation  
+**Date**: 2026-01-20
+**Goal**: Verify SNN can run in closed-loop with GEM simulation
 **Status**: ✅ Complete
 
 ### Configuration
@@ -125,8 +125,8 @@ python -m benchmark.run_benchmark
 
 ## E002: Full Training Baseline (OLD DATA - FAILED)
 
-**Date**: 2026-01-20  
-**Goal**: Train on complete dataset to establish baseline performance  
+**Date**: 2026-01-20
+**Goal**: Train on complete dataset to establish baseline performance
 **Status**: ❌ Failed — Training data was corrupted
 
 ### Results
@@ -141,8 +141,8 @@ See **D001** below — 88% of training data had wrong sign.
 
 ## D001: Training Data Analysis
 
-**Date**: 2026-01-21  
-**Goal**: Investigate why SNN learned incorrect mapping  
+**Date**: 2026-01-21
+**Goal**: Investigate why SNN learned incorrect mapping
 **Status**: ✅ Complete
 
 ### Method
@@ -188,8 +188,8 @@ The training data taught the SNN to output **negative i_q when reference was pos
 
 ## D002: Clean Training Data Generation
 
-**Date**: 2026-01-21  
-**Goal**: Generate new training data with proper controller reset  
+**Date**: 2026-01-21
+**Goal**: Generate new training data with proper controller reset
 **Status**: ✅ Complete
 
 ### Method
@@ -200,7 +200,7 @@ def generate_episode():
     env = PMSMEnv(n_rpm=random, i_q_ref=random, max_steps=2000)
     agent = PIControllerAgent()
     agent.reset()  # ← Proper reset every episode
-    
+
     state, _ = env.reset()
     for step in range(max_steps):
         action = agent(state)
@@ -231,8 +231,8 @@ Generate clean training data using `scripts/generate_training_data.py` and valid
 
 ## B001: Benchmark API Validation
 
-**Date**: 2026-01-21  
-**Goal**: Validate benchmark pipeline with PI controller baseline  
+**Date**: 2026-01-21
+**Goal**: Validate benchmark pipeline with PI controller baseline
 **Status**: ✅ Complete
 
 ### Configuration
@@ -274,8 +274,8 @@ poetry run python scripts/test_benchmark_api.py
 
 ## E003: Delta SNN Training (Failed)
 
-**Date**: 2026-01-26  
-**Goal**: Train SNN with **Delta Coding** (incremental output) to mimic PI controller  
+**Date**: 2026-01-26
+**Goal**: Train SNN with **Delta Coding** (incremental output) to mimic PI controller
 **Status**: ❌ Failed — Controller instable in closed-loop
 
 ### Configuration
@@ -346,8 +346,8 @@ poetry run python -m evaluation.snn.train --model_type delta --epochs 50 --data_
 
 ## E004: Full Training with Membrane SNN (Planned)
 
-**Date**: —  
-**Goal**: Train standard Membrane SNN (proven in E001b) on full clean dataset  
+**Date**: —
+**Goal**: Train standard Membrane SNN (proven in E001b) on full clean dataset
 **Status**: 🔲 TODO
 
 ### Configuration
@@ -357,8 +357,8 @@ beta_output: 0.995    # Slow leak integration
 # ... rest same as E003
 ```
 
-**Date**: —  
-**Goal**: Find optimal hidden layer size  
+**Date**: —
+**Goal**: Find optimal hidden layer size
 **Status**: 🔲 TODO
 
 ### Configurations Tested
@@ -382,8 +382,8 @@ poetry run python -m snn.train --epochs 50 --hidden_size {SIZE}
 
 ## E004: Hyperparameter Study — Output Beta
 
-**Date**: —  
-**Goal**: Find optimal slow-leak rate for output neurons  
+**Date**: —
+**Goal**: Find optimal slow-leak rate for output neurons
 **Status**: 🔲 TODO
 
 ### Configurations Tested
@@ -404,8 +404,8 @@ poetry run python -m snn.train --epochs 50 --hidden_size {SIZE}
 
 ## E005: Closed-Loop Validation
 
-**Date**: —  
-**Goal**: Test trained SNN in closed-loop with PMSMEnv  
+**Date**: —
+**Goal**: Test trained SNN in closed-loop with PMSMEnv
 **Status**: 🔲 TODO
 
 ### Configuration
@@ -442,8 +442,8 @@ reference:
 
 ## E006: Operating Point Sweep
 
-**Date**: —  
-**Goal**: Test SNN across multiple operating points  
+**Date**: —
+**Goal**: Test SNN across multiple operating points
 **Status**: 🔲 TODO
 
 ### Operating Points
@@ -464,19 +464,19 @@ reference:
 ```markdown
 ## EXXX: [Experiment Title]
 
-**Date**: YYYY-MM-DD  
-**Goal**: [What are we trying to learn?]  
+**Date**: YYYY-MM-DD
+**Goal**: [What are we trying to learn?]
 **Status**: 🔲 TODO / 🔄 Running / ✅ Complete
 
 ### Configuration
 ```yaml
 # Model
-hidden_size: 
-beta_output: 
+hidden_size:
+beta_output:
 
 # Training
-epochs: 
-batch_size: 
+epochs:
+batch_size:
 ```
 
 ### Command
@@ -580,7 +580,7 @@ Our SNN with 128 hidden neurons should achieve similar efficiency when deployed 
 ## References
 
 1. **Stroobants, S. et al. (2022)**. "Parsimonious Neuromorphic PID for Quadrotor Altitude Control."
-   arXiv:2109.10199. 
+   arXiv:2109.10199.
    - 93 neurons, position-coded, Loihi deployment
    - Demonstrated 100× energy savings vs ARM Cortex-M4
 

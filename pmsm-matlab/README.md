@@ -40,4 +40,3 @@ Psi_PM = 0.0169;  % PM-Fluss [Wb]
 p = 3;            % Polpaare
 Ts = 1/10000;     % Abtastzeit [s]
 ```
-

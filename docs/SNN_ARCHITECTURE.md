@@ -95,7 +95,7 @@ For the Integral term, setting the output layer to **very slow leak** (or no lea
 # Standard neuron: voltage leaks quickly (good for P-term)
 lif_hidden = snn.Leaky(beta=0.9)  # τ ≈ 9.5 steps
 
-# Slow-leak neuron: voltage stays (perfect for I-term)  
+# Slow-leak neuron: voltage stays (perfect for I-term)
 lif_output = snn.Leaky(beta=0.995, reset_mechanism="none")  # τ ≈ 200 steps
 ```
 
@@ -109,7 +109,7 @@ The output neuron acts as a **storage** for the accumulated error (the integral)
 Environment State          SNN                    Action
 [i_d, i_q, e_d, e_q] ──▶ MembraneSNNController ──▶ [u_d, u_q]
    (normalized)           (membrane readout)     (normalized)
-   
+
 Where:
   e_d = (i_d_ref - i_d) / i_max
   e_q = (i_q_ref - i_q) / i_max
@@ -213,7 +213,7 @@ class TwoAxisSNNController:
     def __init__(self):
         self.snn_d = MembraneSNNController(input_size=2, output_size=1)  # [i_d, e_d] → u_d
         self.snn_q = MembraneSNNController(input_size=2, output_size=1)  # [i_q, e_q] → u_q
-    
+
     def __call__(self, state):
         i_d, i_q, e_d, e_q = state
         u_d = self.snn_d([i_d, e_d])
@@ -301,39 +301,39 @@ Advantage: Decoupled training (each axis learns independently).
 class MembraneSNNController(nn.Module):
     """
     Pure SNN controller with built-in integration (membrane potential readout).
-    
+
     Architecture:
         Input [4] → Dense → LIF (β=0.9) → Dense → LIF (β=0.9) → Dense → LIF (β=0.995)
                                                                           ↓
                                                                     Membrane = [u_d, u_q]
     """
-    
+
     def __init__(self, config: SNNConfig = None, hidden_size: int = 64):
         # ...
-        
+
         # Output layer - SLOW leak (built-in integration)
         self.fc_out = nn.Linear(hidden_size, 2)
         self.lif_out = snn.Leaky(
             beta=0.995,           # Slow decay = integrator
             reset_mechanism="none",  # Don't reset - accumulate!
         )
-        
+
         # Learnable output scaling
         self.output_scale = nn.Parameter(torch.tensor(0.1))
-    
+
     def forward(self, x, state=None, return_spikes=False):
         # Process through hidden layers (fast dynamics)
         for layer, neuron in zip(self.layers, self.neurons):
             cur = layer(spk)
             spk, mem = neuron(cur, hidden_mems[i])
-        
+
         # Output layer - read membrane potential (not spikes!)
         cur_out = self.fc_out(spk)
         _, mem_out = self.lif_out(cur_out, mem_out)
-        
+
         # Scale and clip to [-1, 1]
         voltage = torch.tanh(mem_out * self.output_scale)
-        
+
         return voltage, new_state, spike_info
 ```
 
@@ -343,29 +343,29 @@ class MembraneSNNController(nn.Module):
 class SNNControllerAgent:
     """
     SNN controller agent with multi-timestep inference.
-    
+
     Parameters:
         checkpoint_path: Path to trained model
         num_inference_steps: SNN timesteps per control step (Option B)
     """
-    
+
     def __init__(self, checkpoint_path, num_inference_steps=1):
         self.model = MembraneSNNController.load(checkpoint_path)
         self.num_inference_steps = num_inference_steps
         self._snn_state = None
-    
+
     def __call__(self, state: np.ndarray) -> np.ndarray:
         # Run multiple internal timesteps per control step
         for _ in range(self.num_inference_steps):
             voltage, self._snn_state, spike_info = self.model(
                 state_tensor, self._snn_state, return_spikes=True
             )
-        
+
         return voltage.numpy().clip(-1, 1)
-    
+
     def reset(self):
         self._snn_state = None
-    
+
     def get_spike_statistics(self) -> dict:
         # Returns: total_spikes, sparsity, latency, etc.
         pass
@@ -379,7 +379,7 @@ class ControllerInterface(Protocol):
     def __call__(self, state: np.ndarray) -> np.ndarray:
         """state=[i_d,i_q,e_d,e_q] → action=[u_d,u_q]"""
         ...
-    
+
     def reset(self) -> None:
         """Reset internal state"""
         ...

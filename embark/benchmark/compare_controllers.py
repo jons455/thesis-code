@@ -340,7 +340,7 @@ def main():
         checkpoint_path = PROJECT_ROOT / args.checkpoint
     if not checkpoint_path.exists():
         print(f"\n[ERROR] Checkpoint not found: {args.checkpoint}")
-        print("Run training first: python -m evaluation.snn.train --epochs 100")
+        print("Run training first: python -m evaluation.snn.utils.train --epochs 100")
         return
 
     # Create environment

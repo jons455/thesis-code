@@ -1,6 +1,6 @@
 # Benchmark Metrics for Neuromorphic PMSM Current Control
 
-This Document helps me to keep track and understand all the metrics. not so scientific and explaining what is what hehe. 
+This Document helps me to keep track and understand all the metrics. not so scientific and explaining what is what hehe.
 
 
 
@@ -135,7 +135,7 @@ peak = np.max(current_after_step)
 overshoot = (peak - target) / step_magnitude * 100
 ```
 
-**⚠️ Noise sensitivity**: A single sensor spike registers as overshoot. 
+**⚠️ Noise sensitivity**: A single sensor spike registers as overshoot.
 **Solution**: Apply 5-sample moving average before calculating max.
 
 
@@ -278,11 +278,11 @@ CONTROL QUALITY
   RMSE (i_q):           0.045 A
   ITAE (i_q):           0.0023 A·s²
   Max Error (i_q):      0.32 A
-  
+
 DYNAMICS
   Settling Time:        3.2 ms
   Overshoot:            5.3%
-  
+
 STABILITY
   Control Smoothness:   0.08 V/step  (PI baseline: 0.05 V/step)
   TV Ratio vs PI:       1.6×
@@ -310,7 +310,7 @@ The final comparison is a **Pareto front**:
 Control Quality (RMSE ↓)
         ▲
     0.02│           × PI Baseline (reference)
-        │       
+        │
     0.04│     × SNN-Large (better control, more SyOps)
         │
     0.06│  × SNN-Medium ← BEST TRADE-OFF

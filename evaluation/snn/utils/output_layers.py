@@ -147,3 +147,73 @@ class DeltaCodingOutput(nn.Module):
         cur = self.fc(x)
         spk, mem = self.lif(cur, mem)
         return spk, mem
+
+
+class TTFSOutput(nn.Module):
+    """Time-to-first-spike output decoding layer.
+
+    Produces a single spike per output neuron over a short internal time window.
+    The output voltage is decoded from the (soft) first-spike timing.
+    """
+
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        spike_grad,
+        time_window: int,
+        output_range: tuple[float, float] = (-1.0, 1.0),
+        beta: float = 0.9,
+        learn_beta: bool = False,
+    ):
+        super().__init__()
+        if time_window < 2:
+            raise ValueError("time_window must be >= 2 for TTFS decoding.")
+
+        self.output_size = output_size
+        self.time_window = time_window
+        self.output_range = output_range
+
+        self.fc = nn.Linear(input_size, output_size)
+        self.lif = snn.Leaky(
+            beta=beta,
+            spike_grad=spike_grad,
+            learn_beta=learn_beta,
+            reset_mechanism="zero",
+        )
+
+        self.register_buffer("time_steps", torch.arange(time_window).float())
+
+    def forward_step(
+        self, x: torch.Tensor, mem: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        batch_size = x.shape[0]
+        device = x.device
+        if mem is None:
+            mem = torch.zeros(batch_size, self.output_size, device=device)
+
+        cur = self.fc(x)
+        spk, mem = self.lif(cur, mem)
+        return spk, mem
+
+    def decode(self, spk_history: torch.Tensor) -> torch.Tensor:
+        """Decode voltage from spike timing history.
+
+        Args:
+            spk_history: [time, batch, output_size] spike tensor.
+        """
+        if spk_history.dim() != 3:
+            raise ValueError("spk_history must be [time, batch, output_size].")
+
+        time_steps = self.time_steps.to(spk_history.device).view(-1, 1, 1)
+        spk_sum = spk_history.sum(dim=0)
+        weighted_time = (spk_history * time_steps).sum(dim=0) / (spk_sum + 1e-6)
+
+        no_spike = spk_sum <= 0
+        if no_spike.any():
+            fallback = torch.full_like(weighted_time, self.time_window - 1)
+            weighted_time = torch.where(no_spike, fallback, weighted_time)
+
+        t_norm = weighted_time / max(1, self.time_window - 1)
+        v_min, v_max = self.output_range
+        return v_max - (v_max - v_min) * t_norm
