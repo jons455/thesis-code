@@ -59,6 +59,26 @@ class TTFSSNNController(nn.Module):
             learn_beta=self.config.ttfs_learn_beta,
         )
 
+        # Initialize weights with higher gain to ensure propagation in sparse TTFS regime
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize weights with higher gain for sparse TTFS activity."""
+        for layer in self.layers:
+            # Boosting gain because inputs are very sparse (1 spike per neuron)
+            nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='linear')
+            with torch.no_grad():
+                layer.weight.data *= 4.0  # Boost weights to encourage spiking
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+        
+        # Output layer
+        nn.init.kaiming_uniform_(self.ttfs_out.fc.weight, a=0, mode='fan_in', nonlinearity='linear')
+        with torch.no_grad():
+            self.ttfs_out.fc.weight.data *= 4.0
+            if self.ttfs_out.fc.bias is not None:
+                nn.init.zeros_(self.ttfs_out.fc.bias)
+
     def init_state(self, batch_size: int, device=None):
         if device is None:
             device = next(self.parameters()).device

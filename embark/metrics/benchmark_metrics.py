@@ -1014,17 +1014,10 @@ def compute_neuromorphic_metrics_from_spikes(
     )
 
 
-# =============================================================================
-# 6. AGGREGATED BENCHMARK RESULT
-# =============================================================================
-
-
 @dataclass
 class BenchmarkResult:
     """
     Complete benchmark result aggregating all metric categories.
-
-    This is the main result object returned by the benchmark framework.
     """
 
     # Identification
@@ -1046,11 +1039,25 @@ class BenchmarkResult:
     stability: StabilityMetrics = field(default_factory=StabilityMetrics)
     neuromorphic: NeuromorphicMetrics | None = None
 
+    # --- NEW: THE WINNER METRIC ---
+    lac_score: float = 0.0
+
+    def __post_init__(self):
+        """Auto-calculate LAC score if components are available."""
+        if self.lac_score == 0.0 and self.neuromorphic is not None:
+            # Formula: LAC = RMSE * log10(SyOps)
+            # We use RMSE_iq (torque producing current) as the primary accuracy driver
+            rmse = self.accuracy.RMSE_iq
+            syops = max(self.neuromorphic.syops_per_timestep, 1.0) # Avoid log(0)
+            
+            self.lac_score = rmse * np.log10(syops)
+
     def to_dict(self) -> dict[str, any]:
         """Convert to flat dictionary for CSV export."""
         result = {
             "controller": self.controller_name,
             "operating_point": self.operating_point,
+            "lac_score": self.lac_score,  # <--- Make sure this is in the CSV!
             "speed_rpm": self.speed_rpm,
             "i_d_ref": self.i_d_ref,
             "i_q_ref": self.i_q_ref,
@@ -1081,6 +1088,7 @@ class BenchmarkResult:
             "=" * 70,
             f"Benchmark Result: {self.controller_name}",
             f"Operating Point: id={self.i_d_ref:.1f}A, iq={self.i_q_ref:.1f}A @ {self.speed_rpm:.0f} rpm",
+            f"LAC SCORE:      {self.lac_score:.4f} (Lower is better)", 
             "=" * 70,
             "",
             "ACCURACY",
