@@ -169,6 +169,7 @@ def run_comprehensive_benchmark(
     env: PMSMEnv,
     max_steps: int = 1000,
     compute_neuromorphic: bool = True,
+    return_raw: bool = False,
 ) -> dict:
     """Run comprehensive benchmark with all metrics.
 
@@ -198,6 +199,8 @@ def run_comprehensive_benchmark(
     actions_u_q = []
 
     for step in range(max_steps):
+        if step % 1000 == 0:
+            print(".", end="", flush=True)
         action = agent(state)
         action_env = processors.action_postprocessor(action)
         actions_u_d.append(float(action_env[0]))
@@ -552,15 +555,41 @@ def run_full_comparison(output_dir: str = str(BENCHMARK_RESULTS_DIR)):
 
     results = []
 
-    # Test configurations
+    # 4.1 Benchmark Scenarios (The "Holy Trinity")
+    # Standardized to 1.0 s at 10 kHz (10,000 steps)
     configs = [
-        {"n_rpm": 1000, "i_d_ref": 0.0, "i_q_ref": 2.0, "name": "low_load"},
-        {"n_rpm": 1000, "i_d_ref": 0.0, "i_q_ref": 5.0, "name": "medium_load"},
-        {"n_rpm": 500, "i_d_ref": 0.0, "i_q_ref": 2.0, "name": "low_speed"},
+        {
+            "name": "nominal",
+            "n_rpm": 1000,
+            "i_d_ref": 0.0,
+            "i_q_ref": 2.0,
+            "max_steps": 10000,
+            "noise_std": 0.0,
+        },
+        {
+            "name": "high_speed",
+            "n_rpm": 3000,
+            "i_d_ref": 0.0,
+            "i_q_ref": 2.0,
+            "max_steps": 10000,
+            "noise_std": 0.0,
+        },
+        {
+            "name": "robustness",
+            "n_rpm": 1000,
+            "i_d_ref": 0.0,
+            "i_q_ref": 2.0,
+            "max_steps": 10000,
+            "noise_std": 0.05,
+        },
     ]
 
     for cfg in configs:
-        print(f"\nOperating point: {cfg['name']}")
+        noise_std = cfg.get("noise_std", 0.0)
+        print(
+            f"\nOperating point: {cfg['name']} "
+            f"(noise σ={noise_std:.2f}A)"
+        )
         print("-" * 40)
 
         # PI Controller
@@ -568,7 +597,8 @@ def run_full_comparison(output_dir: str = str(BENCHMARK_RESULTS_DIR)):
             n_rpm=cfg["n_rpm"],
             i_d_ref=cfg["i_d_ref"],
             i_q_ref=cfg["i_q_ref"],
-            max_steps=1000,
+            max_steps=cfg["max_steps"],
+            measurement_noise_std=noise_std,
         )
         pi_agent = PIControllerAgent()
         pi_result = run_comprehensive_benchmark(
@@ -591,7 +621,8 @@ def run_full_comparison(output_dir: str = str(BENCHMARK_RESULTS_DIR)):
                     n_rpm=cfg["n_rpm"],
                     i_d_ref=cfg["i_d_ref"],
                     i_q_ref=cfg["i_q_ref"],
-                    max_steps=1000,
+                    max_steps=cfg["max_steps"],
+                    measurement_noise_std=noise_std,
                 )
                 snn_agent = SNNControllerAgent(str(checkpoint), track_spikes=True)
                 snn_result = run_comprehensive_benchmark(

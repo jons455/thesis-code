@@ -393,3 +393,25 @@ poetry run python scripts/test_benchmark_api.py
 ---
 
 *Last updated: 2026-01-23*
+
+## 2026-01-28
+
+### WP4 Kickoff: Holy Trinity Scenarios Implemented
+
+**What was done**:
+- Implemented the 3 standardized benchmark scenarios in `benchmark/run_benchmark.py` (1.0 s / 10k steps)
+- Added optional measurement noise injection in `benchmark/pmsm_env.py` (Gaussian σ=0.05A)
+- Updated SNN agent tests to load checkpoints from `trained_models/*/best_model.pt`
+- Adjusted SNN action range test to physical volts (±u_max)
+- Full test suite run: **50 passed**
+
+**Why this matters**:
+- Benchmark scenarios are now aligned with the thesis "Holy Trinity" definition
+- Robustness scenario now measures noise filtering in closed-loop
+- Tests validate with real trained checkpoints instead of a legacy path
+
+**Notes**:
+- SNN checkpoints currently tracked on `main` (delta/membrane/population/recurrent)
+- `ttfs` checkpoint exists but was not used for normalized-range tests
+
+*Last updated: 2026-01-28*

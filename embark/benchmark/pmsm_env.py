@@ -81,6 +81,9 @@ class BenchmarkScenario(Enum):
     STEP_RESPONSE = "step_response"
     OPERATING_POINT = "operating_point"
     DISTURBANCE = "disturbance"
+    NOMINAL = "nominal"
+    HIGH_SPEED = "high_speed"
+    ROBUSTNESS = "robustness"
 
 
 # =============================================================================
@@ -143,6 +146,7 @@ class PMSMEnv(gym.Env):
         scenario: str = "step_response",
         step_time: float = 0.0,  # When to apply step (0 = immediate)
         max_steps: int = DEFAULT_MAX_STEPS,
+        measurement_noise_std: float = 0.0,  # Std dev [A] for i_d/i_q noise
         settling_threshold: float = 0.02,  # 2% of reference
         config: PMSMConfig | None = None,
     ):
@@ -155,6 +159,7 @@ class PMSMEnv(gym.Env):
         self.scenario = scenario
         self.step_time = step_time
         self.max_steps = max_steps
+        self.measurement_noise_std = measurement_noise_std
         self.settling_threshold = settling_threshold
 
         # NeuroBench compatibility
@@ -165,6 +170,7 @@ class PMSMEnv(gym.Env):
         self.current_step = 0
         self.time_in_range = 0
         self._episode_data = []
+        self._rng = np.random.default_rng()
 
         # Create GEM environment
         self._create_gem_env()
@@ -286,6 +292,16 @@ class PMSMEnv(gym.Env):
         """Extract physical currents from GEM state."""
         return self._state_extractor.extract_currents(gem_state)
 
+    def _apply_measurement_noise(
+        self, i_d: float, i_q: float
+    ) -> tuple[float, float]:
+        """Apply optional Gaussian noise to measured currents."""
+        if self.measurement_noise_std <= 0:
+            return i_d, i_q
+
+        noise = self._rng.normal(0.0, self.measurement_noise_std, size=2)
+        return i_d + float(noise[0]), i_q + float(noise[1])
+
     def _action_to_gem(self, action: np.ndarray, gem_state: np.ndarray) -> np.ndarray:
         """Convert dq voltages [V] to GEM's normalized abc action."""
         gem_state = np.asarray(gem_state).flatten()
@@ -297,6 +313,8 @@ class PMSMEnv(gym.Env):
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """Reset the environment."""
         super().reset(seed=seed)
+        if seed is not None:
+            self._rng = np.random.default_rng(seed)
 
         self.current_step = 0
         self.time_in_range = 0
@@ -310,9 +328,10 @@ class PMSMEnv(gym.Env):
         # Get initial observation
         i_d, i_q = self._extract_state(self._gem_state)
         i_d_ref, i_q_ref = self._get_current_reference()
-        e_d = i_d_ref - i_d
-        e_q = i_q_ref - i_q
-        obs = np.array([i_d, i_q, e_d, e_q], dtype=np.float32)
+        i_d_meas, i_q_meas = self._apply_measurement_noise(i_d, i_q)
+        e_d = i_d_ref - i_d_meas
+        e_q = i_q_ref - i_q_meas
+        obs = np.array([i_d_meas, i_q_meas, e_d, e_q], dtype=np.float32)
 
         info = {
             "i_d": i_d,
@@ -321,6 +340,9 @@ class PMSMEnv(gym.Env):
             "i_q_ref": i_q_ref,
             "time": 0.0,
         }
+        if self.measurement_noise_std > 0:
+            info["i_d_meas"] = i_d_meas
+            info["i_q_meas"] = i_q_meas
 
         return obs, info
 
@@ -369,8 +391,9 @@ class PMSMEnv(gym.Env):
         i_d, i_q = self._extract_state(self._gem_state)
 
         # Calculate errors
-        e_d = i_d_ref - i_d
-        e_q = i_q_ref - i_q
+        i_d_meas, i_q_meas = self._apply_measurement_noise(i_d, i_q)
+        e_d = i_d_ref - i_d_meas
+        e_q = i_q_ref - i_q_meas
         error_magnitude = np.sqrt(e_d**2 + e_q**2)
 
         # Check if in target (within settling threshold)
@@ -381,7 +404,7 @@ class PMSMEnv(gym.Env):
             self.time_in_range += 1
 
         # Create observation
-        observation = np.array([i_d, i_q, e_d, e_q], dtype=np.float32)
+        observation = np.array([i_d_meas, i_q_meas, e_d, e_q], dtype=np.float32)
 
         # Reward: negative normalized error (higher is better)
         reward = -error_magnitude / self.config.i_max
@@ -406,6 +429,9 @@ class PMSMEnv(gym.Env):
             "time": self.current_step * self.config.tau,
             "time_in_range": self.time_in_range,
         }
+        if self.measurement_noise_std > 0:
+            step_info["i_d_meas"] = i_d_meas
+            step_info["i_q_meas"] = i_q_meas
 
         self._episode_data.append(step_info)
 
