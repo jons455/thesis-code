@@ -37,25 +37,25 @@ SCENARIOS = [
         "max_steps": 10000,
         "noise_std": 0.0,
         "desc": "Baseline (1000 rpm, 2A)"
-    }
-#    {
-#        "name": "B_HighSpeed",
-#        "n_rpm": 3000,
-#        "i_d_ref": 0.0,
-#        "i_q_ref": 2.0,
-#        "max_steps": 10000,
-#        "noise_std": 0.0,
-#        "desc": "High Speed (3000 rpm)"
-#    },
-#    {
-#        "name": "C_Robustness",
-#        "n_rpm": 1000,
-#        "i_d_ref": 0.0,
-#        "i_q_ref": 2.0,
-#        "max_steps": 10000,
-#        "noise_std": 0.05,
-#        "desc": "Noisy (σ=0.05A)"
-#    },
+    },
+    {
+        "name": "B_HighSpeed",
+        "n_rpm": 3000,
+        "i_d_ref": 0.0,
+        "i_q_ref": 2.0,
+        "max_steps": 10000,
+        "noise_std": 0.0,
+        "desc": "High Speed (3000 rpm)"
+    },
+    {
+        "name": "C_Robustness",
+        "n_rpm": 1000,
+        "i_d_ref": 0.0,
+        "i_q_ref": 2.0,
+        "max_steps": 10000,
+        "noise_std": 0.05,
+        "desc": "Noisy (σ=0.05A)"
+    },
 ]
 
 def find_models():
