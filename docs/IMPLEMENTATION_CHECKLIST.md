@@ -125,45 +125,66 @@ This document helps me to keep the overview on what is left to do in the remaini
 If single-network approach shows issues:
 - [ ] Two separate SNNs (one per axis) — matches classical PI structure
 - [ ] Shared backbone + separate heads — best of both worlds
-- [ ] IWTA integration neurons [Stroobants2023, arXiv:2304.08778]
 
 
 
-## WP4: Systematic Evaluation & Baseline Comparison 🔲 NOT STARTED
 
-### 4.1 Benchmark Scenarios
-- [ ] **Step Response**: Multiple reference step sizes
-- [ ] **Operating Point Sweep**:
-  - [ ] Low speed (500 rpm)
-  - [ ] Medium speed (1500 rpm)
-  - [ ] High speed (2500 rpm)
-  - [ ] Field-weakening region (>2500 rpm)
-- [ ] **Disturbance Rejection**: Load torque steps
+WP4: Systematic Evaluation & Baseline Comparison 🔄 IN PROGRESS
+4.1 Benchmark Scenarios (The "Holy Trinity") 🆕
 
-### 4.2 Controller Comparison
-- [x] **PI Controller** (baseline) - IMPLEMENTED
-- [ ] **ANN Controller** (optional dense baseline)
-  - [ ] Same architecture as SNN but with ReLU activations
-  - [ ] Train with same imitation learning approach
-- [ ] **Hybrid SNN Controller** - from WP3
+All episodes standardized to 1.0 second (10,000 steps).
 
-### 4.3 Metrics Collection
-- [ ] Run all controllers through all scenarios (1.0s episodes)
-- [ ] Collect control performance metrics per scenario:
-  - [ ] RMSE, ITAE, Max Error
-  - [ ] Settling time, Overshoot
-  - [ ] Control Smoothness (TV) - critical for SNN
-- [ ] Collect neuromorphic efficiency metrics:
-  - [ ] SyOps/step
-  - [ ] Activation sparsity
-- [ ] Calculate energy estimates using published data:
-  - [ ] Loihi 2 characterization (~23 pJ/SyOp)
-  - [ ] SpiNNaker 2 characterization (~10 pJ/SyOp)
+    [x] Scenario A: Nominal (Baseline)
 
-### 4.4 Results Aggregation
-- [ ] Create comparison tables (PI vs SNN vs ANN)
-- [ ] Generate visualization plots (step responses, Pareto fronts)
-- [ ] Statistical significance testing (if multiple seeds)
+        Speed: 1000 rpm | Step: 0A → 2A | Noise: None
+
+    [x] Scenario B: High Speed (Saturation/Decoupling)
+
+        Speed: 3000 rpm | Step: 0A → 2A | Noise: None
+
+        Purpose: Test Back-EMF decoupling and voltage limit handling.
+
+    [x] Scenario C: Robustness (Filtering)
+
+        Speed: 1000 rpm | Step: 0A → 2A | Noise: Gaussian (σ=0.05A)
+
+        Purpose: Test SNN noise filtering capabilities vs PI.
+
+4.2 Controller Comparison
+
+    [x] PI Controller (Reference)
+
+    [ ] Population SNN (Main Contribution)
+
+    [ ] (Optional) Membrane SNN (Internal Baseline only)
+
+4.3 Metrics Collection
+
+    [ ] Run Population SNN through all 3 scenarios
+
+    [ ] Collect Control Metrics:
+
+        [ ] RMSE & ITAE (Drift check)
+
+        [ ] Settling Time & Overshoot
+
+        [ ] Total Variation (TV) (Chattering check)
+
+    [ ] Collect Neuromorphic Metrics:
+
+        [ ] SyOps/step
+
+        [ ] Activation Sparsity
+
+    [ ] Compute LAC Score: RMSE×log(SyOps)
+
+4.4 Offline Hardware Profiling (NeuroBench) 🆕
+
+    [ ] Record input/output spike traces from Scenario A
+
+    [ ] Feed traces into NeuroBench/Akida energy estimator
+
+    [ ] Report Energy (μJ) and Latency (ms) estimate (Offline Audit)
 
 
 

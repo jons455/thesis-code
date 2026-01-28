@@ -22,7 +22,7 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 ## Metrics Overview
 
 | Category | Metric | Unit | Purpose |
-|-|--|||
+|---|---|---|---|
 | **Accuracy** | RMSE | A | Overall tracking quality |
 | **Accuracy** | ITAE | A·s² | Detect steady-state drift (SNN weakness) |
 | **Dynamics** | Settling Time | ms | Controller agility |
@@ -42,7 +42,7 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 **The primary tracking accuracy metric.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $RMSE = \sqrt{\frac{1}{N} \sum_{t=1}^{N} (i_{ref}[t] - i_{meas}[t])^2}$ |
 | Unit | Amperes [A] |
 | Better | Lower |
@@ -62,7 +62,7 @@ rmse = np.sqrt(np.mean(error**2))
 **Critical for detecting SNN integrator drift.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $ITAE = \sum_{t=1}^{N} t \cdot |e[t]| \cdot dt$ |
 | Unit | A·s² |
 | Better | Lower |
@@ -82,7 +82,7 @@ itae = np.sum(times * np.abs(error) * dt)
 **Catches the worst-case moment that RMSE hides.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $e_{max} = \max(|i_{ref} - i_{meas}|)$ |
 | Unit | Amperes [A] |
 | Better | Lower |
@@ -102,7 +102,7 @@ max_error = np.max(np.abs(error))
 **The "agility" metric. SNNs often beat PIs here.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Definition | Time for output to enter and stay within ±2% error band |
 | Unit | milliseconds [ms] |
 | Better | Lower |
@@ -123,7 +123,7 @@ else:
 **Safety check. Does the SNN "kick" too hard on step changes?**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $M_p = \frac{\max(y) - y_{final}}{y_{final} - y_{initial}} \times 100\%$ |
 | Unit | Percent [%] |
 | Better | Lower |
@@ -149,7 +149,7 @@ overshoot = (peak - target) / step_magnitude * 100
 **The "SNN Killer" metric. Measures voltage chattering.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $TV = \frac{1}{N} \sum_{t=1}^{N} |u[t] - u[t-1]|$ |
 | Unit | V/step (normalized) |
 | Better | Lower |
@@ -178,7 +178,7 @@ tv_ratio = tv_snn / tv_pi  # >1 means SNN is "chattier"
 ### 3.2 Constraint Violations
 
 | Metric | Threshold | Unit |
-|--|--||
+|---|---|---|
 | Current violations | \|I\| > 10.8 A | count |
 | Voltage violations | \|U\| > 48 V | count |
 | di/dt violations | > 50,000 A/s | count |
@@ -194,7 +194,7 @@ tv_ratio = tv_snn / tv_pi  # >1 means SNN is "chattier"
 **The "cost" metric. Proxy for energy consumption.**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $SyOps = \sum_{layers} (SpikeCount_{layer} \times FanOut_{layer})$ |
 | Report as | SyOps/step (normalized by episode length) |
 | Better | Lower |
@@ -214,7 +214,7 @@ syops_per_step = total_syops / num_timesteps
 
 **Energy estimation:**
 | Platform | Energy/SyOp | SyOps/step | Energy/step |
-|-|-||-|
+|---|---|---|---|
 | Loihi 2 | ~23 pJ | 1000 | 23 nJ |
 | SpiNNaker 2 | ~10 pJ | 1000 | 10 nJ |
 | GPU (comparison) | ~1000 pJ | 1000 | 1 µJ |
@@ -224,7 +224,7 @@ syops_per_step = total_syops / num_timesteps
 **How "silent" is the network?**
 
 | Property | Value |
-|-|-|
+|---|---|
 | Formula | $Sparsity = 1 - \frac{TotalSpikes}{TotalNeurons \times TimeSteps}$ |
 | Unit | Percent [%] or ratio [0-1] |
 | Better | Higher |
@@ -248,7 +248,7 @@ sparsity = 1.0 - (total_spikes / total_possible)
 ### 5.1 Standardized Episode Parameters
 
 | Parameter | Value | Reason |
-|--|-|--|
+|---|---|---|
 | **Episode length** | **1.0 s** | Makes ITAE, TV comparable |
 | Control frequency | 10 kHz | Standard for PMSM |
 | Timestep (dt) | 100 µs | 1/10kHz |
@@ -258,7 +258,7 @@ sparsity = 1.0 - (total_spikes / total_possible)
 ### 5.2 Benchmark Scenarios
 
 | Scenario | i_d_ref | i_q_ref | Speed | Purpose |
-|-|||-||
+|---|---|---|---|---|
 | Step Low | 0.0 A | 2.0 A | 1000 rpm | Basic tracking |
 | Step Mid | 0.0 A | 5.0 A | 1000 rpm | Medium load |
 | Step High | 0.0 A | 8.0 A | 1000 rpm | Near limit |
@@ -329,7 +329,7 @@ Control Quality (RMSE ↓)
 ## 7. Implementation Checklist
 
 | Component | File | Status |
-|--||--|
+|--|--|--|
 | RMSE computation | `benchmark_metrics.py` | ✅ |
 | ITAE computation | `benchmark_metrics.py` | ✅ |
 | Settling time | `benchmark_metrics.py` | ✅ |
@@ -339,6 +339,16 @@ Control Quality (RMSE ↓)
 | Sparsity | `benchmark_metrics.py` | ✅ |
 | Episode length config | `benchmark/config.py` | 🔜 |
 | Standardized scenarios | `benchmark/scenarios.py` | 🔜 |
+
+
+
+## 8. Model-Specific Insights
+
+### 8.1 TTFS (Time-to-First-Spike) Model
+
+- **Issue**: The TTFS model encodes information as a single sparse spike per neuron. Standard weight initialization (Kaiming Uniform) often results in "dead neurons" where no spikes propagate to the output layer.
+- **Symptom**: Constant loss during training (gradients become zero).
+- **Solution**: A significant weight boost (e.g., **4x gain** on Kaiming init) is required to ensure sufficient activity propagates through the sparse network to initiate learning.
 
 
 

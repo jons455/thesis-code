@@ -140,18 +140,24 @@ class TestAgentInterface:
             assert hasattr(agent, "reset")
 
 
+def _get_trained_model_checkpoint() -> Path:
+    repo_root = Path(__file__).parent.parent.parent
+    preferred = ["membrane", "delta", "population", "recurrent", "ttfs"]
+    for model_name in preferred:
+        candidate = repo_root / "trained_models" / model_name / "best_model.pt"
+        if candidate.exists():
+            return candidate
+
+    pytest.skip("No compatible SNN checkpoint available in trained_models/")
+
+
 class TestSNNControllerAgent:
     """Test SNN controller agent."""
 
     @pytest.fixture
     def checkpoint_path(self):
         """Path to test checkpoint."""
-        return (
-            Path(__file__).parent.parent.parent
-            / "snn"
-            / "checkpoints"
-            / "best_model.pt"
-        )
+        return _get_trained_model_checkpoint()
 
     def test_checkpoint_exists(self, checkpoint_path):
         """Verify checkpoint file exists for testing."""
@@ -203,7 +209,7 @@ class TestSNNControllerAgent:
         assert action.shape == (2,)
 
     def test_action_in_valid_range(self, checkpoint_path):
-        """Agent outputs actions in normalized range."""
+        """Agent outputs actions in physical range."""
         if not checkpoint_path.exists():
             pytest.skip("No SNN checkpoint available")
 
@@ -211,8 +217,8 @@ class TestSNNControllerAgent:
         state = np.array([0.0, 0.0, 0.5, 0.5])
         action = agent(state)
 
-        assert np.all(action >= -1.0)
-        assert np.all(action <= 1.0)
+        assert np.all(action >= -DEFAULT_PMSM.u_max)
+        assert np.all(action <= DEFAULT_PMSM.u_max)
 
     def test_state_persists_across_calls(self, checkpoint_path):
         """Membrane state persists across timesteps."""
@@ -268,12 +274,7 @@ class TestSNNControllerTorchAgent:
     @pytest.fixture
     def checkpoint_path(self):
         """Path to test checkpoint."""
-        return (
-            Path(__file__).parent.parent.parent
-            / "snn"
-            / "checkpoints"
-            / "best_model.pt"
-        )
+        return _get_trained_model_checkpoint()
 
     def test_creates_successfully(self, checkpoint_path):
         """Agent can be created."""
