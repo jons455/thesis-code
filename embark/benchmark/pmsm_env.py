@@ -333,6 +333,12 @@ class PMSMEnv(gym.Env):
         e_q = i_q_ref - i_q_meas
         obs = np.array([i_d_meas, i_q_meas, e_d, e_q], dtype=np.float32)
 
+        # DEBUG: Check if obs is within space
+        if not self.observation_space.contains(obs):
+            print(f"DEBUG: Reset obs out of bounds: {obs}")
+            print(f"DEBUG: Space low: {self.observation_space.low}")
+            print(f"DEBUG: Space high: {self.observation_space.high}")
+
         info = {
             "i_d": i_d,
             "i_q": i_q,

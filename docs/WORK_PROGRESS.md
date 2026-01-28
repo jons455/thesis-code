@@ -414,4 +414,12 @@ poetry run python scripts/test_benchmark_api.py
 - SNN checkpoints currently tracked on `main` (delta/membrane/population/recurrent)
 - `ttfs` checkpoint exists but was not used for normalized-range tests
 
+### Metric Fix: SyOps Calculation
+
+**What was done**:
+- Fixed `get_spike_statistics` in `embark/benchmark/agents.py` to correctly calculate Synaptic Operations (SyOps)
+- SyOps = Σ (layer_spikes × fan_out)
+- Previously, this metric was returning 0.0 because it wasn't iterating through layers to count connections
+- Verified fix with `SNN_membrane` model: now reports ~49 SyOps/step
+
 *Last updated: 2026-01-28*

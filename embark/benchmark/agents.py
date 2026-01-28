@@ -386,6 +386,7 @@ class SNNControllerAgent:
 
         # Spike tracking for neuromorphic metrics
         self._spike_counts_per_step: list = []  # List of spike counts per timestep
+        self._layer_spike_counts: np.ndarray | None = None  # Cumulative spikes per layer
         self._sparsities_per_step: list = []  # List of sparsities per timestep
         self._inference_times: list = []  # Inference latencies
         self._total_spikes: int = 0
@@ -398,6 +399,7 @@ class SNNControllerAgent:
         """Reset neuron membrane potentials and spike tracking for new episode."""
         self._snn_state = None
         self._spike_counts_per_step = []
+        self._layer_spike_counts = None
         self._sparsities_per_step = []
         self._inference_times = []
         self._total_spikes = 0
@@ -459,6 +461,15 @@ class SNNControllerAgent:
                 if self.track_spikes and spike_info is not None:
                     step_spikes += spike_info["total_spikes"]
                     step_sparsities.append(spike_info["layer_sparsities"])
+                    
+                    # Accumulate layer spikes
+                    current_layer_counts = np.array(spike_info["spike_counts"])
+                    if self._layer_spike_counts is None:
+                        self._layer_spike_counts = np.zeros_like(current_layer_counts)
+                    
+                    # Handle potential size mismatch if model changes (unlikely)
+                    if self._layer_spike_counts.shape == current_layer_counts.shape:
+                        self._layer_spike_counts += current_layer_counts
 
         t_end = time.perf_counter()
 
@@ -553,6 +564,8 @@ class SNNControllerAgent:
             - inference_latency_mean/max/std: timing statistics
             - network_stats: neuron/synapse counts
             - num_inference_steps: internal SNN steps per control step
+            - total_syops: Total synaptic operations (estimated)
+            - syops_per_timestep: SyOps per control step
         """
         if not self._spike_counts_per_step:
             return {"error": "No spike data collected. Enable track_spikes=True"}
@@ -563,6 +576,51 @@ class SNNControllerAgent:
             if self._sparsities_per_step
             else np.array([[0.0]])
         )
+
+        # Calculate SyOps
+        total_syops = 0
+        if self._layer_spike_counts is not None:
+            # Helper to get output features of a layer safely
+            def get_out_features(layer_idx):
+                # If it's a hidden layer
+                if layer_idx < len(self.model.layers):
+                    return self.model.layers[layer_idx].out_features
+                # If it's the output layer
+                # Try common names
+                if hasattr(self.model, "fc_out"):
+                    return self.model.fc_out.out_features
+                elif hasattr(self.model, "pop_out") and hasattr(self.model.pop_out, "fc"):
+                    return self.model.pop_out.fc.out_features
+                elif hasattr(self.model, "ttfs_out") and hasattr(self.model.ttfs_out, "fc"):
+                    return self.model.ttfs_out.fc.out_features
+                return 0
+
+            # Iterate through hidden layers
+            # spike_counts has counts for each neuron layer
+            # layer[i] feeds into layer[i+1]
+            num_hidden = len(self.model.layers)
+            
+            # Check for recurrence
+            is_recurrent = "RecurrentSNNController" in self.model.__class__.__name__
+
+            for i, count in enumerate(self._layer_spike_counts):
+                # Skip if this is an output layer spike count (e.g. Population/TTFS)
+                # We only care about spikes that TRIGGER operations.
+                # Hidden neurons trigger ops in next layer.
+                if i >= num_hidden:
+                    break
+                
+                # 1. Feedforward ops to next layer
+                # Current neurons (layer i) -> Next Linear Layer (layer i+1 or output)
+                next_layer_width = get_out_features(i + 1)
+                total_syops += int(count * next_layer_width)
+                
+                # 2. Recurrent ops (if applicable)
+                if is_recurrent:
+                    # Assuming full recurrence in hidden layers
+                    # RLeaky is usually all-to-all
+                    current_layer_width = get_out_features(i) # approx hidden size
+                    total_syops += int(count * current_layer_width)
 
         stats = {
             # Spike counts
@@ -577,6 +635,9 @@ class SNNControllerAgent:
             "sparsity_per_layer": sparsities.mean(axis=0).tolist()
             if sparsities.size > 0
             else [],
+            # SyOps
+            "total_syops": total_syops,
+            "syops_per_timestep": float(total_syops / max(1, self._total_control_steps)),
             # Network architecture
             **self._network_stats,
         }

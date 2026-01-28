@@ -247,14 +247,16 @@ def run_comprehensive_benchmark(
         if "error" not in spike_stats:
             neuromorphic = NeuromorphicMetrics(
                 total_spikes=spike_stats.get("total_spikes", 0),
-                spikes_per_inference=spike_stats.get("spikes_per_timestep", 0),
+                spikes_per_inference=spike_stats.get("spikes_per_control_step", 0), # Corrected key
                 activation_sparsity=spike_stats.get("mean_sparsity", 0),
                 num_neurons=spike_stats.get("num_neurons", 0),
                 num_synapses=spike_stats.get("num_synapses", 0),
                 num_layers=spike_stats.get("num_layers", 0),
-                inference_latency_mean=spike_stats.get("inference_latency_mean", 0),
-                inference_latency_max=spike_stats.get("inference_latency_max", 0),
-                inference_latency_std=spike_stats.get("inference_latency_std", 0),
+                inference_latency_mean=spike_stats.get("inference_latency_mean_s", 0), # Corrected key
+                inference_latency_max=spike_stats.get("inference_latency_max_s", 0), # Corrected key
+                inference_latency_std=spike_stats.get("inference_latency_std_s", 0), # Corrected key
+                total_syops=spike_stats.get("total_syops", 0),
+                syops_per_timestep=spike_stats.get("syops_per_timestep", 0),
             )
 
     # Build result

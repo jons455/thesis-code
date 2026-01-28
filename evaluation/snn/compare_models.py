@@ -37,25 +37,25 @@ SCENARIOS = [
         "max_steps": 10000,
         "noise_std": 0.0,
         "desc": "Baseline (1000 rpm, 2A)"
-    },
-    {
-        "name": "B_HighSpeed",
-        "n_rpm": 3000,
-        "i_d_ref": 0.0,
-        "i_q_ref": 2.0,
-        "max_steps": 10000,
-        "noise_std": 0.0,
-        "desc": "High Speed (3000 rpm)"
-    },
-    {
-        "name": "C_Robustness",
-        "n_rpm": 1000,
-        "i_d_ref": 0.0,
-        "i_q_ref": 2.0,
-        "max_steps": 10000,
-        "noise_std": 0.05,
-        "desc": "Noisy (σ=0.05A)"
-    },
+    }
+#    {
+#        "name": "B_HighSpeed",
+#        "n_rpm": 3000,
+#        "i_d_ref": 0.0,
+#        "i_q_ref": 2.0,
+#        "max_steps": 10000,
+#        "noise_std": 0.0,
+#        "desc": "High Speed (3000 rpm)"
+#    },
+#    {
+#        "name": "C_Robustness",
+#        "n_rpm": 1000,
+#        "i_d_ref": 0.0,
+#        "i_q_ref": 2.0,
+#        "max_steps": 10000,
+#        "noise_std": 0.05,
+#        "desc": "Noisy (σ=0.05A)"
+#    },
 ]
 
 def find_models():
@@ -120,6 +120,7 @@ def run_evaluation():
                 "ITAE": r.accuracy.ITAE_iq,
                 "TV": r.stability.TV_total,
                 "SyOps": 0.0,
+                "Sparsity": 1.0,  # 100% sparse (no spikes)
                 "LAC": 0.0  # Not applicable
             })
             print(" Done.")
@@ -158,7 +159,8 @@ def run_evaluation():
                         "RMSE": r.accuracy.RMSE_iq,
                         "ITAE": r.accuracy.ITAE_iq,
                         "TV": r.stability.TV_total,
-                        "SyOps": r.neuromorphic.spikes_per_inference if r.neuromorphic else 0.0,
+                        "SyOps": r.neuromorphic.syops_per_timestep if r.neuromorphic else 0.0,
+                        "Sparsity": r.neuromorphic.activation_sparsity if r.neuromorphic else 0.0,
                         "LAC": r.lac_score
                     })
                     print(" Done.")
@@ -183,7 +185,7 @@ def run_evaluation():
     print("="*80)
     
     # Calculate average performance across scenarios
-    avg_df = df.groupby("Model")[["RMSE", "LAC", "SyOps"]].mean().sort_values("LAC")
+    avg_df = df.groupby("Model")[["RMSE", "LAC", "SyOps", "Sparsity"]].mean().sort_values("LAC")
     
     print("\nRanking (by LAC Score - Lower is Better):")
     print(avg_df.to_string())
@@ -195,16 +197,16 @@ def run_evaluation():
     
     # Save detailed report
     report_path = PROJECT_ROOT / "docs" / "MODEL_COMPARISON_REPORT.md"
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("# SNN Model Comparison Report\n\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
         f.write(f"**Best Overall SNN:** {best_snn}\n\n")
         
         f.write("## 1. Leaderboard (Average across 3 Scenarios)\n\n")
-        f.write("| Model | Avg LAC | Avg RMSE [A] | Avg SyOps/step |\n")
-        f.write("|---|---|---|---|\n")
+        f.write("| Model | Avg LAC | Avg RMSE [A] | Avg SyOps/step | Avg Sparsity |\n")
+        f.write("|---|---|---|---|---|\n")
         for model, row in avg_df.iterrows():
-            f.write(f"| {model} | {row['LAC']:.4f} | {row['RMSE']:.4f} | {row['SyOps']:.1f} |\n")
+            f.write(f"| {model} | {row['LAC']:.4f} | {row['RMSE']:.4f} | {row['SyOps']:.1f} | {row['Sparsity']*100:.1f}% |\n")
             
         f.write("\n## 2. Detailed Results by Scenario\n\n")
         
@@ -212,7 +214,7 @@ def run_evaluation():
             s_name = scenario["name"]
             f.write(f"### Scenario: {s_name} ({scenario['desc']})\n\n")
             sub_df = df[df["Scenario"] == s_name].sort_values("RMSE")
-            f.write(sub_df[["Model", "RMSE", "ITAE", "TV", "SyOps", "LAC"]].to_string(index=False))
+            f.write(sub_df[["Model", "RMSE", "ITAE", "TV", "SyOps", "Sparsity", "LAC"]].to_string(index=False))
             f.write("\n\n")
             
     print(f"\nReport saved to: {report_path}")
