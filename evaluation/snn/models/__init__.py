@@ -35,18 +35,8 @@ def load_snn_model(path: str, device: str = "cpu") -> nn.Module:
         model_cls = LearnedLinearSNNController
     elif "pop_out.fc.weight" in state_dict:
         model_cls = PopulationSNNController
-    # Distinguish between recurrent and membrane (feedforward)
-    # Recurrent layers use snn.RLeaky which has different param names often?
-    # snntorch RLeaky has params like 'recurrent.weight' if internal linear is used?
-    # Or just check for the specific structure of RecurrentSNNController.
-    # Our RecurrentSNNController uses RLeaky but doesn't have a unique output layer name
-    # compared to Membrane (both use fc_out/lif_out).
-    # However, hidden layers in Recurrent are RLeaky.
-    # Let's check if the state dict implies recurrence.
-    # Actually, RLeaky usually registers recurrent weights.
-    # But for now, since RecurrentSNNController is the only one using RLeaky,
-    # we can try to infer or fallback.
-    # Alternatively, config might be in checkpoint.
+    elif any("recurrent" in k for k in state_dict.keys()):
+        model_cls = RecurrentSNNController
     elif (
         checkpoint.get("config")
         and hasattr(checkpoint["config"], "model_type")

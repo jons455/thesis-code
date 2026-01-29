@@ -129,22 +129,22 @@ If single-network approach shows issues:
 
 
 
-WP4: Systematic Evaluation & Baseline Comparison 🔲 NOT STARTED
+WP4: Systematic Evaluation & Baseline Comparison 🔄 IN PROGRESS
 4.1 Benchmark Scenarios (The "Holy Trinity") 🆕
 
 All episodes standardized to 1.0 second (10,000 steps).
 
-    [ ] Scenario A: Nominal (Baseline)
+    [x] Scenario A: Nominal (Baseline)
 
         Speed: 1000 rpm | Step: 0A → 2A | Noise: None
 
-    [ ] Scenario B: High Speed (Saturation/Decoupling)
+    [x] Scenario B: High Speed (Saturation/Decoupling)
 
         Speed: 3000 rpm | Step: 0A → 2A | Noise: None
 
         Purpose: Test Back-EMF decoupling and voltage limit handling.
 
-    [ ] Scenario C: Robustness (Filtering)
+    [x] Scenario C: Robustness (Filtering)
 
         Speed: 1000 rpm | Step: 0A → 2A | Noise: Gaussian (σ=0.05A)
 
