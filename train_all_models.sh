@@ -3,9 +3,9 @@ set -e  # Exit immediately if a command exits with a non-zero status
 
 echo "Starting training for all SNN models..."
 
-echo "----------------------------------------------------------------"
-echo "Training Delta SNN..."
-poetry run python evaluation/snn/utils/train.py --model_type delta --epochs 10 --device cuda --delta_scale 0.01
+#echo "----------------------------------------------------------------"
+#echo "Training Delta SNN..."
+#poetry run python evaluation/snn/utils/train.py --model_type delta --epochs 10 --device cuda --delta_scale 0.01
 
 echo "----------------------------------------------------------------"
 echo "Training Population SNN..."
