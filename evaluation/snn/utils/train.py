@@ -36,6 +36,7 @@ class TrainConfig:
     window_size: int = 100
     stride: int = 50
     val_split: float = 0.2
+    error_gain: float = 10.0
 
     # Model
     model_type: str = "membrane"  # "membrane", "population", "learned_linear", "delta", "ttfs", "recurrent"
@@ -64,6 +65,7 @@ class TrainConfig:
     # Checkpoints
     # Will be updated in main() to include model_type subdirectory
     checkpoint_dir: str = str(MODELS_CHECKPOINTS_DIR)
+    run_name: str | None = None
     save_every: int = 10  # Save checkpoint every N epochs
     resume_from: str | None = None  # Path to checkpoint to resume from
     start_epoch: int = 1  # Starting epoch (for resume)
@@ -205,7 +207,11 @@ def train(config: TrainConfig) -> nn.Module:
     # or just use the provided checkpoint dir + model_type.
 
     # Let's enforce the subdirectory structure:
-    model_dir = base_checkpoint_dir / config.model_type
+    if config.run_name:
+        model_dir = base_checkpoint_dir / config.run_name
+    else:
+        model_dir = base_checkpoint_dir / config.model_type
+    
     model_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
@@ -214,7 +220,9 @@ def train(config: TrainConfig) -> nn.Module:
     print(f"Device: {config.device}")
     print(f"Data: {config.data_dir}")
     print(f"Model Type: {config.model_type}")
+    print(f"Run Name: {config.run_name}")
     print(f"Checkpoint Dir: {model_dir}")
+    print(f"Error Gain: {config.error_gain}")
     print(f"Hidden size: {config.hidden_size}")
     if config.model_type in {"population", "learned_linear"}:
         print(f"Neurons/Output: {config.neurons_per_output}")
@@ -235,6 +243,7 @@ def train(config: TrainConfig) -> nn.Module:
             window_size=config.window_size,
             stride=config.stride,
             max_files=config.max_files,
+            error_gain=config.error_gain,
         )
 
         # Manual split
@@ -252,13 +261,42 @@ def train(config: TrainConfig) -> nn.Module:
             val_dataset, batch_size=config.batch_size, shuffle=False
         )
     else:
-        train_loader, val_loader = create_dataloaders(
+        # We need to update create_dataloaders to pass error_gain too, 
+        # or just instantiate manually here to avoid changing signature of create_dataloaders if it is used elsewhere.
+        # Let's instantiate manually to be safe and clear.
+        
+        full_dataset = PMSMDataset(
             data_dir=config.data_dir,
-            batch_size=config.batch_size,
             window_size=config.window_size,
             stride=config.stride,
-            val_split=config.val_split,
+            error_gain=config.error_gain,
         )
+        
+        val_size = int(len(full_dataset) * config.val_split)
+        train_size = len(full_dataset) - val_size
+        
+        generator = torch.Generator().manual_seed(42)
+        train_dataset, val_dataset = torch.utils.data.random_split(
+            full_dataset, [train_size, val_size], generator=generator
+        )
+        
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=config.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+        )
+        
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=config.batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
+        
+        print(f"Train: {len(train_dataset)} windows, Val: {len(val_dataset)} windows")
 
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
 
@@ -416,12 +454,21 @@ def main():
         "--checkpoint-dir",
         type=str,
         default="trained_models",
-        help="Directory to save checkpoints (subfolder per model type will be created)",
+        help="Directory to save checkpoints (subfolder per model type or run_name will be created)",
+    )
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default=None,
+        help="Specific name for this training run (overrides model_type folder name)",
     )
     parser.add_argument(
         "--window_size", type=int, default=100, help="Timesteps per training window"
     )
     parser.add_argument("--stride", type=int, default=50, help="Stride between windows")
+    parser.add_argument(
+        "--error_gain", type=float, default=10.0, help="Amplification factor for error signals"
+    )
 
     # Model arguments
     parser.add_argument(
@@ -523,8 +570,10 @@ def main():
     config = TrainConfig(
         data_dir=args.data_dir,
         checkpoint_dir=args.checkpoint_dir,
+        run_name=args.run_name,
         window_size=args.window_size,
         stride=args.stride,
+        error_gain=args.error_gain,
         model_type=args.model_type,
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,

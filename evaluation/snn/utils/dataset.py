@@ -91,9 +91,11 @@ class PMSMDataset(Dataset):
         stride: int | None = None,
         file_pattern: str = "*.csv",
         max_files: int | None = None,
+        error_gain: float = 10.0,
     ):
         self.data_dir = Path(data_dir)
         self.config = config or DataConfig()
+        self.error_gain = error_gain
 
         # Override config if provided
         if window_size is not None:
@@ -147,6 +149,7 @@ class PMSMDataset(Dataset):
         return i_cols, u_cols, ref_cols
 
     def _load_file(self, filepath: Path) -> tuple[np.ndarray, np.ndarray] | None:
+       
         """Load a single CSV file and extract input/target arrays.
 
         Args:
@@ -170,7 +173,6 @@ class PMSMDataset(Dataset):
         try:
             i_cols, u_cols, ref_cols = self._find_columns(df)
         except ValueError:
-            # Try to compute errors if reference columns don't exist
             i_cols, u_cols, _ = self._find_columns(df)
             ref_cols = None
 
@@ -183,47 +185,46 @@ class PMSMDataset(Dataset):
         u_q = df[u_cols[1]].values
 
         # --- SAFETY CLAMPING (Fix for "Death Spike") ---
-        # The PI controller can output extreme voltages (e.g. +/- 100V) in the
-        # first few steps due to infinite gain theory. Real physics clamps this.
-        # We must clamp training targets to physically trainable limits.
-
-        # Clamp to +/- 1.2x u_max (allow slight transient, but kill outliers)
         limit = self.config.u_max * 1.2
         u_d = np.clip(u_d, -limit, limit)
         u_q = np.clip(u_q, -limit, limit)
 
-        # Specific fix for t=0..5 artifacts
-        # We smooth the first 5 steps to be no larger than the 6th step magnitude + margin
-        # This prevents the SNN from seeing a mathematically perfect but physically
-        # impossible "Dirac delta" function at the start.
+        # Smooth initial transient
         for i in range(min(5, len(u_d))):
             u_d[i] = np.clip(u_d[i], -self.config.u_max, self.config.u_max)
             u_q[i] = np.clip(u_q[i], -self.config.u_max, self.config.u_max)
-        # ------------------------------------------------
 
-        # Compute errors
+        # --- COMPUTE ERRORS & AMPLIFY (The Fix) ---
+        
+        # 1. Get Reference
         if ref_cols and all(c in df.columns for c in ref_cols):
-            # Use explicit reference columns
             i_d_ref = df[ref_cols[0]].values
             i_q_ref = df[ref_cols[1]].values
         else:
-            # Assume reference is the steady-state value (last value)
-            # This works for step responses where we track to a constant
             i_d_ref = np.full_like(i_d, i_d[-1])
             i_q_ref = np.full_like(i_q, i_q[-1])
 
+        # 2. Calculate Raw Error
         e_d = i_d_ref - i_d
         e_q = i_q_ref - i_q
 
-        # Normalize
+        # 3. Normalize States (Standard)
         i_d_norm = i_d / self.config.i_max
         i_q_norm = i_q / self.config.i_max
-        e_d_norm = e_d / self.config.i_max
-        e_q_norm = e_q / self.config.i_max
+
+        # 4. Normalize & AMPLIFY Errors
+        # We define the gain here. 
+        # (Ideally, import SNN_ERROR_GAIN from config.py if you set it up there)
+        GAIN = self.error_gain
+        
+        e_d_norm = np.clip((e_d / self.config.i_max) * GAIN, -1.0, 1.0)
+        e_q_norm = np.clip((e_q / self.config.i_max) * GAIN, -1.0, 1.0)
+        
+        # 5. Target Normalization
         u_d_norm = u_d / self.config.u_max
         u_q_norm = u_q / self.config.u_max
 
-        # Stack into arrays
+        # Stack into arrays [i_d, i_q, e_d, e_q]
         inputs = np.stack([i_d_norm, i_q_norm, e_d_norm, e_q_norm], axis=1)
         targets = np.stack([u_d_norm, u_q_norm], axis=1)
 
