@@ -55,6 +55,7 @@ class DeltaSNNController(nn.Module):
             spike_grad=spike_grad,
             beta=self.config.delta_beta,
         )
+        self.delta_scale = nn.Parameter(torch.tensor(self.config.delta_scale))
 
     def init_state(self, batch_size: int, device=None):
         if device is None:

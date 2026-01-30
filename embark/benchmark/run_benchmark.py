@@ -36,6 +36,7 @@ from embark.benchmark.agents import (  # noqa: E402
 # noqa: E402
 from embark.benchmark.pmsm_env import PMSMEnv  # noqa: E402
 from embark.benchmark.processors import get_default_processors  # noqa: E402
+from embark.utils.config import DEFAULT_PMSM  # noqa: E402
 from embark.utils.paths import (  # noqa: E402
     BENCHMARK_RESULTS_DIR,
     MODELS_CHECKPOINTS_DIR,
@@ -101,7 +102,12 @@ def run_simple_test():
     )
 
     # Create PI controller
-    agent = PIControllerAgent()
+    agent = PIControllerAgent(
+        kp_d=DEFAULT_PMSM.kp_d_optimum,
+        ki_d=DEFAULT_PMSM.ki_stable,
+        kp_q=DEFAULT_PMSM.kp_q_optimum,
+        ki_q=DEFAULT_PMSM.ki_stable,
+    )
 
     processors = get_default_processors(agent, env.config.i_max, env.config.u_max)
 
@@ -602,7 +608,12 @@ def run_full_comparison(output_dir: str = str(BENCHMARK_RESULTS_DIR)):
             max_steps=cfg["max_steps"],
             measurement_noise_std=noise_std,
         )
-        pi_agent = PIControllerAgent()
+        pi_agent = PIControllerAgent(
+            kp_d=DEFAULT_PMSM.kp_d_optimum,
+            ki_d=DEFAULT_PMSM.ki_stable,
+            kp_q=DEFAULT_PMSM.kp_q_optimum,
+            ki_q=DEFAULT_PMSM.ki_stable,
+        )
         pi_result = run_comprehensive_benchmark(
             pi_agent,
             "PI",

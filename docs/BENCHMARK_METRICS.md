@@ -30,6 +30,7 @@ This benchmark evaluates **Spiking Neural Network (SNN) controllers** for PMSM c
 | **Stability** | Control Smoothness (TV) | V/step | Detect chattering (SNN weakness) |
 | **Neuromorphic** | SyOps/step | ops | Computational cost proxy |
 | **Neuromorphic** | Activation Sparsity | % | Efficiency measure |
+| **Combined** | **LAC** | Score | **The "Winner" metric.** Trade-off between accuracy and cost. |
 
 
 
@@ -241,11 +242,44 @@ sparsity = 1.0 - (total_spikes / total_possible)
 - High sparsity = Fewer computations = Lower power
 - At steady state with delta encoding: Sparsity should approach 100%
 
+## 5. Combined Efficiency Score (The "Winner" Metric)
+
+*How do we rank controllers that are "fast but expensive" vs. "slow but cheap"?*
+
+### 5.1 LAC (Logarithmic Accuracy-Cost)
+
+**The single number that defines the best trade-off.**
+
+| Property | Value |
+| --- | --- |
+| Formula |  |
+| Unit | Dimensionless Score |
+| Better | **Lower** |
+| Range | Typically 0.1 - 1.0 |
+
+```python
+# Avoid log(0) error
+safe_syops = max(syops_per_step, 1.0)
+lac = rmse * np.log10(safe_syops)
+
+```
+
+**Why LAC?**
+Comparing Accuracy (RMSE ~0.1) vs. Efficiency (SyOps ~10,000) is hard because they have vastly different scales.
+
+* **RMSE is Linear**: 0.2A error is twice as bad as 0.1A.
+* **SyOps is Exponential**: A network might use 10k, 100k, or 1M ops.
+* **The Solution**: We multiply RMSE by the *Logarithm* of SyOps. This ensures that a tiny gain in accuracy isn't worth it if it costs 10x the energy.
+
+**Interpretation:**
+
+* **Score < 0.2**: Excellent (High accuracy, extremely low energy).
+* **Score > 0.5**: Poor (Either the error is huge, or the network is massive).
 
 
-## 5. Benchmark Configuration
+## 6. Benchmark Configuration
 
-### 5.1 Standardized Episode Parameters
+### 6.1 Standardized Episode Parameters
 
 | Parameter | Value | Reason |
 |---|---|---|
@@ -255,7 +289,7 @@ sparsity = 1.0 - (total_spikes / total_possible)
 | Steps per episode | 10,000 | 1.0s × 10kHz |
 | Step response time | 0.0 s | Step at t=0 |
 
-### 5.2 Benchmark Scenarios
+### 6.2 Benchmark Scenarios
 
 | Scenario | i_d_ref | i_q_ref | Speed | Purpose |
 |---|---|---|---|---|
@@ -265,7 +299,7 @@ sparsity = 1.0 - (total_spikes / total_possible)
 | Speed Sweep | 0.0 A | 2.0 A | 500-2500 rpm | Robustness |
 | Flux Weakening | -2.0 A | 5.0 A | 2000 rpm | d-axis control |
 
-### 5.3 Reporting Template
+### 6.3 Reporting Template
 
 ```
 =======================================================================
@@ -302,7 +336,7 @@ COMPARISON TO PI BASELINE
 
 
 
-## 6. The Trade-off Visualization
+## 7. The Trade-off Visualization
 
 The final comparison is a **Pareto front**:
 
@@ -326,7 +360,7 @@ Control Quality (RMSE ↓)
 
 
 
-## 7. Implementation Checklist
+## 8. Implementation Checklist
 
 | Component | File | Status |
 |--|--|--|
@@ -342,9 +376,9 @@ Control Quality (RMSE ↓)
 
 
 
-## 8. Model-Specific Insights
+## 9. Model-Specific Insights
 
-### 8.1 TTFS (Time-to-First-Spike) Model
+### 9.1 TTFS (Time-to-First-Spike) Model
 
 - **Issue**: The TTFS model encodes information as a single sparse spike per neuron. Standard weight initialization (Kaiming Uniform) often results in "dead neurons" where no spikes propagate to the output layer.
 - **Symptom**: Constant loss during training (gradients become zero).

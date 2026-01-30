@@ -182,6 +182,25 @@ class PMSMDataset(Dataset):
         u_d = df[u_cols[0]].values
         u_q = df[u_cols[1]].values
 
+        # --- SAFETY CLAMPING (Fix for "Death Spike") ---
+        # The PI controller can output extreme voltages (e.g. +/- 100V) in the
+        # first few steps due to infinite gain theory. Real physics clamps this.
+        # We must clamp training targets to physically trainable limits.
+
+        # Clamp to +/- 1.2x u_max (allow slight transient, but kill outliers)
+        limit = self.config.u_max * 1.2
+        u_d = np.clip(u_d, -limit, limit)
+        u_q = np.clip(u_q, -limit, limit)
+
+        # Specific fix for t=0..5 artifacts
+        # We smooth the first 5 steps to be no larger than the 6th step magnitude + margin
+        # This prevents the SNN from seeing a mathematically perfect but physically
+        # impossible "Dirac delta" function at the start.
+        for i in range(min(5, len(u_d))):
+            u_d[i] = np.clip(u_d[i], -self.config.u_max, self.config.u_max)
+            u_q[i] = np.clip(u_q[i], -self.config.u_max, self.config.u_max)
+        # ------------------------------------------------
+
         # Compute errors
         if ref_cols and all(c in df.columns for c in ref_cols):
             # Use explicit reference columns

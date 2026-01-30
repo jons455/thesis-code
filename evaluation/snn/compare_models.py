@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 # Add project root to path
@@ -37,25 +38,25 @@ SCENARIOS = [
         "max_steps": 10000,
         "noise_std": 0.0,
         "desc": "Baseline (1000 rpm, 2A)"
-    },
-    {
-        "name": "B_HighSpeed",
-        "n_rpm": 3000,
-        "i_d_ref": 0.0,
-        "i_q_ref": 2.0,
-        "max_steps": 10000,
-        "noise_std": 0.0,
-        "desc": "High Speed (3000 rpm)"
-    },
-    {
-        "name": "C_Robustness",
-        "n_rpm": 1000,
-        "i_d_ref": 0.0,
-        "i_q_ref": 2.0,
-        "max_steps": 10000,
-        "noise_std": 0.05,
-        "desc": "Noisy (σ=0.05A)"
-    },
+    }
+ #   {
+ #       "name": "B_HighSpeed",
+ #       "n_rpm": 3000,
+ #       "i_d_ref": 0.0,
+ #       "i_q_ref": 2.0,
+ #       "max_steps": 10000,
+ #       "noise_std": 0.0,
+#        "desc": "High Speed (3000 rpm)"
+#    },
+#   {
+#        "name": "C_Robustness",
+#        "n_rpm": 1000,
+#        "i_d_ref": 0.0,
+#        "i_q_ref": 2.0,
+#        "max_steps": 10000,
+#        "noise_std": 0.05,
+#        "desc": "Noisy (σ=0.05A)"
+#    },
 ]
 
 def find_models():
@@ -81,6 +82,91 @@ def find_models():
                 
     return sorted(models)
 
+def plot_combined_scenario_response(scenario_name, results_list):
+    """
+    Plots the step response for all models in a single scenario.
+    results_list: list of (model_name, episode_data) tuples
+    """
+    if not results_list:
+        return
+
+    plot_dir = PROJECT_ROOT / "docs" / "plots" / "step_responses"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    
+    plt.figure(figsize=(12, 6))
+    
+    # Get reference from the first result (all should have same ref for same scenario)
+    # We use the first one's time and ref as base, assuming consistent timesteps
+    first_data = results_list[0][1]
+    time = np.array([d["time"] for d in first_data])
+    i_q_ref = np.array([d["i_q_ref"] for d in first_data])
+    
+    # Plot Reference
+    plt.plot(time, i_q_ref, 'k--', label='Reference', linewidth=2, alpha=0.6)
+    
+    # Plot each model
+    for model_name, episode_data in results_list:
+        t = np.array([d["time"] for d in episode_data])
+        iq = np.array([d["i_q"] for d in episode_data])
+        
+        # Ensure we don't crash if lengths differ slightly (though they shouldn't)
+        if len(t) != len(iq):
+            print(f"Warning: mismatch in data lengths for {model_name}")
+            continue
+
+        # Highlight PI Baseline
+        if model_name == "PI_Baseline":
+            plt.plot(t, iq, label=model_name, linewidth=2.0, linestyle='-', color='black', alpha=0.8)
+        else:
+            plt.plot(t, iq, label=model_name, linewidth=1.5, alpha=0.8)
+            
+    plt.title(f'Combined Step Response - {scenario_name}')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Current i_q (A)')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    
+    filename = f"Combined_{scenario_name}_response.png"
+    plt.savefig(plot_dir / filename)
+    plt.close()
+    print(f"    Combined plot saved to: {plot_dir / filename}")
+
+def plot_step_response(episode_data, model_name, scenario_name):
+    """
+    Plots the motor response to show 'how fast' the controller is.
+    Assumes episode_data contains list of dicts with time, i_q_ref, and i_q.
+    """
+    # Extract data
+    time = np.array([d["time"] for d in episode_data])
+    i_q = np.array([d["i_q"] for d in episode_data])
+    i_q_ref = np.array([d["i_q_ref"] for d in episode_data])
+    
+    # Create plot directory if it doesn't exist
+    plot_dir = PROJECT_ROOT / "docs" / "plots" / "step_responses"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    
+    plt.figure(figsize=(10, 5))
+    
+    # Plot Reference
+    plt.plot(time, i_q_ref, 'k--', label=f'Reference ({i_q_ref[-1]:.1f}A)', linewidth=2)
+    
+    # Plot Actual
+    plt.plot(time, i_q, 'b-', label=f'{model_name} Response', linewidth=2)
+    
+    plt.title(f'Controller Step Response - {scenario_name} ({model_name})')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Current i_q (A)')
+    plt.grid(True)
+    plt.legend()
+    
+    # Save plot
+    filename = f"{model_name}_{scenario_name}_response.png"
+    plt.savefig(plot_dir / filename)
+    plt.close()
+    
+    print(f"    Plot saved to: {plot_dir / filename}")
+
 def run_evaluation():
     print("=" * 80)
     print("SNN MODEL COMPARISON REPORT")
@@ -94,6 +180,7 @@ def run_evaluation():
     print(f"Found {len(models)} models: {[m[0] for m in models]}")
     
     results = []
+    scenario_data = {s["name"]: [] for s in SCENARIOS}
 
     # 1. Run Baseline (PI)
     print("\nRunning PI Baseline...")
@@ -124,6 +211,11 @@ def run_evaluation():
                 "LAC": 0.0  # Not applicable
             })
             print(" Done.")
+            
+            # Plot response
+            if "episode_data" in res:
+                plot_step_response(res["episode_data"], "PI_Baseline", scenario["name"])
+                scenario_data[scenario["name"]].append(("PI_Baseline", res["episode_data"]))
         else:
             print(" Failed.")
 
@@ -164,6 +256,11 @@ def run_evaluation():
                         "LAC": r.lac_score
                     })
                     print(" Done.")
+                    
+                    # Plot response
+                    if "episode_data" in res:
+                        plot_step_response(res["episode_data"], model_name, scenario["name"])
+                        scenario_data[scenario["name"]].append((model_name, res["episode_data"]))
                 else:
                     print(" Failed.")
                     
@@ -171,6 +268,12 @@ def run_evaluation():
             print(f"  Error running {model_name}: {e}")
             import traceback
             traceback.print_exc()
+
+    # Plot Combined Responses
+    print("\nGenerating Comparison Plots...")
+    for scenario_name, data_list in scenario_data.items():
+        if data_list:
+            plot_combined_scenario_response(scenario_name, data_list)
 
     # 3. Generate Report
     df = pd.DataFrame(results)

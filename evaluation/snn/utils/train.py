@@ -93,16 +93,33 @@ def train_epoch(
 
         optimizer.zero_grad()
 
-        # Forward pass through sequence
-        outputs, _, _ = model.forward_sequence(inputs)
+        # --- FIX: Initialize State with Teacher Forcing ---
+        batch_size = inputs.shape[0]
+        
+        # Get the default zero-initialized state
+        state = model.init_state(batch_size, device)
+        
+        # If this is a Delta model (which acts as an integrator), we MUST set
+        # the initial voltage accumulator to the actual start value of the window.
+        if hasattr(model, 'delta_scale'): 
+            state_list = list(state)
+            
+            # The last element in DeltaSNN state is the voltage accumulator
+            # targets[:, 0, :] is the true voltage at timestep t=0 of this window
+            state_list[-1] = targets[:, 0, :].clone()
+            
+            state = tuple(state_list)
+        # --------------------------------------------------
+
+        # Pass the correctly initialized state to the model
+        outputs, _, _ = model.forward_sequence(inputs, state=state)
 
         # MSE loss on voltage predictions
         loss = F.mse_loss(outputs, targets)
 
         # Backward pass
         loss.backward()
-
-        # Gradient clipping
+        
         if grad_clip > 0:
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
@@ -131,7 +148,16 @@ def validate(
         inputs = inputs.to(device)
         targets = targets.to(device)
 
-        outputs, _, _ = model.forward_sequence(inputs)
+        # --- FIX: Initialize State with Teacher Forcing ---
+        batch_size = inputs.shape[0]
+        state = model.init_state(batch_size, device)
+        
+        if hasattr(model, 'delta_scale'):
+            state_list = list(state)
+            state_list[-1] = targets[:, 0, :].clone()
+            state = tuple(state_list)
+
+        outputs, _, _ = model.forward_sequence(inputs, state=state)
 
         loss = F.mse_loss(outputs, targets)
         total_loss += loss.item() * inputs.shape[0]
@@ -345,8 +371,8 @@ def train(config: TrainConfig) -> nn.Module:
         lr = optimizer.param_groups[0]["lr"]
         msg = (
             f"Epoch {epoch:3d}/{config.epochs} | "
-            f"Train: {train_loss:.6f} | "
-            f"Val: {val_metrics['loss']:.6f} | "
+            f"Train: {train_loss:.2e} | "   # Scientific notation
+            f"Val: {val_metrics['loss']:.2e} | " # Scientific notation
             f"MAE: {val_metrics['mae']:.4f} | "
             f"LR: {lr:.2e}" + (" *" if is_best else "")
         )
