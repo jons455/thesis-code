@@ -183,6 +183,7 @@ class PMSMEnv(gym.Env):
                     -self.config.i_max,
                     -2 * self.config.i_max,
                     -2 * self.config.i_max,
+                    -self.config.omega_max * 2, # Speed range (generous)
                 ],
                 dtype=np.float32,
             ),
@@ -192,6 +193,7 @@ class PMSMEnv(gym.Env):
                     self.config.i_max,
                     2 * self.config.i_max,
                     2 * self.config.i_max,
+                    self.config.omega_max * 2,
                 ],
                 dtype=np.float32,
             ),
@@ -331,7 +333,10 @@ class PMSMEnv(gym.Env):
         i_d_meas, i_q_meas = self._apply_measurement_noise(i_d, i_q)
         e_d = i_d_ref - i_d_meas
         e_q = i_q_ref - i_q_meas
-        obs = np.array([i_d_meas, i_q_meas, e_d, e_q], dtype=np.float32)
+        
+        # Include speed in observation (physical units: rpm)
+        # Note: self.n_rpm is the mechanical speed in RPM
+        obs = np.array([i_d_meas, i_q_meas, e_d, e_q, self.n_rpm], dtype=np.float32)
 
         # DEBUG: Check if obs is within space
         if not self.observation_space.contains(obs):
@@ -410,7 +415,8 @@ class PMSMEnv(gym.Env):
             self.time_in_range += 1
 
         # Create observation
-        observation = np.array([i_d_meas, i_q_meas, e_d, e_q], dtype=np.float32)
+        # Include speed in observation (physical units: rpm)
+        observation = np.array([i_d_meas, i_q_meas, e_d, e_q, self.n_rpm], dtype=np.float32)
 
         # Reward: negative normalized error (higher is better)
         reward = -error_magnitude / self.config.i_max

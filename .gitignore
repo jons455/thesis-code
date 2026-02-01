@@ -65,3 +65,6 @@ edge_impulse_data/
 # OS
 .DS_Store
 Thumbs.db
+
+history.json
+

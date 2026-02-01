@@ -6,7 +6,7 @@ class SNNConfig:
     """Configuration for SNN controller."""
 
     # Architecture
-    input_size: int = 4  # [i_d, i_q, e_d, e_q]
+    input_size: int = 5  # [i_d, i_q, e_d, e_q]
     hidden_size: int = 64  # Neurons per hidden layer
     num_hidden_layers: int = 2  # Number of hidden layers
     output_size: int = 2  # [u_d, u_q]

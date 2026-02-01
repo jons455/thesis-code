@@ -431,10 +431,32 @@ class SNNControllerAgent:
             state_np = np.asarray(state).flatten()
 
         # === NORMALIZE INPUTS ===
-        # State from env is [i_d, i_q, e_d, e_q] in physical units [A]
-        # SNN expects normalized inputs in approximately [-1, 1]
-        # All 4 values are current-related, so normalize by i_max
-        state_normalized = state_np / self.i_max
+        # State from env is [i_d, i_q, e_d, e_q, n_rpm] in physical units [A, A, A, A, RPM]
+        
+        # 1. Currents and Errors
+        i_d = state_np[0]
+        i_q = state_np[1]
+        e_d = state_np[2]
+        e_q = state_np[3]
+        
+        # 2. Speed (if available, otherwise 0)
+        if len(state_np) >= 5:
+            n_rpm = state_np[4]
+        else:
+            n_rpm = 0.0 # Fallback
+            
+        # 3. Normalize
+        i_d_norm = i_d / self.i_max
+        i_q_norm = i_q / self.i_max
+        e_d_norm = e_d / self.i_max
+        e_q_norm = e_q / self.i_max
+        
+        # Normalize Speed (using same N_MAX as dataset.py)
+        N_MAX = 4000.0
+        n_norm = n_rpm / N_MAX
+        
+        # 4. Stack Inputs [i_d, i_q, e_d, e_q, n]
+        state_normalized = np.array([i_d_norm, i_q_norm, e_d_norm, e_q_norm, n_norm], dtype=np.float32)
 
         # Convert to tensor
         state_tensor = torch.tensor(
