@@ -1,0 +1,13 @@
+{
+  "input_size": 5,
+  "hidden_sizes": [
+    64,
+    64
+  ],
+  "output_size": 2,
+  "output_scale": 1.0,
+  "use_batch_norm": false,
+  "dropout_rate": 0.0,
+  "weight_bits": 4,
+  "activation_bits": 4
+}
