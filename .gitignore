@@ -36,6 +36,19 @@ checkpoints/
 *.csv
 *.png
 
+# Ignore intermediate training checkpoints but keep final models
+trained_models/
+!trained_models/**/
+!trained_models/**/*.fbz       # Akida Hardware Model
+!trained_models/**/final_model.* # Final Keras/Json/Weights
+!trained_models/**/best_model.*  # Best Keras/Json/Weights/PT
+!trained_models/**/config.json   # Configs
+!trained_models/**/history.json  # Training history
+
+# Explicitly ignore epoch checkpoints
+epoch_*.keras
+epoch_*.pt
+
 # MATLAB
 *.asv
 *.slxc
@@ -48,9 +61,6 @@ slprj/
 
 # Data files (too large for git)
 data/
-trained_models/
-!trained_models/**/
-!trained_models/**/best_model.pt
 evaluation/data-preperation/data/
 pmsm-matlab/export/
 embark/pmsm-pem/export/

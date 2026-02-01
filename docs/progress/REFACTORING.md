@@ -1,319 +1,712 @@
-## **ARCHITECTURAL REDESIGN REQUIREMENTS & QUESTIONS**
+# NeuroBench-Aligned Architectural Refactoring
 
-Based on your codebase analysis, here's a comprehensive breakdown of what you need to answer and plan before proceeding:
+## Overview
 
----
-
-## **I. CLARIFICATION QUESTIONS**
-
-### **A. Physics Engine Abstraction**
-
-1. **State Space Definition**: 
-   - Should the `PhysicsEngine` interface standardize on a **named state dictionary** (e.g., `{"i_d": float, "i_q": float, ...}`) or allow flexible state arrays with adapter-specific extraction?
-   - How do you want to handle systems with different state dimensions? (PMSM has 4 control states, a gimbal might have 2 DoF with position/velocity)
-
-2. **Action Space Definition**:
-   - Should all physics engines accept **physical units** or **normalized actions**? Currently PMSM uses physical [u_d, u_q] in Volts.
-   - Do you want voltage-based control for all systems, or should the interface support force/torque commands for mechanical systems?
-
-3. **Coordinate Transforms**:
-   - Currently GEM handles Park/Clarke transforms internally. Should the new interface abstract this as `PhysicsEngine.get_control_inputs()` and `PhysicsEngine.apply_control()` methods?
-   - Or should each engine expose "native coordinates" and let users handle transforms?
-
-4. **Operating Point Configuration**:
-   - PMSM uses `(n_rpm, i_d_ref, i_q_ref)`. A gimbal might use `(angle_ref, rate_ref)`. Should the interface use a generic `ReferenceTrajectory` protocol?
-
-### **B. Baseline Controller Abstraction**
-
-5. **Controller Interface Standardization**:
-   - Your PI controller currently uses Technical Optimum tuning specific to PMSM ($K_p = L/(2T_s)$). Should the baseline interface require:
-     - **Auto-tuning methods** (e.g., `BaselineController.tune(system_params)`) 
-     - **Manual parameter passing** (e.g., `BaselineController(kp, ki, kd)`)
-     - Both?
-
-6. **Baseline Types**:
-   - What baseline controllers should be supported beyond PI?
-     - PID (with derivative term)?
-     - Model Predictive Control (MPC)?
-     - Cascade controllers (outer position loop + inner velocity loop for gimbal)?
-
-7. **Stateful Controllers**:
-   - PI has integrator state. Should the interface require serialization methods (`get_state()`, `set_state()`) for mid-episode inspection?
-
-### **C. Metrics Generalization**
-
-8. **Domain-Specific vs Universal Metrics**:
-   - Your current metrics are PMSM-specific (e.g., `RMSE_i_q`, `settling_time_iq`). Should you:
-     - Create **abstract metric categories** (e.g., `TrackingError`, `SettlingTime`) with physics-engine-specific implementations?
-     - Or standardize on **generic names** (e.g., `RMSE_primary`, `RMSE_secondary`) and document what "primary" means per system?
-
-9. **Frequency-Dependent Metrics**:
-   - Your PMSM runs at 10 kHz. A gimbal might run at 1 kHz. Should metrics like ITAE, Total Variation, and SyOps be:
-     - **Time-normalized** (e.g., ITAE per second)?
-     - **Step-normalized** (e.g., ITAE per 1000 steps)?
-     - Both, with clear documentation?
-
-10. **Neuromorphic Metrics Across Domains**:
-    - Should spike statistics (total spikes, sparsity, SyOps) remain **controller-agnostic** (already good), or do they need physics-engine context (e.g., "spikes per mm of gimbal travel")?
-
-### **D. Data Generation & Training**
-
-11. **Expert Trajectory Generation**:
-    - Currently you generate PI trajectories for SNN training. Should the new system require:
-      - `BaselineController.generate_dataset(scenarios: List[Scenario], output_dir: Path)`?
-      - Or keep this as manual scripts?
-
-12. **Cross-Domain Transfer**:
-    - Do you want to test if a PMSM-trained SNN can **transfer** to a gimbal (unlikely but scientifically interesting)? Or strictly separate training per domain?
+This document outlines the refactoring plan to align the `embark` benchmarking framework with NeuroBench's modular harness architecture. The goal is to create a clean, extensible framework for benchmarking neuromorphic controllers on closed-loop control tasks.
 
 ---
 
-## **II. DESIGN REQUIREMENTS CHECKLIST**
+## I. Architectural Philosophy
 
-### **A. Core Abstraction Layers**
+### From Gym to NeuroBench
 
-#### **1. PhysicsEngine Protocol** ✅ REQUIRED
+The original design followed a Gym-style "monolithic environment" pattern where `PMSMEnv` handled physics, normalization, reference generation, and reward computation. The new design follows NeuroBench's "modular harness" pattern where each component has a single responsibility.
+
+| Old Pattern (Gym) | New Pattern (NeuroBench) |
+|-------------------|--------------------------|
+| `PMSMEnv` does everything | Components are independent |
+| Wrappers hide processing | Processors are first-class |
+| Metrics computed post-hoc | Accumulators observe in real-time |
+| RL-focused (reward-centric) | Benchmarking-focused (metric-centric) |
+
+### Component Mapping
+
+| NeuroBench Component | Our Equivalent | Responsibility |
+|---------------------|----------------|----------------|
+| **Model** | `ControllerPolicy` | SNN, ANN, or classical controller (PI/PID) |
+| **Benchmark (Task)** | `ClosedLoopTask` | Reference trajectory + Physics composition |
+| **Processors** | `StateProcessor` / `ActionProcessor` | Unit conversion, normalization, spike encoding |
+| **Accumulators** | `MetricAccumulator` | Stateful metric computation (RMSE, SyOps) |
+| **Harness** | `ClosedLoopHarness` | Orchestrates the control loop |
+
+---
+
+## II. Core Design Decisions
+
+### Decision 1: Observation Format
+**Verdict: Domain-Specific Keys (Option B)**
+
+- Use semantic keys (`i_q`, `theta_gimbal`) in Physics/Task
+- Use `MetricRegistry` to map these to generic concepts for cross-system comparison
+- Example: `Registry.register(metric="tracking_error", key="i_q_error")`
+
+### Decision 2: Baseline Auto-Tuning
+**Verdict: Required with Escape Hatch**
+
+- Protocol enforces `tune(config)` or `from_system_config()` factory
+- Provide `ManualTuner` class for explicit parameter override
+- Default: Technical Optimum for PI controllers
+
+### Decision 3: Backward Compatibility
+**Verdict: Full Migration (Clean Break)**
+
+- No `LegacyPMSMEnv` wrapper
+- One-time `migrate_checkpoint.py` script for old SNN weights
+- Clean runtime code without legacy support
+
+### Decision 4: Metrics Normalization
+**Verdict: Store Both Raw and Normalized**
+
+- Raw totals for debugging specific episodes
+- Time-normalized (per-second) for cross-system comparison
+- Storage is cheap; losing data is permanent
+
+### Decision 5: Action Space Units
+**Verdict: Physical Units Always**
+
+- `PhysicsEngine` accepts physical units (Volts, Newtons)
+- `ActionProcessor` handles normalization ([-1, 1] → [-24V, +24V])
+- Keeps physics engine "pure" and realistic
+
+### Decision 6: Coordinate Transforms
+**Verdict: Keep in Adapter or Controller**
+
+- Generic interface uses "native" coordinates of the system
+- PMSM adapter accepts `v_alpha`, `v_beta` (Clarke frame)
+- If controller works in d-q frame, it handles Park transform internally
+
+### Decision 7: Stateful Controllers
+**Verdict: Strictly Require `get_state()` / `set_state()`**
+
+- Essential for reproducible benchmarks
+- Enables replay of specific failure scenarios
+- Required for checkpoint-based evaluation
+
+### Decision 8: Neuromorphic Metrics Location
+**Verdict: Controller-Specific, Not Physics-Specific**
+
+- SyOps is a cost of the agent's compute, not physical motion
+- Physics engine doesn't know about spikes
+- Metrics accumulator observes controller internals if needed
+
+---
+
+## III. Protocol Definitions
+
+### 1. PhysicsEngine Protocol
+
+The physics engine represents pure dynamics. No rewards, no references, no normalization.
+
 ```python
+from typing import Protocol, Any
+
 class PhysicsEngine(Protocol):
-    """Abstract interface for physical systems."""
+    """Abstract interface for physical dynamical systems."""
     
-    def reset(self, seed: int | None = None) -> ObservationDict:
-        """Reset to initial state."""
+    @property
+    def config(self) -> "SystemConfig":
+        """Immutable physical properties (R, L, J, friction, limits)."""
         ...
     
-    def step(self, action: ActionDict) -> tuple[ObservationDict, float, bool, bool, InfoDict]:
-        """Execute one control step."""
+    def reset(self, seed: int | None = None) -> dict[str, float]:
+        """Reset to initial state. Returns initial state dict."""
         ...
     
-    def get_configuration(self) -> SystemConfig:
-        """Return system parameters (for controller tuning)."""
+    def step(self, action: dict[str, float]) -> tuple[dict[str, float], dict[str, Any]]:
+        """
+        Execute one physics step.
+        
+        Args:
+            action: Physical units (e.g., {"v_alpha": 12.0, "v_beta": -5.0} in Volts)
+        
+        Returns:
+            (next_state, debug_info)
+            - next_state: Physical state dict (e.g., {"i_d": 1.2, "i_q": 5.0, ...})
+            - debug_info: Optional diagnostics (e.g., {"solver_steps": 3})
+        """
+        ...
+    
+    def close(self) -> None:
+        """Clean up resources (simulator handles, etc.)."""
         ...
     
     @property
-    def observation_space(self) -> spaces.Dict:
-        """Standardized observation space."""
+    def state_keys(self) -> set[str]:
+        """Keys present in state dict."""
         ...
     
     @property
-    def action_space(self) -> spaces.Dict:
-        """Standardized action space."""
+    def action_keys(self) -> set[str]:
+        """Keys expected in action dict."""
         ...
 ```
 
-**Files to Create**:
-- `embark/benchmark/physics_engine.py` - Protocol definition
-- `embark/benchmark/pmsm_physics_adapter.py` - GEM wrapper (refactor from `pmsm_env.py`)
-- `embark/benchmark/system_config.py` - Dataclasses for system parameters
+### 2. ClosedLoopTask Protocol
 
-**Files to Modify**:
-- `pmsm_env.py` → Extract physics logic to adapter, keep only reference generation
+The task defines the goal. It composes a physics engine and generates references.
 
----
-
-#### **2. BaselineController Protocol** ✅ REQUIRED
 ```python
-class BaselineController(Protocol):
-    """Abstract interface for classical controllers."""
+class ClosedLoopTask(Protocol):
+    """Defines the control objective. Owns a PhysicsEngine."""
     
-    def __call__(self, observation: ObservationDict) -> ActionDict:
-        """Compute control action."""
+    @property
+    def physics_engine(self) -> PhysicsEngine:
+        """The underlying dynamical system."""
         ...
     
+    @property
+    def reference_keys(self) -> set[str]:
+        """Keys provided in reference dict (e.g., {'i_q_ref', 'i_d_ref'})."""
+        ...
+    
+    @property
+    def max_steps(self) -> int | None:
+        """Maximum episode length (None for infinite)."""
+        ...
+    
+    def reset(self, seed: int | None = None) -> tuple[dict[str, float], dict[str, float]]:
+        """
+        Reset task and physics.
+        
+        Returns:
+            (initial_state, initial_reference)
+        """
+        ...
+    
+    def step(self, action: dict[str, float]) -> tuple[dict[str, float], dict[str, float], bool]:
+        """
+        Step physics and update reference.
+        
+        Returns:
+            (next_state, next_reference, done)
+        """
+        ...
+```
+
+### 3. ControllerPolicy Protocol
+
+Controllers can be tensor-based (neural) or dict-based (classical).
+
+```python
+import torch
+
+class TensorController(Protocol):
+    """Neural network controllers (SNN, ANN)."""
+    
     def reset(self) -> None:
-        """Reset internal state."""
+        """Reset internal state (membrane potentials, hidden states)."""
+        ...
+    
+    def forward(self, observation: torch.Tensor) -> torch.Tensor:
+        """Compute action from observation tensor."""
+        ...
+    
+    def get_state(self) -> dict[str, Any]:
+        """Serialize internal state for checkpointing."""
+        ...
+    
+    def set_state(self, state: dict[str, Any]) -> None:
+        """Restore internal state from checkpoint."""
+        ...
+
+
+class DictController(Protocol):
+    """Classical controllers (PI, PID, MPC)."""
+    
+    def reset(self) -> None:
+        """Reset internal state (integrator windup, etc.)."""
+        ...
+    
+    def __call__(
+        self, 
+        state: dict[str, float], 
+        reference: dict[str, float]
+    ) -> dict[str, float]:
+        """Compute action from state and reference."""
+        ...
+    
+    def get_state(self) -> dict[str, Any]:
+        """Serialize internal state."""
+        ...
+    
+    def set_state(self, state: dict[str, Any]) -> None:
+        """Restore internal state."""
         ...
     
     @classmethod
-    def from_system_config(cls, config: SystemConfig, tuning: str = "optimal") -> "BaselineController":
+    def from_system_config(
+        cls, 
+        config: "SystemConfig", 
+        tuning: str = "technical_optimum"
+    ) -> "DictController":
         """Factory method for auto-tuning."""
         ...
 ```
 
-**Files to Create**:
-- `embark/benchmark/baseline_controller.py` - Protocol + abstract base class
-- `embark/benchmark/baselines/pi_controller.py` - Refactor from `agents.py`
-- `embark/benchmark/baselines/pid_controller.py` - Optional extension
+### 4. Processor Protocols
 
-**Files to Modify**:
-- `agents.py` → Move `PIControllerAgent` to new structure, keep only `SNNControllerAgent`
+Processors handle the conversion between physics (dicts) and controllers (tensors).
+
+```python
+class StateProcessor(Protocol):
+    """Converts physics state dict → controller observation tensor."""
+    
+    def configure(self, physics_config: "SystemConfig", task: ClosedLoopTask) -> None:
+        """Called once at harness setup to learn normalization bounds."""
+        ...
+    
+    def __call__(
+        self, 
+        state: dict[str, float], 
+        reference: dict[str, float]
+    ) -> torch.Tensor:
+        """Process state and reference into observation tensor."""
+        ...
+    
+    @property
+    def output_dim(self) -> int:
+        """Dimension of output tensor."""
+        ...
+
+
+class ActionProcessor(Protocol):
+    """Converts controller action tensor → physics action dict."""
+    
+    def configure(self, physics_config: "SystemConfig") -> None:
+        """Called once at harness setup to learn action bounds."""
+        ...
+    
+    def __call__(
+        self, 
+        action: torch.Tensor, 
+        physics_config: "SystemConfig"
+    ) -> dict[str, float]:
+        """Convert action tensor to physical units."""
+        ...
+```
+
+### 5. MetricAccumulator Protocol
+
+Metrics observe the raw control loop data and compute statistics.
+
+```python
+class MetricAccumulator(Protocol):
+    """Stateful metric that observes the control loop."""
+    
+    @property
+    def name(self) -> str:
+        """Unique identifier for this metric."""
+        ...
+    
+    def reset(self) -> None:
+        """Reset accumulated state."""
+        ...
+    
+    def update(
+        self,
+        state: dict[str, float],
+        reference: dict[str, float],
+        action: dict[str, float],
+        next_state: dict[str, float],
+        controller_info: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Update metric with one timestep of data.
+        
+        Args:
+            state: Current physical state
+            reference: Current reference
+            action: Action taken (physical units)
+            next_state: Resulting state
+            controller_info: Optional controller internals (spikes, etc.)
+        """
+        ...
+    
+    def compute(self) -> float | dict[str, float]:
+        """Compute final metric value(s)."""
+        ...
+```
+
+### 6. ClosedLoopHarness
+
+The main orchestrator that runs the benchmark.
+
+```python
+class ClosedLoopHarness:
+    """NeuroBench-style harness for closed-loop control benchmarks."""
+    
+    def __init__(
+        self,
+        task: ClosedLoopTask,
+        controller: TensorController | DictController,
+        state_processor: StateProcessor | None = None,
+        action_processor: ActionProcessor | None = None,
+        metrics: list[MetricAccumulator] | None = None,
+    ):
+        self.task = task
+        self.controller = controller
+        self.state_proc = state_processor
+        self.action_proc = action_processor
+        self.metrics = metrics or []
+        
+        # Detect controller type
+        self._uses_tensors = hasattr(controller, 'forward')
+        
+        # Configure processors if present
+        if self.state_proc:
+            self.state_proc.configure(task.physics_engine.config, task)
+        if self.action_proc:
+            self.action_proc.configure(task.physics_engine.config)
+    
+    def run(self, max_steps: int | None = None) -> dict[str, Any]:
+        """
+        Run one episode of the benchmark.
+        
+        Returns:
+            Dictionary of metric results
+        """
+        state, reference = self.task.reset()
+        self.controller.reset()
+        for m in self.metrics:
+            m.reset()
+        
+        effective_max = max_steps or self.task.max_steps or float('inf')
+        step = 0
+        done = False
+        
+        while not done and step < effective_max:
+            # Compute action
+            if self._uses_tensors:
+                obs = self.state_proc(state, reference)
+                action_tensor = self.controller.forward(obs)
+                action = self.action_proc(action_tensor, self.task.physics_engine.config)
+                controller_info = getattr(self.controller, 'last_info', None)
+            else:
+                action = self.controller(state, reference)
+                controller_info = None
+            
+            # Step physics
+            next_state, next_ref, done = self.task.step(action)
+            
+            # Update metrics (observe raw truth)
+            for m in self.metrics:
+                m.update(state, reference, action, next_state, controller_info)
+            
+            state, reference = next_state, next_ref
+            step += 1
+        
+        # Compute final metrics
+        results = {"steps": step}
+        for m in self.metrics:
+            result = m.compute()
+            if isinstance(result, dict):
+                results.update(result)
+            else:
+                results[m.name] = result
+        
+        return results
+```
 
 ---
 
-#### **3. Metrics Framework Redesign** ⚠️ MODERATE REFACTOR
+## IV. Directory Structure
 
-**Requirements**:
-- Metrics must accept **generic observation/action keys** (not hardcoded `i_d`, `i_q`)
-- Add `MetricRegistry` to dynamically select relevant metrics per physics engine
-- Keep existing metric computation logic, just abstract the data access
-
-**Files to Modify**:
-- `embark/metrics/benchmark_metrics.py`:
-  - Extract `compute_accuracy_metrics()` → `compute_tracking_metrics(time, actual, reference)`
-  - Extract `compute_dynamics_metrics()` → Make axis-agnostic
-  - Add `PhysicsEngineMetrics` protocol with method `get_metric_mappings() -> dict`
-
-**Files to Create**:
-- `embark/metrics/metric_registry.py` - Dynamic metric selection
-- `embark/metrics/pmsm_metrics.py` - PMSM-specific mappings (e.g., "primary axis" = i_q)
-
----
-
-### **B. Backward Compatibility Requirements**
-
-13. **Existing Checkpoints**:
-    - Your trained SNN models expect specific input shapes `[i_d, i_q, e_d, e_q]`. Should the new system:
-      - Keep a `LegacyPMSMAdapter` for old models?
-      - Require retraining with new observation dict format?
-
-14. **Existing Benchmark Results**:
-    - You have CSV files with PMSM-specific column names. Should migration scripts convert these to new generic format?
-
----
-
-### **C. Implementation Scope Boundaries**
-
-15. **What's IN Scope** (you must implement):
-    - [ ] `PhysicsEngine` protocol
-    - [ ] `PMSMPhysicsAdapter` (wraps existing GEM)
-    - [ ] `BaselineController` protocol
-    - [ ] Refactored PI controller as `PMSMPIController`
-    - [ ] Generic `BenchmarkRunner(physics_engine, controller, metrics)`
-    - [ ] Metrics registry system
-    - [ ] Updated documentation with extension guide
-
-16. **What's OUT of Scope** (user provides):
-    - [ ] Gimbal physics implementation
-    - [ ] Gimbal baseline controller
-    - [ ] Gimbal-specific metrics (though you provide template)
-    - [ ] Any actual hardware adapters
-
----
-
-## **III. ARCHITECTURAL PROPOSAL**
-
-### **Proposed New Structure**
 ```
 embark/
 ├── benchmark/
-│   ├── interfaces/              # NEW: Protocol definitions
-│   │   ├── physics_engine.py
-│   │   ├── baseline_controller.py
-│   │   └── observation.py       # Standardized data structures
+│   ├── __init__.py
 │   │
-│   ├── physics/                 # NEW: Physics adapters
+│   ├── interfaces/                    # Protocol definitions
 │   │   ├── __init__.py
-│   │   ├── pmsm_adapter.py     # Refactored from pmsm_env.py
-│   │   └── example_gimbal.py   # Template/documentation
+│   │   ├── physics.py                 # PhysicsEngine protocol
+│   │   ├── task.py                    # ClosedLoopTask protocol
+│   │   ├── controller.py              # TensorController, DictController protocols
+│   │   ├── processors.py              # StateProcessor, ActionProcessor protocols
+│   │   ├── metrics.py                 # MetricAccumulator protocol
+│   │   └── types.py                   # SystemConfig, type aliases
 │   │
-│   ├── baselines/               # NEW: Classical controllers
+│   ├── harness/                       # The central orchestrator
 │   │   ├── __init__.py
-│   │   ├── pi_controller.py
-│   │   └── pid_controller.py
+│   │   ├── closed_loop.py             # ClosedLoopHarness
+│   │   └── hooks.py                   # Logging, visualization hooks (optional)
 │   │
-│   ├── agents.py               # KEEP: Only SNN agents now
-│   ├── controller_interface.py # MODIFY: Update to use new protocols
-│   ├── processors.py           # KEEP: Unchanged (SNN-specific)
-│   └── run_benchmark.py        # MODIFY: Use new PhysicsEngine interface
+│   ├── physics/                       # Physics engine implementations
+│   │   ├── __init__.py
+│   │   ├── pmsm.py                    # PMSMPhysicsEngine (wraps GEM)
+│   │   └── config.py                  # PMSMConfig dataclass
+│   │
+│   ├── tasks/                         # Task implementations
+│   │   ├── __init__.py
+│   │   ├── pmsm_current_control.py    # PMSMCurrentControlTask
+│   │   └── reference_generators.py   # StepReference, SinusoidalReference, etc.
+│   │
+│   ├── processors/                    # Processor implementations
+│   │   ├── __init__.py
+│   │   ├── normalizers.py             # StandardScalerProcessor, MinMaxProcessor
+│   │   ├── encoders.py                # RateEncoder, LatencyEncoder (for SNN)
+│   │   ├── decoders.py                # PopulationDecoder, etc.
+│   │   └── identity.py                # IdentityProcessor (passthrough)
+│   │
+│   ├── controllers/                   # Controller implementations
+│   │   ├── __init__.py
+│   │   ├── classical/
+│   │   │   ├── __init__.py
+│   │   │   ├── pi.py                  # PIController
+│   │   │   ├── pid.py                 # PIDController
+│   │   │   └── tuning.py              # TechnicalOptimum, ZieglerNichols, ManualTuner
+│   │   └── neural/
+│   │       ├── __init__.py
+│   │       ├── snn_wrapper.py         # Wraps SNN models as TensorController
+│   │       └── ann_wrapper.py         # Wraps ANN models as TensorController
+│   │
+│   ├── metrics/                       # Metric accumulators
+│   │   ├── __init__.py
+│   │   ├── accumulators/
+│   │   │   ├── __init__.py
+│   │   │   ├── tracking.py            # TrackingRMSE, TrackingMAE, ITAE
+│   │   │   ├── dynamics.py            # SettlingTime, Overshoot, TotalVariation
+│   │   │   ├── efficiency.py          # ControlEffort, EnergyConsumption
+│   │   │   └── neuromorphic.py        # SyOps, SpikeCount, Sparsity
+│   │   └── registry.py                # MetricRegistry for task-specific mappings
+│   │
+│   ├── agents.py                      # DEPRECATED: Keep SNN agent wrappers temporarily
+│   ├── pmsm_env.py                    # DEPRECATED: Remove after migration
+│   └── run_benchmark.py               # CLI entry point (uses harness)
 │
-├── metrics/
-│   ├── benchmark_metrics.py    # MODIFY: Genericize data access
-│   ├── metric_registry.py      # NEW: Dynamic metric selection
-│   └── pmsm_metrics.py         # NEW: PMSM-specific mappings
+├── utils/
+│   ├── __init__.py
+│   ├── config.py                      # Global configuration
+│   ├── paths.py                       # Path utilities
+│   ├── reproducibility.py             # Seeding, determinism
+│   └── validation.py                  # Protocol compliance validation
 │
-└── utils/
-    ├── config.py               # MODIFY: Add generic SystemConfig
-    └── validation.py           # NEW: Validate adapter implementations
+└── scripts/
+    ├── migrate_checkpoint.py          # One-time migration for old SNN weights
+    └── generate_training_data.py      # Uses new harness for data generation
 ```
 
 ---
 
-## **IV. MIGRATION CHECKLIST**
+## V. Migration Plan
 
-### **Phase 1: Interface Definition** (1-2 days)
-- [ ] Define `PhysicsEngine` protocol
-- [ ] Define `BaselineController` protocol  
-- [ ] Define `ObservationDict`, `ActionDict`, `SystemConfig` types
-- [ ] Write validation tests for protocol compliance
+### Phase 1: Interface Definition (Day 1)
+- [ ] Create `embark/benchmark/interfaces/` package
+- [ ] Define all protocol classes with full type hints
+- [ ] Define `SystemConfig` and type aliases
+- [ ] Write protocol compliance tests
 
-### **Phase 2: PMSM Refactoring** (2-3 days)
-- [ ] Extract GEM logic from `PMSMEnv` → `PMSMPhysicsAdapter`
-- [ ] Move PI controller from `agents.py` → `baselines/pi_controller.py`
-- [ ] Update `run_benchmark.py` to use new abstractions
-- [ ] Verify all existing tests pass
+### Phase 2: Harness Implementation (Day 1-2)
+- [ ] Implement `ClosedLoopHarness`
+- [ ] Implement `IdentityProcessor` (passthrough for dict controllers)
+- [ ] Write harness unit tests
 
-### **Phase 3: Metrics Generalization** (1-2 days)
-- [ ] Create `MetricRegistry` system
-- [ ] Refactor metrics to accept generic observation keys
-- [ ] Create `PMSMMetricMapping` class
-- [ ] Add metric validation tests
+### Phase 3: PMSM Migration (Day 2-3)
+- [ ] Create `PMSMPhysicsEngine` (extract from `pmsm_env.py`)
+- [ ] Create `PMSMCurrentControlTask` (extract reference logic)
+- [ ] Create `PMSMConfig` dataclass
+- [ ] Migrate `PIController` to new structure
+- [ ] Verify existing benchmark results match
 
-### **Phase 4: Documentation** (1 day)
+### Phase 4: Processors (Day 3-4)
+- [ ] Implement `StandardScalerProcessor`
+- [ ] Implement `MinMaxProcessor`
+- [ ] Implement basic spike encoders (if needed for SNN)
+- [ ] Write processor tests
+
+### Phase 5: Metrics Migration (Day 4-5)
+- [ ] Refactor existing metrics to accumulator pattern
+- [ ] Create `TrackingRMSEAccumulator`
+- [ ] Create `SyOpsAccumulator`
+- [ ] Implement `MetricRegistry`
+- [ ] Verify metric values match pre-refactor
+
+### Phase 6: SNN Integration (Day 5-6)
+- [ ] Create `SNNControllerWrapper` (wraps existing SNN models)
+- [ ] Ensure spike statistics flow to neuromorphic metrics
+- [ ] Test full SNN benchmark pipeline
+
+### Phase 7: Documentation & Cleanup (Day 6-7)
 - [ ] Write "How to Add a New Physics Engine" guide
-- [ ] Write "How to Implement a Baseline Controller" guide
-- [ ] Update `ARCHITECTURE.md` with new diagrams
-- [ ] Add example gimbal stub implementation
-
-### **Phase 5: Validation** (1 day)
-- [ ] Run full benchmark suite with refactored code
-- [ ] Compare results with pre-refactor baseline (should be identical)
-- [ ] Generate comparison report
-- [ ] Document any numerical differences
+- [ ] Write "How to Implement a Controller" guide
+- [ ] Remove deprecated code (`pmsm_env.py`, old `agents.py`)
+- [ ] Update `ARCHITECTURE.md`
 
 ---
 
-## **V. CRITICAL DECISIONS NEEDED FROM YOU**
+## VI. Open Questions & Considerations
 
-Before I can proceed with implementation, please answer:
+### 1. GEM Simulator Integration
+**Status: Needs Investigation**
 
-### **DECISION 1: Observation Format**
-Choose one:
-- **Option A**: Standardized dict keys (`{"primary_state": float, "secondary_state": float, "primary_error": float, ...}`)
-- **Option B**: Domain-specific dict keys (`{"i_d": float, "i_q": float, ...}` for PMSM, `{"theta": float, "omega": float, ...}` for gimbal)
-- **Option C**: Hybrid (dict with both generic + domain-specific keys)
+Current `pmsm_env.py` uses GEM's `ElectricMotorEnvironment`. Questions:
+- Does GEM expose raw physics stepping without Gym wrapper?
+- If not, we may need a thin adapter that wraps GEM's Gym env but extracts raw state
 
-**Recommendation**: **Option B** (domain-specific keys) with metric registry mapping them to generic concepts.
+### 2. Reference Generator Flexibility
+**Status: Design Decision Needed**
 
-### **DECISION 2: Baseline Auto-Tuning**
-- Should `BaselineController.from_system_config()` be **required** or **optional**?
-- Should you provide a default implementation using Ziegler-Nichols or similar?
+Should reference generators be:
+- **Embedded in Task**: `PMSMCurrentControlTask` always uses step response
+- **Composable**: `PMSMCurrentControlTask(reference_gen=StepReference(...))`
 
-**Recommendation**: Make it **required** to force proper baseline implementation.
+**Recommendation**: Composable, for flexibility in experiments.
 
-### **DECISION 3: Backward Compatibility**
-- Should we keep a `LegacyPMSMEnv` wrapper for old code, or do full migration?
+### 3. Multi-Objective Metrics
+**Status: Design Decision Needed**
 
-**Recommendation**: **Full migration** with deprecation warnings. Old code still works via legacy imports for 1 release.
+Some metrics are naturally multi-valued (e.g., RMSE per axis). Options:
+- Return `dict[str, float]` from `compute()`
+- Create separate accumulators per axis
+- Use hierarchical naming (`rmse.i_q`, `rmse.i_d`)
 
-### **DECISION 4: Metrics Time Normalization**
-- Should ITAE/TV metrics be reported as:
-  - Total over episode (current approach)
-  - Per-second average (control_frequency agnostic)
-  - Both?
+**Recommendation**: Return dict, use dot notation for hierarchy.
 
-**Recommendation**: **Both** - store raw total + computed per-second in results dict.
+### 4. Real-Time Hooks
+**Status: Optional Enhancement**
+
+For debugging and visualization, consider:
+- `HarnessHook` protocol with `on_step()`, `on_reset()`, `on_done()`
+- Logging hook, plotting hook, etc.
+
+**Recommendation**: Implement after core refactoring.
+
+### 5. Batched Evaluation
+**Status: Future Consideration**
+
+For neural controllers, batched inference is faster. Consider:
+- `BatchedHarness` that runs N episodes in parallel
+- Requires vectorized physics (may not be feasible with GEM)
+
+**Recommendation**: Defer to future work.
+
+### 6. Controller Internal Observability
+**Status: Needs Design**
+
+For neuromorphic metrics (SyOps, spike counts), we need access to controller internals. Options:
+- Controller exposes `last_info` dict after each `forward()`
+- Metrics hook directly into controller (tight coupling)
+- Controller has optional `get_inference_stats()` method
+
+**Recommendation**: Use `last_info` pattern for loose coupling.
 
 ---
 
-## **VI. ESTIMATED FILE CHANGES**
+## VII. Example Usage
+
+### Running a Benchmark with PI Controller
+
+```python
+from embark.benchmark.harness import ClosedLoopHarness
+from embark.benchmark.tasks import PMSMCurrentControlTask
+from embark.benchmark.controllers.classical import PIController
+from embark.benchmark.metrics.accumulators import TrackingRMSE, SettlingTime
+
+# Create components
+task = PMSMCurrentControlTask.from_config("configs/pmsm_default.yaml")
+controller = PIController.from_system_config(task.physics_engine.config)
+
+# Define metrics
+metrics = [
+    TrackingRMSE(tracked_keys=["i_q", "i_d"]),
+    SettlingTime(tracked_key="i_q", threshold=0.02),
+]
+
+# Run benchmark
+harness = ClosedLoopHarness(
+    task=task,
+    controller=controller,
+    metrics=metrics,
+)
+
+results = harness.run()
+print(results)
+# {'steps': 10000, 'rmse_i_q': 0.23, 'rmse_i_d': 0.15, 'settling_time_i_q': 0.0042}
+```
+
+### Running a Benchmark with SNN Controller
+
+```python
+from embark.benchmark.harness import ClosedLoopHarness
+from embark.benchmark.tasks import PMSMCurrentControlTask
+from embark.benchmark.controllers.neural import SNNControllerWrapper
+from embark.benchmark.processors import StandardScalerProcessor, LinearActionProcessor
+from embark.benchmark.metrics.accumulators import TrackingRMSE, SyOpsAccumulator
+
+# Create components
+task = PMSMCurrentControlTask.from_config("configs/pmsm_default.yaml")
+
+# Load trained SNN
+snn_model = load_snn_checkpoint("checkpoints/snn_best.pt")
+controller = SNNControllerWrapper(snn_model)
+
+# Processors for neural controller
+state_proc = StandardScalerProcessor(
+    input_keys=["i_d", "i_q", "e_d", "e_q"],  # state keys to use
+    reference_keys=["i_d_ref", "i_q_ref"],     # reference keys to append
+)
+action_proc = LinearActionProcessor(
+    output_keys=["v_alpha", "v_beta"],
+    bounds={"v_alpha": (-24, 24), "v_beta": (-24, 24)},
+)
+
+# Metrics including neuromorphic
+metrics = [
+    TrackingRMSE(tracked_keys=["i_q", "i_d"]),
+    SyOpsAccumulator(),  # reads from controller.last_info
+]
+
+# Run benchmark
+harness = ClosedLoopHarness(
+    task=task,
+    controller=controller,
+    state_processor=state_proc,
+    action_processor=action_proc,
+    metrics=metrics,
+)
+
+results = harness.run()
+print(results)
+# {'steps': 10000, 'rmse_i_q': 0.31, 'rmse_i_d': 0.22, 'total_syops': 1234567, 'syops_per_step': 123.4}
+```
+
+---
+
+## VIII. File Change Summary
 
 | Category | New Files | Modified Files | Deleted Files |
 |----------|-----------|----------------|---------------|
-| Interfaces | 3 | 0 | 0 |
-| Physics | 2 | 1 (pmsm_env.py) | 0 |
-| Baselines | 2 | 1 (agents.py) | 0 |
-| Metrics | 2 | 1 (benchmark_metrics.py) | 0 |
-| Utils | 2 | 1 (config.py) | 0 |
-| Tests | 5 | 3 | 0 |
-| Docs | 3 | 1 | 0 |
-| **TOTAL** | **19** | **8** | **0** |
+| Interfaces | 6 | 0 | 0 |
+| Harness | 2 | 0 | 0 |
+| Physics | 2 | 0 | 0 |
+| Tasks | 2 | 0 | 0 |
+| Processors | 5 | 0 | 0 |
+| Controllers | 5 | 0 | 0 |
+| Metrics | 6 | 0 | 0 |
+| Utils | 1 | 0 | 0 |
+| Scripts | 1 | 1 | 0 |
+| Deprecated | 0 | 0 | 2 (pmsm_env.py, old agents.py) |
+| **TOTAL** | **30** | **1** | **2** |
 
 ---
 
-## **Next Steps**
+## IX. Success Criteria
 
-Once you answer the **4 critical decisions**, I will:
+The refactoring is complete when:
 
-1. Create a detailed implementation plan with code stubs
-2. Generate the protocol definitions
-3. Show you example implementations for PMSM adapter
-4. Create validation tests to ensure nothing breaks
+1. **Functional Parity**: Same benchmark results as pre-refactor (within numerical tolerance)
+2. **Protocol Compliance**: All implementations pass protocol validation tests
+3. **SNN Pipeline Works**: Full SNN training → benchmark → metrics pipeline functional
+4. **Documentation Complete**: Extension guides written and reviewed
+5. **Tests Pass**: All existing tests pass + new protocol tests
+
+---
+
+## X. Next Steps
+
+1. **Approve this plan** and resolve open questions
+2. **Create interface package** with protocol definitions
+3. **Implement harness** with basic integration test
+4. **Migrate PMSM** incrementally with comparison tests
+5. **Migrate metrics** to accumulator pattern
+6. **Integrate SNN** and verify neuromorphic metrics
+7. **Clean up** deprecated code and update documentation
