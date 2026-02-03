@@ -281,31 +281,42 @@ class SNNControllerAgent(TensorController):
             Normalized action tensor [v_d, v_q] in [-1, 1]
         """
         t_start = time.perf_counter()
+        
+        # Initialize accumulation variables
         step_spikes = 0
         step_sparsities = []
+        voltage_normalized = torch.zeros(
+            observation.shape[0], 2, device=observation.device
+        )
+        spike_info = None  # Will hold last info if available
 
         if observation.dim() == 1:
             observation = observation.unsqueeze(0)
 
         with torch.no_grad():
             for _ in range(self.num_inference_steps):
-                voltage_normalized, self._snn_state, spike_info = self.model(
+                voltage_normalized, self._snn_state, current_spike_info = self.model(
                     observation, self._snn_state, return_spikes=self.track_spikes
                 )
 
-                if self.track_spikes and spike_info is not None:
-                    step_spikes += spike_info["total_spikes"]
-                    step_sparsities.append(spike_info["layer_sparsities"])
+                if self.track_spikes and current_spike_info is not None:
+                    # Accumulate stats from this step
+                    step_spikes += current_spike_info["total_spikes"]
+                    step_sparsities.append(current_spike_info["layer_sparsities"])
 
-                    current_layer_counts = np.array(spike_info["spike_counts"])
+                    current_layer_counts = np.array(current_spike_info["spike_counts"])
                     if self._layer_spike_counts is None:
                         self._layer_spike_counts = np.zeros_like(current_layer_counts)
                     if self._layer_spike_counts.shape == current_layer_counts.shape:
                         self._layer_spike_counts += current_layer_counts
+                    
+                    # Keep last valid info structure for updating last_info later
+                    spike_info = current_spike_info
 
         t_end = time.perf_counter()
 
-        if self.track_spikes and spike_info is not None:
+        # Update statistics if we tracked any spikes (even if last step returned None)
+        if self.track_spikes and (step_spikes > 0 or spike_info is not None):
             self._spike_counts_per_step.append([step_spikes])
             if step_sparsities:
                 avg_sparsity = np.mean(step_sparsities, axis=0).tolist()
