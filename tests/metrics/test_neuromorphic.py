@@ -2,6 +2,7 @@
 Unit tests for neuromorphic metrics.
 
 Tests spike statistics, energy estimates, sparsity.
+
 """
 
 import numpy as np

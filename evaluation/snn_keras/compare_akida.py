@@ -9,6 +9,7 @@ This script runs a comprehensive benchmark comparing:
 
 Usage:
     poetry run python -m evaluation.snn_keras.compare_akida
+
 """
 
 from pathlib import Path

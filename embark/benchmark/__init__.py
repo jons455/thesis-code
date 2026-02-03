@@ -1,4 +1,5 @@
-"""NeuroBench-aligned PMSM Current Control Benchmark.
+"""
+NeuroBench-aligned PMSM Current Control Benchmark.
 
 This module provides a modular closed-loop benchmark framework following
 NeuroBench architecture patterns.
@@ -59,6 +60,7 @@ Usage (Neural):
 
     harness = ClosedLoopHarness(task=task, controller=controller)
     results = harness.run()
+
 """
 
 from .adapters import TensorControllerAdapter

@@ -1,4 +1,5 @@
-"""NeuroBench-aligned controller agents for PMSM current control benchmark.
+"""
+NeuroBench-aligned controller agents for PMSM current control benchmark.
 
 This module provides controller agents that follow the NeuroBench-aligned
 interfaces for closed-loop control benchmarks.
@@ -8,6 +9,7 @@ Available agents:
     - SNNControllerAgent: Spiking neural network implementing TensorController
 
 All agents follow the protocols defined in embark.benchmark.interfaces.
+
 """
 
 from __future__ import annotations
@@ -71,10 +73,12 @@ class PIParameters:
 
 
 class PIControllerAgent(DictController):
-    """Classical PI controller implementing DictController protocol.
+    """
+    Classical PI controller implementing DictController protocol.
 
-    This serves as the baseline controller for benchmarking.
-    Implements decoupled PI control with anti-windup and back-EMF compensation.
+    This serves as the baseline controller for benchmarking. Implements decoupled PI
+    control with anti-windup and back-EMF compensation.
+
     """
 
     def __init__(
@@ -206,10 +210,12 @@ class PIControllerAgent(DictController):
 
 
 class SNNControllerAgent(TensorController):
-    """Spiking Neural Network controller implementing TensorController protocol.
+    """
+    Spiking Neural Network controller implementing TensorController protocol.
 
     Uses a trained SNN model from evaluation.snn.models. Handles normalization
     internally and tracks spike statistics for neuromorphic metrics.
+
     """
 
     def __init__(
@@ -272,16 +278,18 @@ class SNNControllerAgent(TensorController):
         self._snn_state = state.get("snn_state")
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
-        """Compute SNN control action from observation tensor.
+        """
+        Compute SNN control action from observation tensor.
 
         Args:
             observation: Normalized observation tensor [i_d, i_q, e_d, e_q, n]
 
         Returns:
             Normalized action tensor [v_d, v_q] in [-1, 1]
+
         """
         t_start = time.perf_counter()
-        
+
         # Initialize accumulation variables
         step_spikes = 0
         step_sparsities = []
@@ -309,7 +317,7 @@ class SNNControllerAgent(TensorController):
                         self._layer_spike_counts = np.zeros_like(current_layer_counts)
                     if self._layer_spike_counts.shape == current_layer_counts.shape:
                         self._layer_spike_counts += current_layer_counts
-                    
+
                     # Keep last valid info structure for updating last_info later
                     spike_info = current_spike_info
 
@@ -394,9 +402,9 @@ class SNNControllerAgent(TensorController):
                 self._total_spikes / max(1, self._total_control_steps)
             ),
             "mean_sparsity": float(sparsities.mean()) if sparsities.size > 0 else 0.0,
-            "sparsity_per_layer": sparsities.mean(axis=0).tolist()
-            if sparsities.size > 0
-            else [],
+            "sparsity_per_layer": (
+                sparsities.mean(axis=0).tolist() if sparsities.size > 0 else []
+            ),
             "total_syops": total_syops,
             "syops_per_timestep": float(
                 total_syops / max(1, self._total_control_steps)
@@ -412,9 +420,9 @@ class SNNControllerAgent(TensorController):
                     "inference_latency_max_s": float(times.max()),
                     "inference_latency_std_s": float(times.std()),
                     "inference_latency_p99_s": float(np.percentile(times, 99)),
-                    "control_frequency_hz": float(1.0 / times.mean())
-                    if times.mean() > 0
-                    else 0.0,
+                    "control_frequency_hz": (
+                        float(1.0 / times.mean()) if times.mean() > 0 else 0.0
+                    ),
                 }
             )
 

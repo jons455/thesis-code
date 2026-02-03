@@ -14,10 +14,12 @@ from .config import SNNConfig
 
 
 class RecurrentSNNController(nn.Module):
-    """Recurrent SNN controller (RSNN) with implicit temporal integration.
+    """
+    Recurrent SNN controller (RSNN) with implicit temporal integration.
 
-    Uses recurrent LIF neurons (RLeaky) in the hidden layers to learn
-    temporal dynamics and integration without explicit integrator layers.
+    Uses recurrent LIF neurons (RLeaky) in the hidden layers to learn temporal dynamics
+    and integration without explicit integrator layers.
+
     """
 
     def __init__(

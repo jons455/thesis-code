@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from embark.benchmark.interfaces import ActionDict, MetricAccumulator, ReferenceDict, StateDict
+from embark.benchmark.interfaces import (
+    ActionDict,
+    MetricAccumulator,
+    ReferenceDict,
+    StateDict,
+)
 
 
 @dataclass

@@ -16,7 +16,12 @@ class PhysicsEngine(Protocol):
         ...
 
     def reset(self, seed: int | None = None) -> StateDict:
-        """Reset to initial state. Returns initial state dict."""
+        """
+        Reset to initial state.
+
+        Returns initial state dict.
+
+        """
         ...
 
     def step(self, action: ActionDict) -> tuple[StateDict, dict[str, Any]]:
@@ -28,6 +33,7 @@ class PhysicsEngine(Protocol):
 
         Returns:
             (next_state, debug_info)
+
         """
         ...
 

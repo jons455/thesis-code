@@ -1,4 +1,5 @@
-"""Validation script for Akida PMSM models.
+"""
+Validation script for Akida PMSM models.
 
 This script loads a trained model (Keras .keras or Akida .fbz) and runs it
 against a specific trajectory file to visualize performance.
@@ -9,6 +10,7 @@ Usage:
 
     # Validate Akida .fbz model
     python -m evaluation.snn_keras.validate --model trained_models/akida/akida_model.fbz --data data/raw/train/trajectory_0.csv
+
 """
 
 import argparse

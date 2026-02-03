@@ -1,7 +1,5 @@
-"""
-PMSM FOC Simulation mit gym-electric-motor (GEM)
-Generiert Trainingsdaten für neuronale Netze
-"""
+"""PMSM FOC Simulation mit gym-electric-motor (GEM) Generiert Trainingsdaten für
+neuronale Netze."""
 
 import argparse
 import os

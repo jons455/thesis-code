@@ -14,10 +14,11 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
-import sys
-from pathlib import Path
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # noqa: E402
+
 
 # ============================================================================
 # KONFIGURATION

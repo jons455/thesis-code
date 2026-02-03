@@ -20,7 +20,9 @@ class LinearActionProcessor(ActionProcessor):
     def configure(self, physics_config: SystemConfig) -> None:  # noqa: ARG002
         pass
 
-    def __call__(self, action: torch.Tensor, physics_config: SystemConfig) -> ActionDict:  # noqa: ARG002
+    def __call__(
+        self, action: torch.Tensor, physics_config: SystemConfig
+    ) -> ActionDict:  # noqa: ARG002
         action = action.detach().cpu().flatten().tolist()
         if len(action) < len(self.output_keys):
             raise ValueError("Action tensor smaller than number of output keys.")

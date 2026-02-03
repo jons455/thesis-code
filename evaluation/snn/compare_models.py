@@ -1,9 +1,10 @@
 """
-Compare trained SNN models against PI baseline.
-Now includes Symmetry Tests (Positive vs Negative) to verify data balancing.
+Compare trained SNN models against PI baseline. Now includes Symmetry Tests (Positive vs
+Negative) to verify data balancing.
 
 Usage:
     poetry run python -m evaluation.snn.compare_models
+
 """
 
 from pathlib import Path
@@ -366,12 +367,14 @@ def run_evaluation():
                         "RMSE": r.accuracy.RMSE_iq,
                         "ITAE": r.accuracy.ITAE_iq,
                         "TV": r.stability.TV_total,
-                        "SyOps": r.neuromorphic.syops_per_timestep
-                        if r.neuromorphic
-                        else 0.0,
-                        "Sparsity": r.neuromorphic.activation_sparsity
-                        if r.neuromorphic
-                        else 0.0,
+                        "SyOps": (
+                            r.neuromorphic.syops_per_timestep if r.neuromorphic else 0.0
+                        ),
+                        "Sparsity": (
+                            r.neuromorphic.activation_sparsity
+                            if r.neuromorphic
+                            else 0.0
+                        ),
                         "LAC": r.lac_score,
                     }
                 )

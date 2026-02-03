@@ -39,7 +39,9 @@ class IdentityStateProcessor(StateProcessor):
             reference[k] for k in self.reference_keys or []
         ]
         if len(values) != len(keys):
-            raise KeyError("State/reference missing required keys for identity processor.")
+            raise KeyError(
+                "State/reference missing required keys for identity processor."
+            )
         return torch.tensor(values, dtype=torch.float32)
 
     @property
@@ -57,7 +59,9 @@ class IdentityActionProcessor(ActionProcessor):
         if self.action_keys is None:
             raise ValueError("IdentityActionProcessor requires action_keys.")
 
-    def __call__(self, action: torch.Tensor, physics_config: SystemConfig) -> ActionDict:
+    def __call__(
+        self, action: torch.Tensor, physics_config: SystemConfig
+    ) -> ActionDict:
         action = action.detach().cpu().flatten().tolist()
         keys = list(self.action_keys or [])
         if len(action) < len(keys):

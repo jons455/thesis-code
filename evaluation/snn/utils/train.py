@@ -39,7 +39,9 @@ class TrainConfig:
     error_gain: float = 10.0
 
     # Model
-    model_type: str = "membrane"  # "membrane", "population", "learned_linear", "delta", "ttfs", "recurrent"
+    model_type: str = (
+        "membrane"  # "membrane", "population", "learned_linear", "delta", "ttfs", "recurrent"
+    )
     hidden_size: int = 64
     num_hidden_layers: int = 2
     beta_hidden: float = 0.9
@@ -181,13 +183,15 @@ def validate(
 
 
 def train(config: TrainConfig) -> nn.Module:
-    """Main training function.
+    """
+    Main training function.
 
     Args:
         config: Training configuration.
 
     Returns:
         Trained SNN model.
+
     """
     # Create checkpoint directory with model type subdirectory
     # We update it here to ensure it uses the specific model type folder

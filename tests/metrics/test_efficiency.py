@@ -2,6 +2,7 @@
 Unit tests for efficiency metrics.
 
 Tests copper losses, electrical power, efficiency calculations.
+
 """
 
 import numpy as np

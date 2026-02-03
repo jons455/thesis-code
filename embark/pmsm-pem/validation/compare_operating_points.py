@@ -12,10 +12,11 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
-import sys
-from pathlib import Path
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # noqa: E402
+
 
 # ============================================================================
 # KONFIGURATION
@@ -120,7 +121,12 @@ def get_steady_state_value(
 
 
 def compare_controllers_for_all_ops(output_dir: Path) -> pd.DataFrame:
-    """Vergleicht GEM Standard vs. Eigenen Controller für alle Arbeitspunkte."""
+    """
+    Vergleicht GEM Standard vs.
+
+    Eigenen Controller für alle Arbeitspunkte.
+
+    """
     print("\n[1] Vergleiche Controller für alle Arbeitspunkte...")
 
     results = []

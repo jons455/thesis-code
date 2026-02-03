@@ -1,4 +1,5 @@
-"""Reproducibility utilities for ensuring reproducible experiments.
+"""
+Reproducibility utilities for ensuring reproducible experiments.
 
 This module provides seed management for NumPy, PyTorch, and Python's random
 module, experiment configuration tracking, and file checksum verification.
@@ -18,6 +19,7 @@ Example:
 Note:
     For PyTorch reproducibility details, see:
     https://pytorch.org/docs/stable/notes/randomness.html
+
 """
 
 import hashlib
@@ -62,6 +64,7 @@ def set_seed(seed: int = 42, deterministic: bool = True) -> None:
         >>> set_seed(42)
         >>> np.random.rand()  # Will always produce the same value
         0.3745401188473625
+
     """
     # Python's built-in random
     random.seed(seed)
@@ -105,6 +108,7 @@ def get_random_state() -> dict[str, Any]:
         >>> state = get_random_state()
         >>> # ... do some random operations ...
         >>> restore_random_state(state)  # Restore to previous state
+
     """
     state = {
         "python": random.getstate(),
@@ -127,6 +131,7 @@ def restore_random_state(state: dict[str, Any]) -> None:
     ----------
     state : dict
         State dictionary from get_random_state().
+
     """
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
@@ -159,6 +164,7 @@ def compute_file_checksum(filepath: str | Path, algorithm: str = "sha256") -> st
         >>> checksum = compute_file_checksum("data/train.csv")
         >>> print(checksum[:16])  # First 16 chars
         'a1b2c3d4e5f67890'
+
     """
     filepath = Path(filepath)
 
@@ -214,6 +220,7 @@ class ExperimentConfig:
         ...     },
         ... )
         >>> config.save("experiments/exp_001.yaml")
+
     """
 
     seed: int = 42
@@ -261,6 +268,7 @@ class ExperimentConfig:
         ----------
         filepath : str or Path
             Output file path. Extension determines format (.yaml/.yml or .json).
+
         """
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -296,6 +304,7 @@ class ExperimentConfig:
         -------
         ExperimentConfig
             Loaded configuration object.
+
         """
         filepath = Path(filepath)
 
@@ -344,6 +353,7 @@ def create_experiment_dir(
         >>> exp_dir = create_experiment_dir("experiments", "snn_training")
         >>> print(exp_dir)
         experiments/snn_training_2026-01-13_143025
+
     """
     base_dir = Path(base_dir)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")

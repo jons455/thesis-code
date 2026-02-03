@@ -1,4 +1,5 @@
-"""Keras/Akida-compatible SNN models for PMSM control.
+"""
+Keras/Akida-compatible SNN models for PMSM control.
 
 This module provides Keras implementations of the SNN controller models
 that are compatible with BrainChip's Akida neuromorphic processor.
@@ -18,6 +19,7 @@ Example:
 
     # Train and export
     train_and_export(model, data_dir="data/raw/train")
+
 """
 
 from evaluation.snn_keras.models import AkidaConfig, AkidaController

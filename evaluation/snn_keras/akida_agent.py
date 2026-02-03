@@ -1,7 +1,9 @@
-"""Akida Controller Agent for Benchmark Integration.
+"""
+Akida Controller Agent for Benchmark Integration.
 
-This module provides a wrapper around the Keras/Akida model that fits the
-NeuroBench-aligned DictController protocol.
+This module provides a wrapper around the Keras/Akida model that fits the NeuroBench-
+aligned DictController protocol.
+
 """
 
 from pathlib import Path
@@ -22,6 +24,7 @@ class AkidaControllerAgent(DictController):
     1. Input normalization (Physical State -> Model Input)
     2. Inference (Keras or Akida runtime)
     3. Output denormalization (Model Output -> Physical Action)
+
     """
 
     def __init__(
@@ -71,6 +74,7 @@ class AkidaControllerAgent(DictController):
 
         Returns:
             action: Physical action dict {"v_d": ..., "v_q": ...}
+
         """
         # Extract features
         i_d = float(state["i_d"])

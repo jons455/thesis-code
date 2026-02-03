@@ -32,10 +32,10 @@ except ImportError:
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from embark.benchmark.agents import PIControllerAgent
-from embark.benchmark.pmsm_env import PMSMEnv
-from embark.utils.config import DEFAULT_PMSM
-from embark.utils.paths import DATA_RAW_DIR
+from embark.benchmark.agents import PIControllerAgent  # noqa: E402
+from embark.benchmark.pmsm_env import PMSMEnv  # noqa: E402
+from embark.utils.config import DEFAULT_PMSM  # noqa: E402
+from embark.utils.paths import DATA_RAW_DIR  # noqa: E402
 
 
 def generate_episode(
@@ -61,6 +61,7 @@ def generate_episode(
 
     Returns:
         pd.DataFrame: Trajectory data including dynamic references.
+
     """
     env = PMSMEnv(
         n_rpm=n_rpm,
@@ -143,6 +144,7 @@ def validate_episode(df: pd.DataFrame, threshold: float = 0.5) -> bool:
     Check if episode achieved good tracking.
 
     For multi-step data, we check if the final state matches the final reference.
+
     """
     final_error_q = abs(df["i_q"].iloc[-1] - df["i_q_ref"].iloc[-1])
 

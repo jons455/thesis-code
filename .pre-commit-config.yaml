@@ -1,39 +1,26 @@
-# Pre-commit configuration for NeuroBench compatibility
-# See https://pre-commit.com for more information
-# See https://neurobench.readthedocs.io/en/latest/contributing.html
-
 repos:
-  # Standard pre-commit hooks
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-        args: ['--maxkb=1000']
-      - id: check-merge-conflict
-      - id: check-toml
-      - id: debug-statements
+- repo: https://github.com/psf/black
+  rev: 24.3.0
+  hooks:
+    - id: black
+      exclude: ^examples/
+      language_version: python3
 
-  # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
+- repo: https://github.com/myint/docformatter
+  rev: v1.7.5
+  hooks:
+    - id: docformatter
+      args: [ "--in-place", "--wrap-summaries=88", "--wrap-descriptions=88", "--pre-summary-newline", "--black", "--recursive", "--blank"]
+      exclude: ^examples/
 
-  # MyPy - Static type checking (disabled for now due to pre-existing issues)
-  # TODO: Re-enable after fixing type annotations across codebase
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: v1.8.0
-  #   hooks:
-  #     - id: mypy
-  #       additional_dependencies:
-  #         - types-requests
-  #         - numpy
-  #         - pandas-stubs
-  #       args: [--ignore-missing-imports, --no-strict-optional]
-  #       pass_filenames: false
-  #       entry: mypy benchmark metrics utils snn
+- repo: https://github.com/PyCQA/flake8
+  rev: 7.0.0
+  hooks:
+    - id: flake8
+      name: flake8
+      exclude: ^examples/
+      types: [ python ]
+      args:
+      - --max-line-length=88
+      - --ignore=E501, E203, W291, W503, F403, F401, F821
+      #- E203, W503, F401, F403, C901

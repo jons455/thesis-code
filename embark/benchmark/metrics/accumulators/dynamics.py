@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from embark.benchmark.interfaces import ActionDict, MetricAccumulator, ReferenceDict, StateDict
+from embark.benchmark.interfaces import (
+    ActionDict,
+    MetricAccumulator,
+    ReferenceDict,
+    StateDict,
+)
 
 
 @dataclass
@@ -85,4 +90,6 @@ class Overshoot(MetricAccumulator):
             return 0.0
         if self._final_ref == 0:
             return 0.0
-        return max(0.0, (self._max_value - self._final_ref) / abs(self._final_ref) * 100)
+        return max(
+            0.0, (self._max_value - self._final_ref) / abs(self._final_ref) * 100
+        )

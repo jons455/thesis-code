@@ -1,6 +1,9 @@
-"""Unit tests for controller agents.
+"""
+Unit tests for controller agents.
 
-Tests agent interfaces and basic functionality with new DictController/TensorController protocols.
+Tests agent interfaces and basic functionality with new DictController/TensorController
+protocols.
+
 """
 
 from pathlib import Path

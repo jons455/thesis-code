@@ -1,6 +1,8 @@
-"""Configuration for Akida-compatible Keras models.
+"""
+Configuration for Akida-compatible Keras models.
 
 This mirrors the PyTorch SNNConfig but with Akida constraints.
+
 """
 
 from dataclasses import dataclass, field
@@ -8,7 +10,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class AkidaConfig:
-    """Configuration for Akida-compatible PMSM controller.
+    """
+    Configuration for Akida-compatible PMSM controller.
 
     Akida 1.0 Constraints:
     - Only ReLU activations in hidden layers
@@ -23,6 +26,7 @@ class AkidaConfig:
         output_scale: Scale factor for output regression
         use_batch_norm: Whether to use batch normalization (can help quantization)
         dropout_rate: Dropout rate during training (0.0 to disable)
+
     """
 
     # Architecture

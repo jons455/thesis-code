@@ -1,7 +1,9 @@
-"""Output-layer building blocks for SNN controllers.
+"""
+Output-layer building blocks for SNN controllers.
 
-These layers encapsulate different continuous-output decoding strategies
-so model architectures can stay focused on core dynamics.
+These layers encapsulate different continuous-output decoding strategies so model
+architectures can stay focused on core dynamics.
+
 """
 
 from __future__ import annotations
@@ -16,10 +18,12 @@ except ImportError:  # pragma: no cover - handled by caller
 
 
 class PopulationCodingOutput(nn.Module):
-    """Population coding output layer.
+    """
+    Population coding output layer.
 
-    Multiple neurons per output dimension, each tuned to a preferred value.
-    Decoding uses a weighted average of preferred values.
+    Multiple neurons per output dimension, each tuned to a preferred value. Decoding
+    uses a weighted average of preferred values.
+
     """
 
     def __init__(
@@ -70,9 +74,11 @@ class PopulationCodingOutput(nn.Module):
 
 
 class LearnedLinearOutput(nn.Module):
-    """Learned linear decoding from output spikes.
+    """
+    Learned linear decoding from output spikes.
 
     Produces a dense, trainable mapping from spikes to continuous outputs.
+
     """
 
     def __init__(
@@ -150,10 +156,12 @@ class DeltaCodingOutput(nn.Module):
 
 
 class TTFSOutput(nn.Module):
-    """Time-to-first-spike output decoding layer.
+    """
+    Time-to-first-spike output decoding layer.
 
-    Produces a single spike per output neuron over a short internal time window.
-    The output voltage is decoded from the (soft) first-spike timing.
+    Produces a single spike per output neuron over a short internal time window. The
+    output voltage is decoded from the (soft) first-spike timing.
+
     """
 
     def __init__(
@@ -197,10 +205,12 @@ class TTFSOutput(nn.Module):
         return spk, mem
 
     def decode(self, spk_history: torch.Tensor) -> torch.Tensor:
-        """Decode voltage from spike timing history.
+        """
+        Decode voltage from spike timing history.
 
         Args:
             spk_history: [time, batch, output_size] spike tensor.
+
         """
         if spk_history.dim() != 3:
             raise ValueError("spk_history must be [time, batch, output_size].")

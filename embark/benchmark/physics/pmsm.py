@@ -153,7 +153,9 @@ class PMSMPhysicsEngine:
         return float(self._last_gem_state[self._idx_epsilon]) * np.pi
 
     @staticmethod
-    def _dq_to_alpha_beta(v_d: float, v_q: float, epsilon: float) -> tuple[float, float]:
+    def _dq_to_alpha_beta(
+        v_d: float, v_q: float, epsilon: float
+    ) -> tuple[float, float]:
         c, s = np.cos(epsilon), np.sin(epsilon)
         v_alpha = v_d * c - v_q * s
         v_beta = v_d * s + v_q * c

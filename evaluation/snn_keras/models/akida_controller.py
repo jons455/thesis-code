@@ -1,4 +1,5 @@
-"""Akida-compatible Keras model for PMSM control.
+"""
+Akida-compatible Keras model for PMSM control.
 
 This implements a feed-forward neural network that is compatible with
 BrainChip's Akida neuromorphic processor (version 1.0).
@@ -12,6 +13,7 @@ Key constraints for Akida 1.0:
 
 The model structure mirrors the PyTorch LearnedLinearSNNController
 but uses standard Keras layers that Akida can convert.
+
 """
 
 from __future__ import annotations
@@ -27,7 +29,8 @@ def create_akida_controller(
     config: AkidaConfig | None = None,
     name: str = "akida_controller",
 ) -> keras.Model:
-    """Create an Akida-compatible controller model.
+    """
+    Create an Akida-compatible controller model.
 
     This function creates a standard Keras Sequential model that follows
     all Akida 1.0 constraints. The model can be:
@@ -47,6 +50,7 @@ def create_akida_controller(
         >>> model = create_akida_controller(config)
         >>> model.compile(optimizer='adam', loss='mse')
         >>> model.fit(x_train, y_train, epochs=100)
+
     """
     if config is None:
         config = AkidaConfig()
@@ -88,7 +92,8 @@ def create_akida_controller(
 
 
 class AkidaController:
-    """Wrapper class for Akida-compatible PMSM controller.
+    """
+    Wrapper class for Akida-compatible PMSM controller.
 
     This class provides a convenient interface matching the PyTorch
     model API while wrapping a Keras model internally.
@@ -102,6 +107,7 @@ class AkidaController:
         >>> controller.compile()
         >>> controller.fit(x_train, y_train, epochs=50)
         >>> controller.export_akida("model.fbz")
+
     """
 
     def __init__(
@@ -109,11 +115,13 @@ class AkidaController:
         config: AkidaConfig | None = None,
         hidden_size: int | None = None,
     ):
-        """Initialize the controller.
+        """
+        Initialize the controller.
 
         Args:
             config: Model configuration.
             hidden_size: Override hidden size (for compatibility with PyTorch API).
+
         """
         self.config = config or AkidaConfig()
 
@@ -132,13 +140,15 @@ class AkidaController:
         learning_rate: float | None = None,
         **kwargs,
     ) -> None:
-        """Compile the model for training.
+        """
+        Compile the model for training.
 
         Args:
             optimizer: Optimizer name or instance.
             loss: Loss function.
             learning_rate: Override learning rate from config.
             **kwargs: Additional arguments to model.compile().
+
         """
         lr = learning_rate or self.config.learning_rate
 
@@ -156,11 +166,21 @@ class AkidaController:
         self.model.compile(optimizer=optimizer, loss=loss, **kwargs)
 
     def fit(self, *args, **kwargs):
-        """Train the model. See keras.Model.fit()."""
+        """
+        Train the model.
+
+        See keras.Model.fit().
+
+        """
         return self.model.fit(*args, **kwargs)
 
     def predict(self, *args, **kwargs):
-        """Run inference. See keras.Model.predict()."""
+        """
+        Run inference.
+
+        See keras.Model.predict().
+
+        """
         return self.model.predict(*args, **kwargs)
 
     def __call__(self, inputs, training: bool = False):
@@ -178,10 +198,12 @@ class AkidaController:
         )
 
     def save(self, path: str) -> None:
-        """Save model weights and config.
+        """
+        Save model weights and config.
 
         Args:
             path: Path to save (without extension).
+
         """
         import json
         from pathlib import Path
@@ -201,13 +223,15 @@ class AkidaController:
 
     @classmethod
     def load(cls, path: str) -> "AkidaController":
-        """Load model from saved weights and config.
+        """
+        Load model from saved weights and config.
 
         Args:
             path: Path to saved model (without extension).
 
         Returns:
             Loaded AkidaController.
+
         """
         import json
         from pathlib import Path
@@ -227,7 +251,8 @@ class AkidaController:
         return controller
 
     def quantize(self, calibration_data=None):
-        """Quantize model for Akida deployment.
+        """
+        Quantize model for Akida deployment.
 
         This converts the float32 model to 4-bit quantized format
         suitable for Akida hardware.
@@ -241,6 +266,7 @@ class AkidaController:
 
         Raises:
             ImportError: If quantizeml is not installed.
+
         """
         try:
             import quantizeml
@@ -280,7 +306,8 @@ class AkidaController:
         return self._quantized_model
 
     def convert_to_akida(self):
-        """Convert quantized model to Akida format.
+        """
+        Convert quantized model to Akida format.
 
         Must call quantize() first.
 
@@ -290,6 +317,7 @@ class AkidaController:
         Raises:
             ImportError: If cnn2snn is not installed.
             RuntimeError: If model has not been quantized.
+
         """
         if self._quantized_model is None:
             raise RuntimeError("Must call quantize() before convert_to_akida()")

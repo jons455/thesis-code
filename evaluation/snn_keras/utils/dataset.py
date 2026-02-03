@@ -1,4 +1,5 @@
-"""TensorFlow/Keras dataset for PMSM controller training.
+"""
+TensorFlow/Keras dataset for PMSM controller training.
 
 This module provides data loading utilities compatible with TensorFlow/Keras,
 mirroring the PyTorch dataset but using tf.data for efficient training.
@@ -6,6 +7,7 @@ mirroring the PyTorch dataset but using tf.data for efficient training.
 The data format is the same as the PyTorch version:
 - Input: [i_d, i_q, e_d, e_q, n] normalized features
 - Target: [u_d, u_q] normalized voltage commands
+
 """
 
 from __future__ import annotations
@@ -58,7 +60,8 @@ class DataConfig:
 
 
 class PMSMKerasDataset:
-    """Dataset for PMSM controller training with TensorFlow.
+    """
+    Dataset for PMSM controller training with TensorFlow.
 
     This class loads CSV trajectory files and prepares them for
     training Keras models. It provides both numpy arrays and
@@ -76,6 +79,7 @@ class PMSMKerasDataset:
         >>> dataset = PMSMKerasDataset("data/raw/train")
         >>> x_train, y_train = dataset.get_arrays()
         >>> tf_dataset = dataset.get_tf_dataset(batch_size=32)
+
     """
 
     def __init__(
@@ -250,17 +254,20 @@ class PMSMKerasDataset:
         )
 
     def get_arrays(self) -> tuple[np.ndarray, np.ndarray]:
-        """Get input/target arrays.
+        """
+        Get input/target arrays.
 
         Returns:
             Tuple of (inputs, targets) arrays with shapes:
             - inputs: (num_windows, window_size, 5)
             - targets: (num_windows, window_size, 2)
+
         """
         return self._x, self._y
 
     def get_flattened_arrays(self) -> tuple[np.ndarray, np.ndarray]:
-        """Get flattened input/target arrays for non-sequential training.
+        """
+        Get flattened input/target arrays for non-sequential training.
 
         This is useful for training feed-forward models that process
         single timesteps rather than sequences.
@@ -269,6 +276,7 @@ class PMSMKerasDataset:
             Tuple of (inputs, targets) arrays with shapes:
             - inputs: (num_samples, 5)
             - targets: (num_samples, 2)
+
         """
         x_flat = self._x.reshape(-1, self._x.shape[-1])
         y_flat = self._y.reshape(-1, self._y.shape[-1])
@@ -280,7 +288,8 @@ class PMSMKerasDataset:
         shuffle: bool = True,
         flatten: bool = True,
     ) -> tf.data.Dataset:
-        """Get TensorFlow Dataset.
+        """
+        Get TensorFlow Dataset.
 
         Args:
             batch_size: Batch size.
@@ -290,6 +299,7 @@ class PMSMKerasDataset:
 
         Returns:
             tf.data.Dataset ready for training.
+
         """
         if flatten:
             x, y = self.get_flattened_arrays()
@@ -311,7 +321,8 @@ class PMSMKerasDataset:
         val_split: float = 0.2,
         seed: int = 42,
     ) -> tuple["PMSMKerasDataset", "PMSMKerasDataset"]:
-        """Split dataset into train and validation.
+        """
+        Split dataset into train and validation.
 
         Note: Returns views that share the underlying data loading
         but with different window indices.
@@ -322,6 +333,7 @@ class PMSMKerasDataset:
 
         Returns:
             Tuple of (train_dataset, val_dataset).
+
         """
         np.random.seed(seed)
         indices = np.random.permutation(len(self._x))
@@ -375,7 +387,8 @@ def create_tf_dataset(
     flatten: bool = True,
     seed: int = 42,
 ) -> tuple[tf.data.Dataset, tf.data.Dataset]:
-    """Create train and validation TensorFlow datasets.
+    """
+    Create train and validation TensorFlow datasets.
 
     Args:
         data_dir: Directory with CSV trajectory files.
@@ -389,6 +402,7 @@ def create_tf_dataset(
 
     Returns:
         Tuple of (train_dataset, val_dataset).
+
     """
     dataset = PMSMKerasDataset(
         data_dir=data_dir,

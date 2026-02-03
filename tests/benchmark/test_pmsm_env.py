@@ -1,6 +1,8 @@
-"""Unit tests for PMSM physics engine.
+"""
+Unit tests for PMSM physics engine.
 
 Tests the PMSMPhysicsEngine which wraps GEM for PMSM simulation.
+
 """
 
 import pytest

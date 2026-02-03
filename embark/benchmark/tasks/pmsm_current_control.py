@@ -18,7 +18,8 @@ from embark.utils.config import DEFAULT_MAX_STEPS
 
 @dataclass
 class SafetyLimits:
-    """Safety limits for early termination.
+    """
+    Safety limits for early termination.
 
     If any limit is exceeded, the episode terminates with done=True.
     Set a limit to None to disable that check.
@@ -26,6 +27,7 @@ class SafetyLimits:
     Safety checks are split into two phases:
     - Action limits: Checked BEFORE physics step (prevents commanding crazy voltages)
     - State limits: Checked AFTER physics step (detects system instability)
+
     """
 
     max_current_a: float | None = 20.0  # Max |i_d| or |i_q| in Amperes
@@ -33,13 +35,15 @@ class SafetyLimits:
     max_speed_rpm: float | None = None  # Max omega in RPM (None = no limit)
 
     def check_action(self, action: dict[str, float]) -> str | None:
-        """Check action limits BEFORE applying to physics.
+        """
+        Check action limits BEFORE applying to physics.
 
         Args:
             action: Action dict with v_d, v_q (or v_alpha, v_beta).
 
         Returns:
             Violation reason string if violated, None if safe.
+
         """
         if self.max_voltage_v is not None:
             for key in ["v_d", "v_q", "v_alpha", "v_beta"]:
@@ -54,13 +58,15 @@ class SafetyLimits:
         return None
 
     def check_state(self, state: StateDict) -> str | None:
-        """Check state limits AFTER physics step.
+        """
+        Check state limits AFTER physics step.
 
         Args:
             state: State dict with i_d, i_q, omega.
 
         Returns:
             Violation reason string if violated, None if safe.
+
         """
         # Current limits
         if self.max_current_a is not None:
@@ -85,9 +91,11 @@ class SafetyLimits:
         return None
 
     def check(self, state: StateDict, action: dict[str, float] | None = None) -> bool:
-        """Legacy combined check (for backward compatibility).
+        """
+        Legacy combined check (for backward compatibility).
 
         Prefer using check_action() and check_state() separately.
+
         """
         if action is not None:
             if self.check_action(action) is not None:
@@ -97,7 +105,8 @@ class SafetyLimits:
 
 @dataclass
 class PMSMCurrentControlTask:
-    """Closed-loop current control task for PMSM.
+    """
+    Closed-loop current control task for PMSM.
 
     This task composes:
     - A physics engine (PMSM simulation via GEM)
@@ -119,6 +128,7 @@ class PMSMCurrentControlTask:
             physics_engine=engine,
             reference_generator=SinusoidalReference(amplitude=2.0, freq_hz=10),
         )
+
     """
 
     physics_engine: PMSMPhysicsEngine = field(default_factory=PMSMPhysicsEngine)
@@ -158,7 +168,8 @@ class PMSMCurrentControlTask:
         config: PMSMConfig | None = None,
         safety_limits: SafetyLimits | None = None,
     ) -> "PMSMCurrentControlTask":
-        """Factory method for creating a task with default step reference.
+        """
+        Factory method for creating a task with default step reference.
 
         Args:
             n_rpm: Motor speed in RPM.
@@ -168,14 +179,19 @@ class PMSMCurrentControlTask:
             max_steps: Maximum episode length.
             config: PMSM configuration (uses default if None).
             safety_limits: Safety limits (uses default if None).
+
         """
         physics = PMSMPhysicsEngine(n_rpm=n_rpm, config=config or PMSMConfig())
-        reference = StepReference(i_d_ref=i_d_ref, i_q_ref=i_q_ref, step_time_s=step_time_s)
+        reference = StepReference(
+            i_d_ref=i_d_ref, i_q_ref=i_q_ref, step_time_s=step_time_s
+        )
         return cls(
             physics_engine=physics,
             reference_generator=reference,
             max_steps=max_steps,
-            safety_limits=safety_limits if safety_limits is not None else SafetyLimits(),
+            safety_limits=(
+                safety_limits if safety_limits is not None else SafetyLimits()
+            ),
         )
 
     def reset(self, seed: int | None = None) -> tuple[StateDict, ReferenceDict]:
@@ -189,7 +205,8 @@ class PMSMCurrentControlTask:
         return state, reference
 
     def step(self, action: dict[str, float]) -> tuple[StateDict, ReferenceDict, bool]:
-        """Execute one control step.
+        """
+        Execute one control step.
 
         Safety checks are performed in two phases:
         1. Action limits BEFORE physics (prevents commanding crazy voltages)
@@ -201,6 +218,7 @@ class PMSMCurrentControlTask:
         Returns:
             Tuple of (next_state, next_reference, done).
             done=True if max_steps reached OR safety limit violated.
+
         """
         violation_reason: str | None = None
 

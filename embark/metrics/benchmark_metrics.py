@@ -1,4 +1,5 @@
-"""Comprehensive benchmark metrics for neuromorphic PMSM current control.
+"""
+Comprehensive benchmark metrics for neuromorphic PMSM current control.
 
 This module provides a structured framework for evaluating control performance
 metrics (adapted for current control) and neuromorphic-specific metrics based
@@ -10,6 +11,7 @@ Note:
         - NeuroBench Framework (arXiv:2304.04640, 2023)
         - Metrics for Evaluating Quality of Control in Electric Drives
           (IEEE Trans. Ind. Electron., 2021)
+
 """
 
 from dataclasses import dataclass, field
@@ -60,6 +62,7 @@ class BenchmarkConfig:
 
     CRITICAL: All benchmarks MUST use the same episode length for
     ITAE and Total Variation metrics to be comparable!
+
     """
 
     # Standard episode length (1.0 second for comparable ITAE)
@@ -122,6 +125,7 @@ class AccuracyMetrics:
         "For current-controlled drives, tracking accuracy should be evaluated
         using time-weighted integral metrics that penalize both steady-state
         error and transient deviations" [2]
+
     """
 
     # Integral Metrics
@@ -178,6 +182,7 @@ def compute_accuracy_metrics(
     -------
     AccuracyMetrics
         Computed accuracy metrics
+
     """
     dt = np.diff(time, prepend=time[0])
     dt[0] = dt[1] if len(dt) > 1 else 1e-4
@@ -256,6 +261,7 @@ class DynamicsMetrics:
         "Dynamic response metrics quantify a drive's ability to follow
         rapidly changing reference trajectories, critical for applications
         requiring high dynamic performance" [2]
+
     """
 
     # Rise Time (10% to 90%)
@@ -293,6 +299,7 @@ def _compute_step_response_metrics(
     Compute step response metrics for a single signal.
 
     Assumes a step change occurs at step_time from initial to final value.
+
     """
     # Find step transition
     step_idx = np.searchsorted(time, step_time)
@@ -403,6 +410,7 @@ def compute_dynamics_metrics(
     -------
     DynamicsMetrics
         Computed dynamic performance metrics
+
     """
     metrics_d = _compute_step_response_metrics(time, i_d, i_d_ref, step_time)
     metrics_q = _compute_step_response_metrics(time, i_q, i_q_ref, step_time)
@@ -441,6 +449,7 @@ class EfficiencyMetrics:
         "In current-controlled drives, efficiency is determined by the current
         magnitude required to produce the desired torque. MTPA (Maximum Torque
         Per Ampere) strategies minimize copper losses for a given torque." [2]
+
     """
 
     # Copper Losses (dominant loss component)
@@ -499,6 +508,7 @@ def compute_efficiency_metrics(
     -------
     EfficiencyMetrics
         Computed efficiency metrics
+
     """
     dt = np.diff(time, prepend=time[0])
     dt[0] = dt[1] if len(dt) > 1 else 1e-4
@@ -558,6 +568,7 @@ class SafetyMetrics:
         "Safety constraints in motor drives must be strictly enforced.
         Current limits protect power electronics and motor windings from
         thermal damage." [2]
+
     """
 
     # Current Limit Violations
@@ -609,6 +620,7 @@ def compute_safety_metrics(
     -------
     SafetyMetrics
         Computed safety metrics
+
     """
     dt = np.diff(time, prepend=time[0])
     dt[0] = dt[1] if len(dt) > 1 else 1e-4
@@ -688,6 +700,7 @@ class StabilityMetrics:
     Note: Motor inductance acts as low-pass filter with τ = L/R ≈ 2.6ms
     (f_cutoff ≈ 61 Hz). Chattering above 60 Hz is electrically filtered
     but still wastes energy.
+
     """
 
     # Total Variation (normalized by episode length)
@@ -725,6 +738,7 @@ def compute_stability_metrics(
     -------
     StabilityMetrics
         Computed stability metrics
+
     """
     # Total Variation: sum of absolute differences
     tv_u_d_raw = float(np.sum(np.abs(np.diff(u_d))))
@@ -788,6 +802,7 @@ class NeuromorphicMetrics:
 
     [4] Frontiers Neuroscience 2023: "For motor control, latency is critical.
         SNNs can achieve <1ms inference with appropriate network architectures"
+
     """
 
     # -------------------------------------------------------------------------
@@ -902,6 +917,7 @@ def compute_neuromorphic_metrics_from_spikes(
     -------
     NeuromorphicMetrics
         Computed neuromorphic metrics
+
     """
     num_neurons, num_timesteps = spike_trains.shape
     num_pre = weights.shape[1] if len(weights.shape) > 1 else num_neurons
@@ -1016,9 +1032,7 @@ def compute_neuromorphic_metrics_from_spikes(
 
 @dataclass
 class BenchmarkResult:
-    """
-    Complete benchmark result aggregating all metric categories.
-    """
+    """Complete benchmark result aggregating all metric categories."""
 
     # Identification
     controller_name: str = ""
@@ -1162,6 +1176,7 @@ def run_benchmark(
     -------
     BenchmarkResult
         Complete benchmark results
+
     """
     from datetime import datetime
 
@@ -1215,6 +1230,7 @@ def compare_controllers(
     -------
     pd.DataFrame
         Comparison table
+
     """
     # Convert to DataFrame
     rows = [r.to_dict() for r in results]

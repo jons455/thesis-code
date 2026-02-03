@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from embark.utils.paths import DATA_RAW_DIR
+from embark.utils.paths import DATA_RAW_DIR  # noqa: E402
 
 
 def plot_trajectory(df: pd.DataFrame, filename: str):

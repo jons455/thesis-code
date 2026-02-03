@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class TensorControllerAdapter:
-    """Wraps TensorController + processors into unified Controller interface.
+    """
+    Wraps TensorController + processors into unified Controller interface.
 
     This eliminates if/else logic in the harness by making neural controllers
     behave identically to classical controllers from the harness's perspective.
@@ -53,6 +54,7 @@ class TensorControllerAdapter:
 
         # Now usable in harness without special handling
         harness = ClosedLoopHarness(task=task, controller=controller, ...)
+
     """
 
     controller: TensorController
@@ -77,11 +79,13 @@ class TensorControllerAdapter:
         self._last_action_tensor = None
 
     def __call__(self, state: StateDict, reference: ReferenceDict) -> ActionDict:
-        """Process state, run controller, process action.
+        """
+        Process state, run controller, process action.
 
         Intermediate tensors are stored and accessible via properties:
         - self.last_observation: input tensor
         - self.last_action_tensor: output tensor (before denormalization)
+
         """
         if self._physics_config is None:
             raise RuntimeError(
@@ -109,14 +113,16 @@ class TensorControllerAdapter:
 
     @property
     def model(self) -> Any:
-        """Direct access to underlying controller/model for hook registration.
+        """
+        Direct access to underlying controller/model for hook registration.
 
-        Use this to register forward hooks for NeuroBench WorkloadMetric or
-        other external metric tools that need model access.
+        Use this to register forward hooks for NeuroBench WorkloadMetric or other
+        external metric tools that need model access.
 
         This property attempts to unwrap the controller to find the actual
-        torch.nn.Module. For example, if using SNNControllerAgent, it returns
-        the underlying snn_model.
+        torch.nn.Module. For example, if using SNNControllerAgent, it returns the
+        underlying snn_model.
+
         """
         # Unwrap SNNControllerAgent to get the actual PyTorch model
         if hasattr(self.controller, "model"):
@@ -130,16 +136,19 @@ class TensorControllerAdapter:
 
     @property
     def last_action_tensor(self) -> "torch.Tensor | None":
-        """Last output tensor (normalized) from the controller.
+        """
+        Last output tensor (normalized) from the controller.
 
-        This is the raw neural network output before denormalization
-        to physical voltage units.
+        This is the raw neural network output before denormalization to physical voltage
+        units.
+
         """
         return self._last_action_tensor
 
     @property
     def last_info(self) -> dict[str, Any] | None:
-        """Spike statistics from underlying controller.
+        """
+        Spike statistics from underlying controller.
 
         Returns whatever the underlying TensorController stores in its
         `last_info` attribute after forward(). Typically includes:
@@ -147,5 +156,6 @@ class TensorControllerAdapter:
         - total_syops: int
         - layer_spikes: dict[str, int]
         - sparsity: float
+
         """
         return getattr(self.controller, "last_info", None)

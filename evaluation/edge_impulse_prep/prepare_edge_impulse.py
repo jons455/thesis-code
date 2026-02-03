@@ -65,6 +65,7 @@ def downsample_data(df, factor=10, preserve_time=True):
 
     Returns:
         Downsampled DataFrame
+
     """
     if factor == 1:
         print("\n=== No Downsampling (using original 10 kHz data) ===")
@@ -121,6 +122,7 @@ def prepare_basic_data(df, keep_run_id=False):
 
     Features: i_d, i_q, n
     Targets: u_d, u_q
+
     """
     print("\n=== Preparing Basic (Instantaneous) Mapping ===")
 
@@ -149,6 +151,7 @@ def prepare_windowed_data(df, window_size=5):
     Prepare time-windowed data for temporal pattern learning.
 
     Creates sliding windows of [i_d, i_q, n] over time.
+
     """
     print(f"\n=== Preparing Windowed Data (window={window_size}) ===")
 
@@ -201,6 +204,7 @@ def split_by_runs(df, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
         train_ratio: Fraction of runs for training
         val_ratio: Fraction of runs for validation
         test_ratio: Fraction of runs for testing
+
     """
     print("\n=== Splitting Data by Runs ===")
 
@@ -249,6 +253,7 @@ def save_datasets(
     Save train/val/test datasets as CSV files.
 
     Edge Impulse requires timestamp column for CSV uploads.
+
     """
     output_path = (
         Path(output_dir) if output_dir else (DATA_PROCESSED_DIR / "edge_impulse")

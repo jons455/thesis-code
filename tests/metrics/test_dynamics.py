@@ -2,6 +2,7 @@
 Unit tests for dynamics metrics.
 
 Tests rise time, settling time, overshoot, peak time calculations.
+
 """
 
 import numpy as np

@@ -1,4 +1,5 @@
-"""Dataset for PMSM SNN training.
+"""
+Dataset for PMSM SNN training.
 
 Loads PI controller trajectories and prepares them for SNN training.
 The dataset provides (input, target) pairs where input is [i_d, i_q, e_d, e_q]
@@ -19,6 +20,7 @@ Example:
             # targets: [batch, time, 2]
             outputs, _ = model.forward_sequence(inputs)
             loss = F.mse_loss(outputs, targets)
+
 """
 
 from dataclasses import dataclass
@@ -59,7 +61,8 @@ class DataConfig:
 
 
 class PMSMDataset(Dataset):
-    """Dataset of PI controller trajectories for imitation learning.
+    """
+    Dataset of PI controller trajectories for imitation learning.
 
     Loads CSV files from a directory and extracts windows of input
     [i_d, i_q, e_d, e_q] and target [u_d, u_q] voltage commands.
@@ -81,6 +84,7 @@ class PMSMDataset(Dataset):
             inputs, targets = dataset[0]
             # inputs: [window_size, 4] tensor
             # targets: [window_size, 2] tensor
+
     """
 
     def __init__(
@@ -149,13 +153,15 @@ class PMSMDataset(Dataset):
         return i_cols, u_cols, ref_cols
 
     def _load_file(self, filepath: Path) -> tuple[np.ndarray, np.ndarray] | None:
-        """Load a single CSV file and extract input/target arrays.
+        """
+        Load a single CSV file and extract input/target arrays.
 
         Args:
             filepath: Path to CSV file.
 
         Returns:
             Tuple of (inputs, targets) arrays, or None if file has issues.
+
         """
         try:
             df = pd.read_csv(filepath)
@@ -329,7 +335,8 @@ def create_dataloaders(
     num_workers: int = 0,
     seed: int = 42,
 ) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """Create train and validation dataloaders.
+    """
+    Create train and validation dataloaders.
 
     Args:
         data_dir: Path to directory with CSV files.
@@ -342,6 +349,7 @@ def create_dataloaders(
 
     Returns:
         Tuple of (train_loader, val_loader).
+
     """
     from torch.utils.data import DataLoader, random_split
 

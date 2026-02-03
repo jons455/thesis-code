@@ -119,6 +119,7 @@ def main(
       - "panel": Preserves original time + run_id per run
       - "stack": Concatenates runs into continuous time series
       - "both": Generates both output formats
+
     """
     if out_dir is None:
         out_dir = str(DATA_PROCESSED_DIR / "merged")

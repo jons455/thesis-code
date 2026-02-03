@@ -1,4 +1,5 @@
-"""Training script for Akida-compatible PMSM controller.
+"""
+Training script for Akida-compatible PMSM controller.
 
 This script provides the complete training pipeline:
 1. Load and preprocess data
@@ -12,6 +13,7 @@ Usage:
 
     # With quick test mode:
     python -m evaluation.snn_keras.utils.train --data_dir data/raw/train --max_files 5 --epochs 10
+
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 import tf_keras as keras
+
 # from tensorflow import keras
 
 from evaluation.snn_keras.models import AkidaConfig, AkidaController
@@ -141,13 +144,15 @@ def create_callbacks(
 
 
 def train(config: TrainConfig) -> tuple[AkidaController, dict]:
-    """Main training function.
+    """
+    Main training function.
 
     Args:
         config: Training configuration.
 
     Returns:
         Tuple of (trained_controller, history_dict).
+
     """
     # Setup directories
     if config.run_name:
@@ -261,7 +266,8 @@ def evaluate(
     window_size: int = 100,
     error_gain: float = 10.0,
 ) -> dict[str, float]:
-    """Evaluate a trained model.
+    """
+    Evaluate a trained model.
 
     Args:
         model_path: Path to saved model.
@@ -271,6 +277,7 @@ def evaluate(
 
     Returns:
         Dictionary of evaluation metrics.
+
     """
     # Load model
     controller = AkidaController.load(model_path)

@@ -82,7 +82,9 @@ class DummyDictController(DictController):
         pass
 
     @classmethod
-    def from_system_config(cls, config, tuning: str = "technical_optimum"):  # noqa: ARG002
+    def from_system_config(
+        cls, config, tuning: str = "technical_optimum"
+    ):  # noqa: ARG002
         return cls()
 
 

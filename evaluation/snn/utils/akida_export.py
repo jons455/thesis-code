@@ -1,4 +1,5 @@
-"""Akida/NIR export utilities for PMSM SNN controller.
+"""
+Akida/NIR export utilities for PMSM SNN controller.
 
 This module provides tools for exporting the trained SNN controller to
 neuromorphic hardware formats: NIR (Neuromorphic Intermediate Representation)
@@ -20,6 +21,7 @@ Example:
 
         # Export to NIR
         export_to_nir(model, "exports/pmsm_controller.nir")
+
 """
 
 import sys
@@ -71,7 +73,8 @@ class AkidaCompatibilityReport:
 
 
 def validate_akida_compatibility(model: nn.Module) -> AkidaCompatibilityReport:
-    """Check if the SNN model is compatible with Akida hardware.
+    """
+    Check if the SNN model is compatible with Akida hardware.
 
     Akida constraints include: specific layer types (Dense, Conv2D, etc.),
     LIF neurons with specific parameters, INT8 quantized weights, and
@@ -82,6 +85,7 @@ def validate_akida_compatibility(model: nn.Module) -> AkidaCompatibilityReport:
 
     Returns:
         Detailed compatibility report with issues, warnings, and recommendations.
+
     """
     issues = []
     warnings = []
@@ -168,7 +172,8 @@ def export_to_nir(
     output_path: str,
     sample_input: torch.Tensor | None = None,
 ) -> bool:
-    """Export SNN model to NIR (Neuromorphic Intermediate Representation) format.
+    """
+    Export SNN model to NIR (Neuromorphic Intermediate Representation) format.
 
     NIR is a universal format that can be converted to Akida, Loihi,
     SpiNNaker, and Speck hardware.
@@ -180,6 +185,7 @@ def export_to_nir(
 
     Returns:
         True if export succeeded.
+
     """
     try:
         import nir
@@ -217,7 +223,8 @@ def export_to_onnx(
     output_path: str,
     sample_input: torch.Tensor | None = None,
 ) -> bool:
-    """Export SNN model to ONNX format (intermediate step for some hardware).
+    """
+    Export SNN model to ONNX format (intermediate step for some hardware).
 
     Note: ONNX doesn't natively support spiking neurons, so this exports
     the computational graph. Useful for CNN2SNN workflows.
@@ -229,6 +236,7 @@ def export_to_onnx(
 
     Returns:
         True if export succeeded.
+
     """
     if sample_input is None:
         sample_input = torch.randn(1, 4)
@@ -266,7 +274,8 @@ def quantize_model(
     calibration_data: torch.Tensor | None = None,
     bits: int = 8,
 ) -> nn.Module:
-    """Quantize model weights to INT8 for Akida deployment.
+    """
+    Quantize model weights to INT8 for Akida deployment.
 
     This is a simple post-training quantization. For best results,
     use quantization-aware training.
@@ -278,6 +287,7 @@ def quantize_model(
 
     Returns:
         Quantized model.
+
     """
     # This is a placeholder - full quantization would use:
     # - torch.quantization for PyTorch native

@@ -10,16 +10,20 @@ Usage:
 import sys
 from pathlib import Path
 
+# Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import numpy as np
+import gym_electric_motor as gem  # noqa: E402
+import numpy as np  # noqa: E402
+from gym_electric_motor.physical_systems import ConstantSpeedLoad  # noqa: E402
 
-from embark.benchmark.controller_interface import run_benchmark
-from embark.benchmark.pmsm_env import PMSMEnv
-
-# =============================================================================
-# EXAMPLE 1: Simple P Controller
-# =============================================================================
+from embark.benchmark.agents import PIControllerAgent  # noqa: E402
+from embark.benchmark.harness.closed_loop import ClosedLoopHarness  # noqa: E402
+from embark.benchmark.physics.pmsm import PMSMPhysicsEngine  # noqa: E402
+from embark.benchmark.tasks.pmsm_current_control import (  # noqa: E402
+    PMSMCurrentControlTask,
+)
+from embark.benchmark.tasks.reference_generators import StepGenerator  # noqa: E402
 
 
 class SimplePController:
@@ -29,6 +33,7 @@ class SimplePController:
     This shows the MINIMUM you need to implement:
     - __call__(state) -> action
     - reset()
+
     """
 
     def __init__(self, kp: float = 5.0):
@@ -48,6 +53,7 @@ class SimplePController:
 
         Output:
             action: [u_d, u_q] - normalized to [-1, 1]
+
         """
         # Extract normalized errors
         e_d_norm = state[2]
@@ -78,9 +84,7 @@ class SimplePController:
 
 
 class SimplePIController:
-    """
-    A simple PI controller showing how to handle internal state.
-    """
+    """A simple PI controller showing how to handle internal state."""
 
     def __init__(self, kp: float = 5.0, ki: float = 100.0):
         self.kp = kp
@@ -128,6 +132,7 @@ class ExternalModelWrapper:
     Template for wrapping an external model (e.g., from MATLAB, TensorFlow, JAX).
 
     Modify this to match your model's API.
+
     """
 
     def __init__(self, model_path: str):

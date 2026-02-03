@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Run benchmark evaluation comparing SNN controller against PI baseline.
+"""
+Run benchmark evaluation comparing SNN controller against PI baseline.
 
 This script demonstrates how to use the benchmark framework to evaluate
 a trained SNN controller against the classical PI controller baseline.
@@ -9,6 +10,7 @@ Usage:
 
     # With custom options
     poetry run python evaluation/core/run_evaluation.py --speed 1500 --iq-ref 3.0
+
 """
 
 import argparse

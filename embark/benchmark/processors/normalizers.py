@@ -7,7 +7,13 @@ from typing import Sequence
 
 import torch
 
-from embark.benchmark.interfaces import ClosedLoopTask, ReferenceDict, StateDict, StateProcessor, SystemConfig
+from embark.benchmark.interfaces import (
+    ClosedLoopTask,
+    ReferenceDict,
+    StateDict,
+    StateProcessor,
+    SystemConfig,
+)
 
 
 @dataclass
@@ -20,11 +26,17 @@ class StandardScalerProcessor(StateProcessor):
     std: dict[str, float] | None = None
     _output_dim: int = 0
 
-    def configure(self, physics_config: SystemConfig, task: ClosedLoopTask) -> None:  # noqa: ARG002
+    def configure(
+        self, physics_config: SystemConfig, task: ClosedLoopTask
+    ) -> None:  # noqa: ARG002
         if self.mean is None:
-            self.mean = {k: 0.0 for k in list(self.input_keys) + list(self.reference_keys)}
+            self.mean = {
+                k: 0.0 for k in list(self.input_keys) + list(self.reference_keys)
+            }
         if self.std is None:
-            self.std = {k: 1.0 for k in list(self.input_keys) + list(self.reference_keys)}
+            self.std = {
+                k: 1.0 for k in list(self.input_keys) + list(self.reference_keys)
+            }
         self._output_dim = len(self.input_keys) + len(self.reference_keys)
 
     def __call__(self, state: StateDict, reference: ReferenceDict) -> torch.Tensor:
@@ -49,7 +61,9 @@ class MinMaxProcessor(StateProcessor):
     bounds: dict[str, tuple[float, float]] | None = None
     _output_dim: int = 0
 
-    def configure(self, physics_config: SystemConfig, task: ClosedLoopTask) -> None:  # noqa: ARG002
+    def configure(
+        self, physics_config: SystemConfig, task: ClosedLoopTask
+    ) -> None:  # noqa: ARG002
         if self.bounds is None:
             self.bounds = {}
             for key in list(self.input_keys) + list(self.reference_keys):

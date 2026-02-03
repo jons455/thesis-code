@@ -14,11 +14,13 @@ from .config import SNNConfig
 
 
 class MembraneSNNController(nn.Module):
-    """Pure SNN controller with built-in integration.
+    """
+    Pure SNN controller with built-in integration.
 
-    The output layer uses slow-leak LIF neurons (high beta) whose membrane
-    potential directly encodes the voltage command. This eliminates the need
-    for an external integrator.
+    The output layer uses slow-leak LIF neurons (high beta) whose membrane potential
+    directly encodes the voltage command. This eliminates the need for an external
+    integrator.
+
     """
 
     def __init__(

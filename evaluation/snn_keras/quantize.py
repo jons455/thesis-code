@@ -1,7 +1,8 @@
 """
 Export existing Keras model to Akida .fbz format.
-# Helper script
-Use this if training finished but export failed.
+
+# Helper script Use this if training finished but export failed.
+
 """
 
 from pathlib import Path

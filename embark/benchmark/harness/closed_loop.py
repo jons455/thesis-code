@@ -12,7 +12,8 @@ from embark.benchmark.interfaces import (
 
 
 class ClosedLoopHarness:
-    """NeuroBench-style harness for closed-loop control benchmarks.
+    """
+    NeuroBench-style harness for closed-loop control benchmarks.
 
     The harness follows a unified control loop:
         state, ref = task.reset()
@@ -40,6 +41,7 @@ class ClosedLoopHarness:
         controller.configure(task.physics_engine.config, task)
         harness = ClosedLoopHarness(task=task, controller=controller)
         results = harness.run()
+
     """
 
     def __init__(
@@ -53,13 +55,15 @@ class ClosedLoopHarness:
         self.metrics = metrics or []
 
     def run(self, max_steps: int | None = None) -> dict[str, Any]:
-        """Run one episode of the benchmark.
+        """
+        Run one episode of the benchmark.
 
         Args:
             max_steps: Override task's max_steps if provided.
 
         Returns:
             Dictionary containing step count and all metric results.
+
         """
         state, reference = self.task.reset()
         self.controller.reset()

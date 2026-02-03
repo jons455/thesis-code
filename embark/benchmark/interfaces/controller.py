@@ -12,10 +12,12 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class Controller(Protocol):
-    """Unified controller interface for the harness.
+    """
+    Unified controller interface for the harness.
 
-    Both classical (DictController) and neural (TensorController) controllers
-    must implement this interface, either directly or via an adapter.
+    Both classical (DictController) and neural (TensorController) controllers must
+    implement this interface, either directly or via an adapter.
+
     """
 
     def reset(self) -> None:
@@ -37,10 +39,12 @@ class Controller(Protocol):
 
 @runtime_checkable
 class TensorController(Protocol):
-    """Neural network controllers (SNN, ANN).
+    """
+    Neural network controllers (SNN, ANN).
 
-    These require wrapping with TensorControllerAdapter to be used
-    with the ClosedLoopHarness.
+    These require wrapping with TensorControllerAdapter to be used with the
+    ClosedLoopHarness.
+
     """
 
     def reset(self) -> None:
