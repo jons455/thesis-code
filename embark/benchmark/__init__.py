@@ -1,43 +1,107 @@
-"""
-NeuroBench Integration Module for PMSM Current Control Benchmark
-================================================================
+"""NeuroBench-aligned PMSM Current Control Benchmark.
 
-This module provides the interface layer between the GEM (gym-electric-motor)
-PMSM simulation and the NeuroBench closed-loop benchmark framework.
+This module provides a modular closed-loop benchmark framework following
+NeuroBench architecture patterns.
 
 Components:
 -----------
-- PMSMEnv: Gymnasium-compatible wrapper for GEM PMSM environment
-- PIControllerAgent: Baseline PI controller as NeuroBench agent
-- SNNControllerAgent: Spiking neural network controller
+- ClosedLoopHarness: Main benchmark orchestrator
+- PMSMCurrentControlTask: PMSM current control task with physics engine
+- PMSMPhysicsEngine: Pure physics dynamics (wraps GEM)
+- PIControllerAgent: Classical PI controller (DictController)
+- TensorControllerAdapter: Wraps TensorController + processors into unified interface
 
-Usage:
-------
-    from embark.benchmark import PMSMEnv, PIControllerAgent, SNNControllerAgent
-    from neurobench.benchmarks import BenchmarkClosedLoop
+Architecture:
+-------------
+The harness follows a unified control loop without if/else branching:
 
-    env = PMSMEnv()
-    agent = PIControllerAgent()
-    # or: agent = SNNControllerAgent("snn/checkpoints/best_model.pt")
+    state, ref = task.reset()
+    while not done:
+        action = controller(state, ref)  # Unified interface
+        state, ref, done = task.step(action)
 
-    benchmark = BenchmarkClosedLoop(agent, env, ...)
-    results = benchmark.run()
+Classical controllers implement Controller directly.
+Neural controllers must be wrapped with TensorControllerAdapter.
+
+Usage (Classical):
+------------------
+    from embark.benchmark import (
+        PMSMCurrentControlTask,
+        PIControllerAgent,
+        ClosedLoopHarness,
+        TrackingRMSE,
+    )
+
+    task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0)
+    controller = PIControllerAgent.from_system_config(task.physics_engine.config)
+    harness = ClosedLoopHarness(task=task, controller=controller)
+    results = harness.run()
+
+Usage (Neural):
+---------------
+    from embark.benchmark import (
+        PMSMCurrentControlTask,
+        TensorControllerAdapter,
+        ClosedLoopHarness,
+    )
+    from embark.benchmark.agents import SNNControllerAgent
+    from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+
+    task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0)
+    snn = SNNControllerAgent(...)
+
+    controller = TensorControllerAdapter(
+        controller=snn,
+        state_processor=MinMaxProcessor(...),
+        action_processor=LinearActionProcessor(...),
+    )
+    controller.configure(task.physics_engine.config, task)
+
+    harness = ClosedLoopHarness(task=task, controller=controller)
+    results = harness.run()
 """
 
+from .adapters import TensorControllerAdapter
 from .agents import (
     PIControllerAgent,
-    PIControllerTorchAgent,
     PIParameters,
     SNNControllerAgent,
     SNNControllerTorchAgent,
 )
-from .pmsm_env import PMSMEnv
+from .controllers import ANNControllerWrapper, SNNControllerWrapper
+from .harness import ClosedLoopHarness
+from .metrics import (
+    ControlEffort,
+    Overshoot,
+    SettlingTime,
+    SyOpsAccumulator,
+    TrackingRMSE,
+)
+from .physics import PMSMConfig, PMSMPhysicsEngine
+from .tasks import PMSMCurrentControlTask, SafetyLimits
 
 __all__ = [
-    "PMSMEnv",
+    # Harness
+    "ClosedLoopHarness",
+    # Tasks
+    "PMSMCurrentControlTask",
+    "SafetyLimits",
+    # Physics
+    "PMSMConfig",
+    "PMSMPhysicsEngine",
+    # Adapters
+    "TensorControllerAdapter",
+    # Controllers
     "PIControllerAgent",
-    "PIControllerTorchAgent",
     "PIParameters",
     "SNNControllerAgent",
     "SNNControllerTorchAgent",
+    "ANNControllerWrapper",
+    "SNNControllerWrapper",
+    # Metrics
+    "ControlEffort",
+    "Overshoot",
+    "SettlingTime",
+    "SyOpsAccumulator",
+    "TrackingRMSE",
 ]

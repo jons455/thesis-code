@@ -1,165 +1,183 @@
-# Benchmark Module
+# PMSM Current Control Benchmark
 
-NeuroBench integration layer for PMSM current control benchmark.
+NeuroBench-aligned closed-loop benchmark framework for neuromorphic PMSM current control.
 
-## Purpose
+For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-This module bridges the GEM (gym-electric-motor) PMSM simulation with the NeuroBench closed-loop benchmark framework. It provides:
+## Architecture
 
-- **Gymnasium-compatible environment** wrapping GEM's PMSM simulation
-- **Controller agents** (PI baseline, future SNN)
-- **Processor functions** for encoding/decoding (normalization, spike encoding)
+```
+benchmark/
+├── agents.py              # PIControllerAgent (baseline), SNNControllerAgent
+├── adapters/
+│   └── tensor_adapter.py  # TensorControllerAdapter (wraps neural + processors)
+├── harness/
+│   └── closed_loop.py     # ClosedLoopHarness - unified control loop
+├── physics/
+│   ├── config.py          # PMSMConfig
+│   └── pmsm.py            # PMSMPhysicsEngine (wraps GEM)
+├── tasks/
+│   ├── pmsm_current_control.py   # PMSMCurrentControlTask, SafetyLimits
+│   └── reference_generators.py   # StepReference, SinusoidalReference
+├── processors/            # For neural controllers (inside adapter)
+│   ├── normalizers.py     # MinMaxProcessor, StandardScalerProcessor
+│   ├── decoders.py        # LinearActionProcessor
+│   └── identity.py        # Passthrough processors
+├── metrics/accumulators/  # Real-time metric computation
+│   ├── tracking.py        # TrackingRMSE, TrackingMAE
+│   ├── dynamics.py        # SettlingTime, Overshoot
+│   ├── efficiency.py      # ControlEffort
+│   └── neuromorphic.py    # SyOpsAccumulator, SpikeCountAccumulator
+├── interfaces/            # Protocol definitions
+│   ├── controller.py      # Controller, TensorController
+│   ├── physics.py         # PhysicsEngine
+│   ├── task.py            # ClosedLoopTask
+│   └── metrics.py         # MetricAccumulator
+└── controllers/neural/    # Wrappers for trained models
+    ├── snn_wrapper.py     # SNNControllerWrapper
+    └── ann_wrapper.py     # ANNControllerWrapper
+```
 
 ## Quick Start
 
-```python
-from embark.benchmark import PMSMEnv, PIControllerAgent
-
-# Create environment and agent
-env = PMSMEnv(n_rpm=1000, i_d_ref=0.0, i_q_ref=2.0)
-agent = PIControllerAgent()
-
-# Run episode
-state, info = env.reset()
-agent.reset()
-
-for _ in range(500):
-    action = agent(state)  # [u_d, u_q] in V
-    state, reward, done, truncated, info = env.step(action)
-    if done:
-        break
-
-# Get results
-print(f"Final i_q: {info['i_q']:.4f} A (ref: {info['i_q_ref']:.4f} A)")
-```
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `pmsm_env.py` | `PMSMEnv` — Gymnasium wrapper for GEM PMSM |
-| `agents.py` | `PIControllerAgent`, `PIControllerTorchAgent` — Controller implementations |
-| `processors.py` | Encoding/decoding functions (normalize, rate encode, etc.) |
-| `run_benchmark.py` | Validation script |
-| `tests/` | Unit tests for components |
-
-## PMSMEnv
-
-Gymnasium-compatible wrapper for GEM PMSM current control.
-
-**Observation Space** (physical units):
-```
-[i_d, i_q, e_d, e_q]
-  │    │    │    └── q-axis current error (ref - measured)
-  │    │    └─────── d-axis current error
-  │    └──────────── q-axis current (measured)
-  └───────────────── d-axis current (measured)
-```
-
-**Action Space** (physical units):
-```
-[u_d, u_q]
-  │    └── q-axis voltage command
-  └─────── d-axis voltage command
-```
-
-**Parameters**:
-```python
-PMSMEnv(
-    n_rpm=1000,           # Motor speed [rpm]
-    i_d_ref=0.0,          # d-axis current reference [A]
-    i_q_ref=2.0,          # q-axis current reference [A]
-    scenario='step_response',  # Benchmark scenario
-    max_steps=2000,       # Steps per episode
-)
-```
-
-## PIControllerAgent
-
-Classical PI controller with Technical Optimum tuning.
-
-**Features**:
-- Decoupling compensation (back-EMF feedforward)
-- Anti-windup on integrators
-- Voltage magnitude limiting
-
-**Interface**:
-```python
-agent = PIControllerAgent()
-agent.reset()                    # Reset integrator states
-action = agent(state)            # Get control action
-```
-
-## Processors (Future Expansion)
-
-Currently provides:
-- `StateNormalizationPreprocessor` — Normalize currents/errors by limits
-- `ActionDenormalizer` — Convert normalized voltage to physical
-- `DqToAbcTransformer` — Transform dq voltages to GEM abc action
-- `IdentityProcessor` — Pass-through for physical-space agents
-
-## Running the Benchmark
-
-```bash
-python -m embark.benchmark.run_benchmark
-```
-
-Expected output:
-```
-Simple Integration Test (without NeuroBench)
-============================================
-Results:
-  Steps completed: 500
-  Total reward: -X.XXXX
-  Final tracking error: 0.00 mA
-  Time in target: 453 steps
-  i_d final: 0.0000 A (ref: 0.0000 A)
-  i_q final: 2.0000 A (ref: 2.0000 A)
-
-[OK] Simple test PASSED
-```
-
-## NeuroBench Integration
-
-For full NeuroBench closed-loop benchmark:
+### Run PI Controller (Baseline)
 
 ```python
-from neurobench.benchmarks import BenchmarkClosedLoop
-from neurobench.models import TorchAgent
-from benchmark import PMSMEnv, PIControllerTorchAgent
-
-env = PMSMEnv()
-agent = TorchAgent(PIControllerTorchAgent())
-
-benchmark = BenchmarkClosedLoop(
-    agent=agent,
-    environment=env,
-    weight_update=False,
-    preprocessors=[],
-    postprocessors=[],
-    metric_list=[...],
+from embark.benchmark import (
+    ClosedLoopHarness,
+    PIControllerAgent,
+    PMSMCurrentControlTask,
+    TrackingRMSE,
+    SettlingTime,
 )
 
-results, avg_time = benchmark.run(nr_interactions=10, max_length=500)
+# Create task
+task = PMSMCurrentControlTask.from_config(
+    n_rpm=1000,        # Motor speed [rpm]
+    i_d_ref=0.0,       # d-axis current reference [A]
+    i_q_ref=2.0,       # q-axis current reference [A]
+    max_steps=1000,
+)
+
+# Create PI controller (auto-tuned using Technical Optimum)
+controller = PIControllerAgent.from_system_config(task.physics_engine.config)
+
+# Define metrics
+metrics = [
+    TrackingRMSE(tracked_keys=["i_q", "i_d"]),
+    SettlingTime(tracked_key="i_q", threshold=0.02),
+]
+
+# Run benchmark
+harness = ClosedLoopHarness(task=task, controller=controller, metrics=metrics)
+results = harness.run()
+
+print(f"RMSE i_q: {results['rmse_i_q']*1000:.2f} mA")
+print(f"Settling time: {results['settling_time']*1000:.1f} ms")
+
+task.physics_engine.close()
 ```
 
-## Motor Parameters
+### Run SNN Controller
 
-Default motor parameters (validated against MATLAB/Simulink):
+```python
+from embark.benchmark import (
+    ClosedLoopHarness,
+    PMSMCurrentControlTask,
+    TensorControllerAdapter,
+    TrackingRMSE,
+    SyOpsAccumulator,
+)
+from embark.benchmark.agents import SNNControllerAgent
+from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
 
-| Parameter | Value | Unit |
-|-----------|-------|------|
-| Pole pairs | 3 | - |
-| R_s | 0.543 | Ω |
-| L_d | 1.13 | mH |
-| L_q | 1.42 | mH |
-| Ψ_PM | 16.9 | mWb |
-| I_max | 10.8 | A |
-| U_DC | 48 | V |
-| Control freq | 10 | kHz |
+# Create task
+task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=1000)
 
-## See Also
+# Load trained SNN (TensorController)
+snn = SNNControllerAgent("path/to/checkpoint.pt", track_spikes=True)
 
-- `docs/ARCHITECTURE.md` — Full system architecture
-- `docs/BENCHMARK_METRICS.md` — Metrics documentation
-- `pmsm-pem/` — GEM simulation scripts
+# Processors convert dict<->tensor
+state_proc = MinMaxProcessor(input_keys=["i_d", "i_q"], reference_keys=["i_d_ref", "i_q_ref"])
+action_proc = LinearActionProcessor(
+    output_keys=["v_d", "v_q"],
+    bounds={"v_d": (-48, 48), "v_q": (-48, 48)},
+)
+
+# Wrap with TensorControllerAdapter for unified interface
+controller = TensorControllerAdapter(
+    controller=snn,
+    state_processor=state_proc,
+    action_processor=action_proc,
+)
+controller.configure(task.physics_engine.config, task)
+
+# Metrics
+# Note: SyOpsAccumulator uses data passed via controller_info (from track_spikes=True)
+# For NeuroBench WorkloadMetric, pass `controller.model` to the metric constructor.
+metrics = [TrackingRMSE(tracked_keys=["i_q"]), SyOpsAccumulator()]
+
+# Run - same harness interface as PI controller
+harness = ClosedLoopHarness(task=task, controller=controller, metrics=metrics)
+results = harness.run()
+
+print(f"RMSE: {results['rmse_i_q']*1000:.2f} mA")
+print(f"SyOps/step: {results['syops_per_step']:.1f}")
+
+task.physics_engine.close()
+```
+
+## Controller Protocols
+
+### Controller (Unified Interface)
+
+All controllers (classical and neural) must conform to this unified interface:
+
+```python
+class Controller(Protocol):
+    def reset(self) -> None: ...
+    def __call__(self, state: dict, reference: dict) -> dict: ...
+    def get_state(self) -> dict: ...
+    def set_state(self, state: dict) -> None: ...
+```
+
+- Classical controllers (PI) implement `Controller` directly
+- Neural controllers must be wrapped with `TensorControllerAdapter`
+
+### TensorController (Neural - Before Wrapping)
+
+For SNN/ANN controllers that work with tensors:
+
+```python
+class TensorController(Protocol):
+    def reset(self) -> None: ...
+    def forward(self, observation: torch.Tensor) -> torch.Tensor: ...
+    def get_state(self) -> dict: ...
+    def set_state(self, state: dict) -> None: ...
+```
+
+Use `TensorControllerAdapter` to wrap with processors and conform to `Controller`.
+
+## PI Controller Details
+
+The baseline `PIControllerAgent` in `agents.py` uses **Technical Optimum** tuning:
+
+```
+Kp_d = L_d / (2 * tau)
+Ki_d = R_s / (2 * tau)
+Kp_q = L_q / (2 * tau)
+Ki_q = R_s / (2 * tau)
+```
+
+Features:
+- Decoupling compensation (back-EMF)
+- Anti-windup
+- Voltage limiting
+
+## Physics Engine
+
+`PMSMPhysicsEngine` wraps GEM (gym-electric-motor) for realistic PMSM simulation:
+
+- State: `{i_d, i_q, omega, epsilon, time}`
+- Action: `{v_d, v_q}` or `{v_alpha, v_beta}` in Volts
+- Configurable via `PMSMConfig`

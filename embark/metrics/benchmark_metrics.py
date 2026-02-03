@@ -1048,8 +1048,8 @@ class BenchmarkResult:
             # Formula: LAC = RMSE * log10(SyOps)
             # We use RMSE_iq (torque producing current) as the primary accuracy driver
             rmse = self.accuracy.RMSE_iq
-            syops = max(self.neuromorphic.syops_per_timestep, 1.0) # Avoid log(0)
-            
+            syops = max(self.neuromorphic.syops_per_timestep, 1.0)  # Avoid log(0)
+
             self.lac_score = rmse * np.log10(syops)
 
     def to_dict(self) -> dict[str, any]:
@@ -1088,7 +1088,7 @@ class BenchmarkResult:
             "=" * 70,
             f"Benchmark Result: {self.controller_name}",
             f"Operating Point: id={self.i_d_ref:.1f}A, iq={self.i_q_ref:.1f}A @ {self.speed_rpm:.0f} rpm",
-            f"LAC SCORE:      {self.lac_score:.4f} (Lower is better)", 
+            f"LAC SCORE:      {self.lac_score:.4f} (Lower is better)",
             "=" * 70,
             "",
             "ACCURACY",

@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from embark.utils.paths import DATA_RAW_DIR, MODELS_CHECKPOINTS_DIR  # noqa: E402
-from evaluation.snn.utils.dataset import PMSMDataset, create_dataloaders  # noqa: E402
+from evaluation.snn.utils.dataset import PMSMDataset  # noqa: E402
 from evaluation.snn.models import (  # noqa: E402
     DeltaSNNController,
     LearnedLinearSNNController,
@@ -97,19 +97,19 @@ def train_epoch(
 
         # --- FIX: Initialize State with Teacher Forcing ---
         batch_size = inputs.shape[0]
-        
+
         # Get the default zero-initialized state
         state = model.init_state(batch_size, device)
-        
+
         # If this is a Delta model (which acts as an integrator), we MUST set
         # the initial voltage accumulator to the actual start value of the window.
-        if hasattr(model, 'delta_scale'): 
+        if hasattr(model, "delta_scale"):
             state_list = list(state)
-            
+
             # The last element in DeltaSNN state is the voltage accumulator
             # targets[:, 0, :] is the true voltage at timestep t=0 of this window
             state_list[-1] = targets[:, 0, :].clone()
-            
+
             state = tuple(state_list)
         # --------------------------------------------------
 
@@ -121,7 +121,7 @@ def train_epoch(
 
         # Backward pass
         loss.backward()
-        
+
         if grad_clip > 0:
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
@@ -153,8 +153,8 @@ def validate(
         # --- FIX: Initialize State with Teacher Forcing ---
         batch_size = inputs.shape[0]
         state = model.init_state(batch_size, device)
-        
-        if hasattr(model, 'delta_scale'):
+
+        if hasattr(model, "delta_scale"):
             state_list = list(state)
             state_list[-1] = targets[:, 0, :].clone()
             state = tuple(state_list)
@@ -211,7 +211,7 @@ def train(config: TrainConfig) -> nn.Module:
         model_dir = base_checkpoint_dir / config.run_name
     else:
         model_dir = base_checkpoint_dir / config.model_type
-    
+
     model_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
@@ -261,25 +261,25 @@ def train(config: TrainConfig) -> nn.Module:
             val_dataset, batch_size=config.batch_size, shuffle=False
         )
     else:
-        # We need to update create_dataloaders to pass error_gain too, 
+        # We need to update create_dataloaders to pass error_gain too,
         # or just instantiate manually here to avoid changing signature of create_dataloaders if it is used elsewhere.
         # Let's instantiate manually to be safe and clear.
-        
+
         full_dataset = PMSMDataset(
             data_dir=config.data_dir,
             window_size=config.window_size,
             stride=config.stride,
             error_gain=config.error_gain,
         )
-        
+
         val_size = int(len(full_dataset) * config.val_split)
         train_size = len(full_dataset) - val_size
-        
+
         generator = torch.Generator().manual_seed(42)
         train_dataset, val_dataset = torch.utils.data.random_split(
             full_dataset, [train_size, val_size], generator=generator
         )
-        
+
         train_loader = DataLoader(
             train_dataset,
             batch_size=config.batch_size,
@@ -287,7 +287,7 @@ def train(config: TrainConfig) -> nn.Module:
             num_workers=0,
             pin_memory=True,
         )
-        
+
         val_loader = DataLoader(
             val_dataset,
             batch_size=config.batch_size,
@@ -295,7 +295,7 @@ def train(config: TrainConfig) -> nn.Module:
             num_workers=0,
             pin_memory=True,
         )
-        
+
         print(f"Train: {len(train_dataset)} windows, Val: {len(val_dataset)} windows")
 
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
@@ -409,8 +409,8 @@ def train(config: TrainConfig) -> nn.Module:
         lr = optimizer.param_groups[0]["lr"]
         msg = (
             f"Epoch {epoch:3d}/{config.epochs} | "
-            f"Train: {train_loss:.2e} | "   # Scientific notation
-            f"Val: {val_metrics['loss']:.2e} | " # Scientific notation
+            f"Train: {train_loss:.2e} | "  # Scientific notation
+            f"Val: {val_metrics['loss']:.2e} | "  # Scientific notation
             f"MAE: {val_metrics['mae']:.4f} | "
             f"LR: {lr:.2e}" + (" *" if is_best else "")
         )
@@ -467,7 +467,10 @@ def main():
     )
     parser.add_argument("--stride", type=int, default=50, help="Stride between windows")
     parser.add_argument(
-        "--error_gain", type=float, default=10.0, help="Amplification factor for error signals"
+        "--error_gain",
+        type=float,
+        default=10.0,
+        help="Amplification factor for error signals",
     )
 
     # Model arguments

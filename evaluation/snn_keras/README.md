@@ -98,7 +98,7 @@ Dense(2) + Linear   ← Output (u_d, u_q)
 
 **Input features** (5 total):
 - `i_d`: Normalized d-axis current
-- `i_q`: Normalized q-axis current  
+- `i_q`: Normalized q-axis current
 - `e_d`: Amplified d-axis error (reference - actual)
 - `e_q`: Amplified q-axis error
 - `n`: Normalized motor speed (RPM)
@@ -209,12 +209,12 @@ Since Akida outputs 4-bit integers (range ~[-8, 7] or [0, 15] depending on quant
 # During inference on Raspberry Pi
 def denormalize_output(akida_output, u_max=350.0, quant_scale=0.1):
     """Convert Akida integer output to voltage.
-    
+
     Args:
         akida_output: Integer from Akida (e.g., [3, -2])
         u_max: Maximum voltage limit
         quant_scale: Learned scale from quantization
-        
+
     Returns:
         Voltage in physical units
     """

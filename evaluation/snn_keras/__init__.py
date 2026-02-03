@@ -15,7 +15,7 @@ Example:
 
     config = AkidaConfig(hidden_size=64)
     model = AkidaController(config=config)
-    
+
     # Train and export
     train_and_export(model, data_dir="data/raw/train")
 """
