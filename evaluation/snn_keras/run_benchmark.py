@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 """
-Run benchmark evaluation comparing SNN controller against PI baseline.
+Run benchmark evaluation for Keras/Akida models (Float or Quantized).
 
-This script demonstrates how to use the benchmark framework to evaluate
-a trained SNN controller against the classical PI controller baseline.
+This script allows closed-loop benchmarking of Keras (.keras) or Akida (.fbz) models
+using the standard NeuroBench-aligned harness.
 
 Usage:
-    poetry run python evaluation/core/run_evaluation.py
-
-    # With custom options
-    poetry run python evaluation/core/run_evaluation.py --speed 1500 --iq-ref 3.0
+    poetry run python evaluation/snn_keras/run_benchmark.py --model akida/best_model.keras
 
 """
 
@@ -22,34 +19,24 @@ _project_root = Path(__file__).resolve().parents[2]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from embark.benchmark.adapters import TensorControllerAdapter  # noqa: E402
-from embark.benchmark.agents import (  # noqa: E402
-    PIControllerAgent,
-    SNNControllerAgent,
-)
+from embark.benchmark.agents import PIControllerAgent  # noqa: E402
 from embark.benchmark.harness.closed_loop import ClosedLoopHarness  # noqa: E402
 from embark.benchmark.metrics.accumulators.dynamics import (  # noqa: E402
     Overshoot,
     SettlingTime,
 )
 from embark.benchmark.metrics.accumulators.efficiency import ControlEffort  # noqa: E402
-from embark.benchmark.metrics.accumulators.neuromorphic import (  # noqa: E402
-    SpikeCountAccumulator,
-    SyOpsAccumulator,
-)
 from embark.benchmark.metrics.accumulators.tracking import TrackingRMSE  # noqa: E402
-from embark.benchmark.processors.decoders import LinearActionProcessor  # noqa: E402
-from embark.benchmark.processors.normalizers import MinMaxProcessor  # noqa: E402
 from embark.benchmark.tasks.pmsm_current_control import (  # noqa: E402
     PMSMCurrentControlTask,
 )
-from embark.utils.paths import MODELS_BEST_DIR  # noqa: E402
+from evaluation.snn_keras.akida_agent import AkidaControllerAgent  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Evaluate SNN controller against PI baseline",
+        description="Evaluate Keras/Akida controller against PI baseline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -57,15 +44,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default=str(MODELS_BEST_DIR / "best_model.pt"),
-        help="Path to trained SNN model checkpoint",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device for inference",
+        required=True,
+        help="Path to trained Keras (.keras) or Akida (.fbz) model",
     )
 
     # Operating point
@@ -95,20 +75,8 @@ def parse_args() -> argparse.Namespace:
         default=2000,
         help="Maximum steps per episode",
     )
-    parser.add_argument(
-        "--inference-steps",
-        type=int,
-        default=1,
-        help="Number of SNN timesteps per control step",
-    )
 
     # Output
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        default=True,
-        help="Print detailed output",
-    )
     parser.add_argument(
         "--save-results",
         type=str,
@@ -124,17 +92,14 @@ def main() -> int:
     args = parse_args()
 
     print("=" * 70)
-    print("SNN Controller Benchmark Evaluation")
+    print("Akida/Keras Controller Benchmark Evaluation")
     print("=" * 70)
     print()
 
     # Check if model exists
     model_path = Path(args.model)
     if not model_path.exists():
-        print(f"Error: Model checkpoint not found: {model_path}")
-        print(
-            "Please ensure the model file exists or specify a valid path with --model"
-        )
+        print(f"Error: Model file not found: {model_path}")
         return 1
 
     # Create task
@@ -149,66 +114,45 @@ def main() -> int:
         max_steps=args.max_steps,
     )
 
-    # Metrics
-    # We use separate metric instances for PI and SNN to keep results clean
+    # Metrics factory
     def create_metrics():
         return [
             TrackingRMSE(tracked_keys=["i_q", "i_d"]),
             SettlingTime(tracked_key="i_q", threshold=0.05),  # 5% settling
             Overshoot(tracked_key="i_q"),
             ControlEffort(),
-            # Neuromorphic metrics (will be 0 for PI)
-            SpikeCountAccumulator(),
-            SyOpsAccumulator(),
         ]
 
     # Create controllers
     print("Loading controllers...")
 
-    # 1. PI Controller
+    # 1. PI Controller (Baseline)
     pi_agent = PIControllerAgent.from_system_config(task.physics_engine.config)
     pi_metrics = create_metrics()
     pi_harness = ClosedLoopHarness(task=task, controller=pi_agent, metrics=pi_metrics)
 
-    # 2. SNN Controller
-    # Must wrap SNN agent with TensorControllerAdapter for harness compatibility
-    snn_agent = SNNControllerAgent(
-        checkpoint_path=str(model_path),
-        device=args.device,
-        track_spikes=True,
-        num_inference_steps=args.inference_steps,
-    )
+    # 2. Akida/Keras Controller
+    # AkidaControllerAgent is a DictController, so no adapter needed!
+    try:
+        akida_agent = AkidaControllerAgent(
+            model_path=str(model_path),
+            # Ensure these match your training configuration!
+            i_max=task.physics_engine.config.i_max,
+            u_max=task.physics_engine.config.u_max,
+            error_gain=10.0,  # Standard training gain
+        )
+    except Exception as e:
+        print(f"Failed to load Akida agent: {e}")
+        return 1
 
-    # Define processors for the adapter
-    # These handle normalization (dict -> tensor) and denormalization (tensor -> dict)
-    state_processor = MinMaxProcessor(
-        input_keys=["i_d", "i_q", "omega"],
-        reference_keys=["i_d_ref", "i_q_ref"],
-    )
-    action_processor = LinearActionProcessor(
-        output_keys=["v_d", "v_q"],
-        # Bounds will be set by configure() based on physics limits
-    )
-
-    snn_controller = TensorControllerAdapter(
-        controller=snn_agent,
-        state_processor=state_processor,
-        action_processor=action_processor,
-    )
-    # Important: configure processors with physics limits
-    snn_controller.configure(task.physics_engine.config, task)
-
-    snn_metrics = create_metrics()
-    snn_harness = ClosedLoopHarness(
-        task=task, controller=snn_controller, metrics=snn_metrics
+    akida_metrics = create_metrics()
+    akida_harness = ClosedLoopHarness(
+        task=task, controller=akida_agent, metrics=akida_metrics
     )
 
     print("  PI Controller: Ready")
-    snn_info = snn_agent.get_info()
-    print(
-        f"  SNN Controller: {snn_info['parameters']} parameters, "
-        f"{snn_info['hidden_size']} hidden neurons"
-    )
+    info = akida_agent.get_info()
+    print(f"  Akida Controller: {info['type']} ({info['name']})")
     print()
 
     # Run PI baseline
@@ -219,12 +163,16 @@ def main() -> int:
     print("Done.")
     print()
 
-    # Run SNN controller
+    # Run Akida controller
     print("-" * 70)
-    print("Running SNN Controller")
+    print("Running Akida/Keras Controller")
     print("-" * 70)
-    snn_results = snn_harness.run()
-    print("Done.")
+    try:
+        akida_results = akida_harness.run()
+        print("Done.")
+    except Exception as e:
+        print(f"Error running Akida controller: {e}")
+        akida_results = {}
     print()
 
     # Comparison table
@@ -232,7 +180,7 @@ def main() -> int:
     print("Comparison Summary")
     print("=" * 70)
     print()
-    print(f"{'Metric':<25} {'PI Controller':>18} {'SNN Controller':>18}")
+    print(f"{'Metric':<25} {'PI Controller':>18} {'Akida Controller':>18}")
     print("-" * 70)
 
     # Helper to safe get metric
@@ -243,49 +191,28 @@ def main() -> int:
     # Accuracy metrics
     print(
         f"{'RMSE i_q [A]':<25} {get_val(pi_results, 'rmse_i_q'):>18.4f} "
-        f"{get_val(snn_results, 'rmse_i_q'):>18.4f}"
+        f"{get_val(akida_results, 'rmse_i_q'):>18.4f}"
     )
     print(
         f"{'RMSE i_d [A]':<25} {get_val(pi_results, 'rmse_i_d'):>18.4f} "
-        f"{get_val(snn_results, 'rmse_i_d'):>18.4f}"
+        f"{get_val(akida_results, 'rmse_i_d'):>18.4f}"
     )
 
     # Dynamics metrics
     print(
         f"{'Settling time i_q [s]':<25} {get_val(pi_results, 'settling_time'):>18.4f} "
-        f"{get_val(snn_results, 'settling_time'):>18.4f}"
+        f"{get_val(akida_results, 'settling_time'):>18.4f}"
     )
     print(
         f"{'Overshoot i_q [%]':<25} {get_val(pi_results, 'overshoot'):>18.1f} "
-        f"{get_val(snn_results, 'overshoot'):>18.1f}"
+        f"{get_val(akida_results, 'overshoot'):>18.1f}"
     )
 
     # Efficiency
     print(
         f"{'Control Effort':<25} {get_val(pi_results, 'control_effort'):>18.1f} "
-        f"{get_val(snn_results, 'control_effort'):>18.1f}"
+        f"{get_val(akida_results, 'control_effort'):>18.1f}"
     )
-
-    # Neuromorphic metrics (SNN only)
-    snn_spikes = get_val(snn_results, "total_spikes")
-    if snn_spikes > 0:
-        print()
-        print("-" * 70)
-        print("Neuromorphic Metrics (SNN only)")
-        print("-" * 70)
-        print(f"{'Total spikes':<25} {'-':>18} {snn_spikes:>18,.0f}")
-        print(
-            f"{'Spikes per step':<25} {'-':>18} "
-            f"{get_val(snn_results, 'spikes_per_step'):>18.1f}"
-        )
-        print(
-            f"{'Total SyOps':<25} {'-':>18} "
-            f"{get_val(snn_results, 'total_syops'):>18,.0f}"
-        )
-        print(
-            f"{'SyOps per step':<25} {'-':>18} "
-            f"{get_val(snn_results, 'syops_per_step'):>18,.0f}"
-        )
 
     print()
     print("=" * 70)
@@ -303,7 +230,7 @@ def main() -> int:
                 "i_q_ref": args.iq_ref,
             },
             "pi_controller": pi_results,
-            "snn_controller": snn_results,
+            "akida_controller": akida_results,
         }
 
         output_path = Path(args.save_results)

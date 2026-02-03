@@ -258,6 +258,44 @@ class SNNControllerAgent(TensorController):
         # Last inference info for metrics
         self.last_info: dict[str, Any] | None = None
 
+        # Pre-calculate layer fan-outs for efficient SyOps tracking
+        self._layer_fanouts: list[int] = []
+        self._recurrent_fanouts: list[int] = []
+        self._cache_layer_fanouts()
+
+    def _cache_layer_fanouts(self) -> None:
+        """Cache fan-out values for SyOps calculation."""
+        self._layer_fanouts = []
+        self._recurrent_fanouts = []
+
+        # Check if recurrent
+        is_recurrent = "RecurrentSNNController" in self.model.__class__.__name__
+
+        def get_out_features(layer_idx):
+            if layer_idx < len(self.model.layers):
+                return self.model.layers[layer_idx].out_features
+            if hasattr(self.model, "fc_out"):
+                return self.model.fc_out.out_features
+            elif hasattr(self.model, "pop_out") and hasattr(self.model.pop_out, "fc"):
+                return self.model.pop_out.fc.out_features
+            elif hasattr(self.model, "ttfs_out") and hasattr(self.model.ttfs_out, "fc"):
+                return self.model.ttfs_out.fc.out_features
+            return 0
+
+        num_hidden = len(self.model.layers)
+
+        for i in range(num_hidden):
+            # Feedforward connections to next layer (or output)
+            next_width = get_out_features(i + 1)
+            self._layer_fanouts.append(next_width)
+
+            # Recurrent connections (self-feedback)
+            if is_recurrent:
+                current_width = get_out_features(i)
+                self._recurrent_fanouts.append(current_width)
+            else:
+                self._recurrent_fanouts.append(0)
+
     def reset(self) -> None:
         """Reset neuron membrane potentials and spike tracking."""
         self._snn_state = None
@@ -333,10 +371,20 @@ class SNNControllerAgent(TensorController):
             self._inference_times.append(t_end - t_start)
             self._total_control_steps += 1
 
+            # Calculate SyOps for this step
+            step_syops = 0
+            if spike_info and "spike_counts" in spike_info:
+                counts = spike_info["spike_counts"]
+                for i, count in enumerate(counts):
+                    if i < len(self._layer_fanouts):
+                        step_syops += count * self._layer_fanouts[i]
+                        step_syops += count * self._recurrent_fanouts[i]
+
             self.last_info = {
                 "total_spikes": step_spikes,
                 "sparsity": np.mean(step_sparsities) if step_sparsities else 0.0,
                 "latency_s": t_end - t_start,
+                "syops": step_syops,  # Per-step SyOps for accumulators
             }
 
         return torch.clamp(voltage_normalized, -1.0, 1.0)
@@ -366,33 +414,11 @@ class SNNControllerAgent(TensorController):
 
         total_syops = 0
         if self._layer_spike_counts is not None:
-
-            def get_out_features(layer_idx):
-                if layer_idx < len(self.model.layers):
-                    return self.model.layers[layer_idx].out_features
-                if hasattr(self.model, "fc_out"):
-                    return self.model.fc_out.out_features
-                elif hasattr(self.model, "pop_out") and hasattr(
-                    self.model.pop_out, "fc"
-                ):
-                    return self.model.pop_out.fc.out_features
-                elif hasattr(self.model, "ttfs_out") and hasattr(
-                    self.model.ttfs_out, "fc"
-                ):
-                    return self.model.ttfs_out.fc.out_features
-                return 0
-
-            num_hidden = len(self.model.layers)
-            is_recurrent = "RecurrentSNNController" in self.model.__class__.__name__
-
+            # Re-calculate total SyOps using cached fanouts
             for i, count in enumerate(self._layer_spike_counts):
-                if i >= num_hidden:
-                    break
-                next_layer_width = get_out_features(i + 1)
-                total_syops += int(count * next_layer_width)
-                if is_recurrent:
-                    current_layer_width = get_out_features(i)
-                    total_syops += int(count * current_layer_width)
+                if i < len(self._layer_fanouts):
+                    total_syops += int(count * self._layer_fanouts[i])
+                    total_syops += int(count * self._recurrent_fanouts[i])
 
         stats = {
             "total_spikes": int(self._total_spikes),
