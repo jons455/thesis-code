@@ -455,3 +455,25 @@ poetry run python scripts/test_benchmark_api.py
 - Verified fix with `SNN_membrane` model: now reports ~49 SyOps/step
 
 *Last updated: 2026-01-28*
+
+## 2026-02-03
+
+### Akida HIL Integration: Remote Controller + Server
+
+**What was done**:
+- Added `RemoteAkidaPolicy` as a `TensorController` client for TCP-based inference.
+- Implemented Akida inference server script in `akida/server/inference_server.py` (echo mode + model mode).
+- Added local echo verification script: `scripts/verify_hil_connectivity.py`.
+- Documented a quick-start How-To in `docs/akida/FEATURE_AKIDA_HIL.md`.
+
+**Why this matters**:
+- Enables hardware-in-the-loop evaluation with Akida while keeping the harness synchronous.
+- Provides a concrete, reproducible pipeline for PC-to-Pi inference with minimal friction.
+
+**Key Files**:
+- `embark/benchmark/controllers/remote/akida_policy.py`
+- `akida/server/inference_server.py`
+- `scripts/verify_hil_connectivity.py`
+- `docs/akida/FEATURE_AKIDA_HIL.md`
+
+*Last updated: 2026-02-03*
