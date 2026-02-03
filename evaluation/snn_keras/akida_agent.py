@@ -107,6 +107,11 @@ class AkidaControllerAgent(DictController):
 
         # --- INFERENCE ---
         if self.is_akida_hardware:
+            # Akida expects (N, H, W, C) = (N, 1, 1, 5) for dense layers
+            input_vector = input_vector.reshape(
+                input_vector.shape[0], 1, 1, input_vector.shape[1]
+            )
+
             # Akida expect quantized inputs usually, but Model() handles conversion
             # if InputQuantizer was part of the model (which cnn2snn adds by default).
             # However, akida.Model.predict returns standard numpy array of integers/floats.
