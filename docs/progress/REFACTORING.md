@@ -91,6 +91,36 @@ The original design followed a Gym-style "monolithic environment" pattern where 
 
 ---
 
+## II.a NeuroBench Alignment Strategy
+
+### Goal
+Align the refactor with the NeuroBench architecture (models, processors, metrics, hooks),
+while extending it for closed-loop control tasks.
+
+### What We Reuse from NeuroBench
+- `NeuroBenchModel` wrappers for SNN/ANN controllers
+- Hook-based metrics (e.g., `SynapticOperations`, `ActivationSparsity`)
+- Processor manager pattern (pre-/post-processing)
+
+### What We Add (Closed-Loop Extensions)
+- `ClosedLoopBenchmark` (NeuroBench-style `Benchmark` but with physics stepping)
+- `ClosedLoopTask` + `PhysicsEngine` interfaces (control-specific)
+- Control metrics accumulators (tracking, dynamics, safety, efficiency)
+
+### Mapping to NeuroBench Modules
+| NeuroBench Package | Our Extension |
+|--------------------|---------------|
+| `neurobench.models` | `embark/benchmark/models` |
+| `neurobench.benchmarks` | `embark/benchmark/benchmarks/closed_loop.py` |
+| `neurobench.preprocessing` | `embark/benchmark/preprocessing` |
+| `neurobench.postprocessing` | `embark/benchmark/postprocessing` |
+| `neurobench.metrics` | `embark/benchmark/metrics/control` |
+
+### Expected Outcome
+- SNN controllers automatically expose SyOps/sparsity through NeuroBench hooks
+- Closed-loop evaluation matches NeuroBench metric semantics
+- Architecture remains aligned with upstream NeuroBench (2025_GC branch)
+
 ## III. Protocol Definitions
 
 ### 1. PhysicsEngine Protocol
@@ -489,6 +519,11 @@ embark/
 
 ## V. Migration Plan
 
+### Phase 0: NeuroBench Alignment (Day 0)
+- [ ] Add NeuroBench as dependency (pin to 2025_GC branch if required)
+- [ ] Create `embark/benchmark/models/` with `NeuroBenchModel` wrappers
+- [ ] Verify NeuroBench hooks work with SNN controller for SyOps/sparsity
+
 ### Phase 1: Interface Definition (Day 1)
 - [ ] Create `embark/benchmark/interfaces/` package
 - [ ] Define all protocol classes with full type hints
@@ -496,7 +531,7 @@ embark/
 - [ ] Write protocol compliance tests
 
 ### Phase 2: Harness Implementation (Day 1-2)
-- [ ] Implement `ClosedLoopHarness`
+- [ ] Implement `ClosedLoopBenchmark` (NeuroBench-style run loop)
 - [ ] Implement `IdentityProcessor` (passthrough for dict controllers)
 - [ ] Write harness unit tests
 
@@ -521,7 +556,7 @@ embark/
 - [ ] Verify metric values match pre-refactor
 
 ### Phase 6: SNN Integration (Day 5-6)
-- [ ] Create `SNNControllerWrapper` (wraps existing SNN models)
+- [ ] Create `SNNControllerWrapper` (NeuroBenchModel wrapper)
 - [ ] Ensure spike statistics flow to neuromorphic metrics
 - [ ] Test full SNN benchmark pipeline
 
