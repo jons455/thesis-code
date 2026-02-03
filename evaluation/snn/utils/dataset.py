@@ -149,7 +149,6 @@ class PMSMDataset(Dataset):
         return i_cols, u_cols, ref_cols
 
     def _load_file(self, filepath: Path) -> tuple[np.ndarray, np.ndarray] | None:
-       
         """Load a single CSV file and extract input/target arrays.
 
         Args:
@@ -181,17 +180,17 @@ class PMSMDataset(Dataset):
         i_q = df[i_cols[1]].values
         u_d = df[u_cols[0]].values
         u_q = df[u_cols[1]].values
-        
+
         # NEW: Extract Speed (n)
         # Check if 'n' or 'n_rpm' exists (standard names in your generator)
-        if 'n' in df.columns:
-            n_rpm = df['n'].values
-        elif 'n_rpm' in df.columns:
-            n_rpm = df['n_rpm'].values
+        if "n" in df.columns:
+            n_rpm = df["n"].values
+        elif "n_rpm" in df.columns:
+            n_rpm = df["n_rpm"].values
         else:
             # Fallback for old files (assume 0 if missing, but better to fail)
             # print(f"Warning: No speed in {filepath.name}")
-            return None 
+            return None
 
         # --- SAFETY CLAMPING ---
         limit = self.config.u_max * 1.2
@@ -204,7 +203,7 @@ class PMSMDataset(Dataset):
             u_q[i] = np.clip(u_q[i], -self.config.u_max, self.config.u_max)
 
         # --- COMPUTE INPUT FEATURES ---
-        
+
         # 1. Reference
         if ref_cols and all(c in df.columns for c in ref_cols):
             i_d_ref = df[ref_cols[0]].values
@@ -219,20 +218,20 @@ class PMSMDataset(Dataset):
 
         # 3. Normalization & Amplification
         GAIN = self.error_gain
-        
+
         # State Normalization
         i_d_norm = i_d / self.config.i_max
         i_q_norm = i_q / self.config.i_max
-        
+
         # Error Amplification
         e_d_norm = np.clip((e_d / self.config.i_max) * GAIN, -1.0, 1.0)
         e_q_norm = np.clip((e_q / self.config.i_max) * GAIN, -1.0, 1.0)
-        
+
         # NEW: Speed Normalization
-        # We assume Max RPM is around 6000 for standard PMSM, 
+        # We assume Max RPM is around 6000 for standard PMSM,
         # or we can use a safe upper bound like 4000.
         # Let's use 4000 to keep it in [-1, 1] for your 3000 RPM tests.
-        N_MAX = 4000.0 
+        N_MAX = 4000.0
         n_norm = n_rpm / N_MAX
 
         # 4. Target Normalization

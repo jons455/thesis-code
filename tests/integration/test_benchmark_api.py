@@ -1,37 +1,46 @@
-"""Test the benchmark API with PI controller."""
+"""Integration tests for the benchmark API."""
 
-import sys
-from pathlib import Path
+import pytest
 
-# Add project root to sys.path
-project_root = Path(__file__).resolve().parents[2]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+pytest.importorskip("gym_electric_motor")
 
-from embark.benchmark.agents import PIControllerAgent  # noqa: E402
-from embark.benchmark.controller_interface import run_benchmark  # noqa: E402
-from embark.benchmark.pmsm_env import PMSMEnv  # noqa: E402
+from embark.benchmark import (  # noqa: E402
+    ClosedLoopHarness,
+    PIControllerAgent,
+    PMSMCurrentControlTask,
+    TrackingRMSE,
+)
 
-print("Testing Benchmark API")
-print("=" * 60)
 
-# Create environment
-env = PMSMEnv(n_rpm=1000, i_d_ref=0.0, i_q_ref=5.0, max_steps=2000)
-print(f"Environment: {env.n_rpm} rpm, i_q_ref = {env.i_q_ref} A")
+def test_benchmark_with_pi_controller():
+    """Test running a benchmark with PI controller using new harness."""
+    task = PMSMCurrentControlTask.from_config(
+        n_rpm=1000,
+        i_d_ref=0.0,
+        i_q_ref=2.0,
+        max_steps=100,
+    )
+    controller = PIControllerAgent.from_system_config(task.physics_engine.config)
+    metrics = [TrackingRMSE(tracked_keys=["i_q", "i_d"])]
 
-# Create PI controller
-controller = PIControllerAgent()
-print(f"Controller: {controller.__class__.__name__}")
+    harness = ClosedLoopHarness(task=task, controller=controller, metrics=metrics)
+    results = harness.run()
 
-# Run benchmark
-print("\nRunning benchmark...")
-results = run_benchmark(controller, env, verbose=True)
+    assert "steps" in results
+    assert results["steps"] == 100
+    assert "rmse_i_q" in results
+    assert results["rmse_i_q"] >= 0
 
-# Print summary
-print("\n" + results.summary())
+    task.physics_engine.close()
 
-# Close environment
-env.close()
 
-print("\n" + "=" * 60)
-print("Benchmark API test complete!")
+def test_benchmark_api_smoke_test():
+    """Smoke test that the benchmark API works end-to-end."""
+    task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=50)
+    controller = PIControllerAgent.from_system_config(task.physics_engine.config)
+
+    harness = ClosedLoopHarness(task=task, controller=controller)
+    results = harness.run()
+
+    assert results["steps"] == 50
+    task.physics_engine.close()

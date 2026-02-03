@@ -24,8 +24,10 @@ import pandas as pd
 try:
     from tqdm import tqdm
 except ImportError:
+
     def tqdm(iterable, **kwargs):
         return iterable
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -67,7 +69,7 @@ def generate_episode(
         step_time=step_time,
         max_steps=max_steps,
     )
-    
+
     # Use robust parametric tuning (auto-scales with motor parameters)
     agent = PIControllerAgent(
         kp_d=DEFAULT_PMSM.kp_d_optimum,
@@ -82,25 +84,24 @@ def generate_episode(
     # Track current active references (they will change during the episode)
     current_iq_ref = i_q_initial
     current_id_ref = i_d_initial
-    
+
     # APRBS Configuration: Change target every 50ms (500 steps @ 100us)
-    step_interval = 500  
+    step_interval = 500
 
     data = []
-    
+
     for step in range(max_steps):
-        
         # --- DYNAMIC PROFILE LOGIC (APRBS) ---
         if step > 0 and step % step_interval == 0:
             # Generate a new random target for q-axis (Torque)
             # Range [-8.0, 8.0] covers motoring, braking, and zero-crossing.
             # We stay slightly below I_max (10.8A) to avoid permanent saturation.
             current_iq_ref = np.random.uniform(-8.0, 8.0)
-            
+
             # Apply new reference to the environment
             # (Crucial so that the error calculation inside Env is correct)
             env.i_q_ref = current_iq_ref
-            
+
             # Note: We keep i_d_ref constant (usually 0) for now.
             # To learn Field Weakening, you could vary i_d_ref here too.
         # -------------------------------------
@@ -123,8 +124,8 @@ def generate_episode(
                 "n": n_rpm,
                 "u_d": u_d,
                 "u_q": u_q,
-                "i_d_ref": current_id_ref,   # Current active reference
-                "i_q_ref": current_iq_ref,   # Current active reference
+                "i_d_ref": current_id_ref,  # Current active reference
+                "i_q_ref": current_iq_ref,  # Current active reference
             }
         )
 
@@ -140,7 +141,7 @@ def generate_episode(
 def validate_episode(df: pd.DataFrame, threshold: float = 0.5) -> bool:
     """
     Check if episode achieved good tracking.
-    
+
     For multi-step data, we check if the final state matches the final reference.
     """
     final_error_q = abs(df["i_q"].iloc[-1] - df["i_q_ref"].iloc[-1])
@@ -148,8 +149,8 @@ def validate_episode(df: pd.DataFrame, threshold: float = 0.5) -> bool:
     # Check sign is correct (same sign as reference)
     ref_end = df["i_q_ref"].iloc[-1]
     val_end = df["i_q"].iloc[-1]
-    
-    if abs(ref_end) > 0.1: # Only check sign if reference is not effectively zero
+
+    if abs(ref_end) > 0.1:  # Only check sign if reference is not effectively zero
         sign_correct = np.sign(val_end) == np.sign(ref_end)
     else:
         sign_correct = True
@@ -162,7 +163,7 @@ def main():
     parser.add_argument(
         "--num-files",
         type=int,
-        default=500, # Default increased to 500 for better coverage
+        default=500,  # Default increased to 500 for better coverage
         help="Number of training files to generate",
     )
     parser.add_argument(
@@ -198,11 +199,11 @@ def main():
     for _ in tqdm(range(args.num_files), desc="Generating"):
         # 1. Random Constant Speed per Episode (Simulating Mechanical Inertia)
         n_rpm = np.random.uniform(500, 2500)
-        
+
         # 2. Initial References (Will be changed by APRBS logic immediately or later)
-        i_d_start = 0.0 # Standard MTPA
-        i_q_start = 0.0 # Start from zero load
-        
+        i_d_start = 0.0  # Standard MTPA
+        i_q_start = 0.0  # Start from zero load
+
         # 3. Generate Episode
         df = generate_episode(
             n_rpm=n_rpm,

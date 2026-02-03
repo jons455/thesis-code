@@ -1,16 +1,18 @@
-"""NeuroBench-compatible controller agents for PMSM current control benchmark.
+"""NeuroBench-aligned controller agents for PMSM current control benchmark.
 
-This module provides controller agents that follow the NeuroBench agent
-interface for closed-loop control benchmarks.
+This module provides controller agents that follow the NeuroBench-aligned
+interfaces for closed-loop control benchmarks.
 
 Available agents:
-    - PIControllerAgent: Classical PI controller (baseline)
-    - SNNControllerAgent: Spiking neural network controller (Membrane or Population)
+    - PIControllerAgent: Classical PI controller implementing DictController
+    - SNNControllerAgent: Spiking neural network implementing TensorController
 
-All agents implement the NeuroBench agent interface with ``__call__(state)``
-returning an action and ``reset()`` for stateful agents.
+All agents follow the protocols defined in embark.benchmark.interfaces.
 """
 
+from __future__ import annotations
+
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,7 +20,15 @@ import numpy as np
 import torch
 from torch import nn
 
+from embark.benchmark.interfaces import (
+    ActionDict,
+    DictController,
+    ReferenceDict,
+    StateDict,
+    TensorController,
+)
 from embark.utils.config import DEFAULT_PMSM
+
 
 # =============================================================================
 # PI Controller Parameters (Technical Optimum)
@@ -27,85 +37,45 @@ from embark.utils.config import DEFAULT_PMSM
 
 @dataclass
 class PIParameters:
-    """
-    PI controller parameters using Technical Optimum tuning.
+    """PI controller parameters using Technical Optimum tuning."""
 
-    Kp = L / (2 * Ts)
-    Ki = R / (2 * Ts)
-
-    where Ts is the control sampling period.
-    """
-
-    # Motor parameters
-    L_d: float = DEFAULT_PMSM.l_d  # d-axis inductance [H]
-    L_q: float = DEFAULT_PMSM.l_q  # q-axis inductance [H]
-    R_s: float = DEFAULT_PMSM.r_s  # Stator resistance [Ω]
-    psi_pm: float = DEFAULT_PMSM.psi_p  # PM flux linkage [Wb]
-    p: int = DEFAULT_PMSM.p  # Pole pairs
-
-    # Limits
-    i_max: float = DEFAULT_PMSM.i_max  # Maximum current [A]
-    u_max: float = DEFAULT_PMSM.u_max  # Maximum voltage [V]
-
-    # Sampling
-    Ts: float = DEFAULT_PMSM.tau  # Control period [s] (10 kHz)
+    L_d: float = DEFAULT_PMSM.l_d
+    L_q: float = DEFAULT_PMSM.l_q
+    R_s: float = DEFAULT_PMSM.r_s
+    psi_pm: float = DEFAULT_PMSM.psi_p
+    p: int = DEFAULT_PMSM.p
+    i_max: float = DEFAULT_PMSM.i_max
+    u_max: float = DEFAULT_PMSM.u_max
+    Ts: float = DEFAULT_PMSM.tau
 
     @property
     def Kp_d(self) -> float:
-        """Proportional gain for d-axis."""
         return self.L_d / (2 * self.Ts)
 
     @property
     def Ki_d(self) -> float:
-        """Integral gain for d-axis."""
         return self.R_s / (2 * self.Ts)
 
     @property
     def Kp_q(self) -> float:
-        """Proportional gain for q-axis."""
         return self.L_q / (2 * self.Ts)
 
     @property
     def Ki_q(self) -> float:
-        """Integral gain for q-axis."""
         return self.R_s / (2 * self.Ts)
 
 
 # =============================================================================
-# PI Controller Agent
+# PI Controller Agent (DictController Protocol)
 # =============================================================================
 
 
-class PIControllerAgent:
-    """
-    Classical PI controller for PMSM current control.
+class PIControllerAgent(DictController):
+    """Classical PI controller implementing DictController protocol.
 
     This serves as the baseline controller for benchmarking.
-    Implements decoupled PI control with anti-windup and
-    back-EMF compensation.
-
-    The agent interface matches NeuroBench expectations:
-    - __call__(state) returns action
-    - reset() clears integrator states
-
-    Parameters
-    ----------
-    params : PIParameters
-        Controller tuning parameters
-    decoupling : bool
-        Enable cross-coupling compensation
-    anti_windup : bool
-        Enable anti-windup on integrators
-
-    Example
-    -------
-        agent = PIControllerAgent()
-        state, _ = env.reset()
-        action = agent(state)  # Returns normalized [u_d, u_q]
+    Implements decoupled PI control with anti-windup and back-EMF compensation.
     """
-
-    INPUT_SPACE = "physical"
-    OUTPUT_SPACE = "physical"
 
     def __init__(
         self,
@@ -121,232 +91,126 @@ class PIControllerAgent:
         self.decoupling = decoupling
         self.anti_windup = anti_windup
 
-        # Override gains if provided directly
         self._kp_d = kp_d
         self._ki_d = ki_d
         self._kp_q = kp_q
         self._ki_q = ki_q
 
-        # Integrator states
         self.integral_d = 0.0
         self.integral_q = 0.0
-
-        # Previous errors for derivative (if needed)
         self.prev_e_d = 0.0
         self.prev_e_q = 0.0
 
-        # Omega for decoupling (estimated from environment)
-        self.omega_el = 0.0
-
     @property
     def kp_d(self) -> float:
-        """Proportional gain for d-axis."""
         return self._kp_d if self._kp_d is not None else self.params.Kp_d
 
     @property
     def ki_d(self) -> float:
-        """Integral gain for d-axis."""
         return self._ki_d if self._ki_d is not None else self.params.Ki_d
 
     @property
     def kp_q(self) -> float:
-        """Proportional gain for q-axis."""
         return self._kp_q if self._kp_q is not None else self.params.Kp_q
 
     @property
     def ki_q(self) -> float:
-        """Integral gain for q-axis."""
         return self._ki_q if self._ki_q is not None else self.params.Ki_q
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset integrator states."""
         self.integral_d = 0.0
         self.integral_q = 0.0
         self.prev_e_d = 0.0
         self.prev_e_q = 0.0
 
-    def set_omega(self, omega_el: float):
-        """Set electrical angular velocity for decoupling."""
-        self.omega_el = omega_el
+    def get_state(self) -> dict[str, Any]:
+        """Serialize internal state for checkpointing."""
+        return {
+            "integral_d": self.integral_d,
+            "integral_q": self.integral_q,
+            "prev_e_d": self.prev_e_d,
+            "prev_e_q": self.prev_e_q,
+        }
 
-    def __call__(self, state: np.ndarray) -> np.ndarray:
-        """
-        Compute PI control action.
+    def set_state(self, state: dict[str, Any]) -> None:
+        """Restore internal state from checkpoint."""
+        self.integral_d = state.get("integral_d", 0.0)
+        self.integral_q = state.get("integral_q", 0.0)
+        self.prev_e_d = state.get("prev_e_d", 0.0)
+        self.prev_e_q = state.get("prev_e_q", 0.0)
 
-        Parameters
-        ----------
-        state : np.ndarray
-            Physical state [i_d, i_q, e_d, e_q] from PMSMEnv
+    def __call__(self, state: StateDict, reference: ReferenceDict) -> ActionDict:
+        """Compute PI control action from state and reference dicts."""
+        i_d = state["i_d"]
+        i_q = state["i_q"]
+        i_d_ref = reference["i_d_ref"]
+        i_q_ref = reference["i_q_ref"]
 
-        Returns
-        -------
-        np.ndarray
-            Physical voltage command [u_d, u_q] in [V]
-        """
-        # Handle torch tensor input
-        if isinstance(state, torch.Tensor):
-            state = state.cpu().numpy().flatten()
+        e_d = i_d_ref - i_d
+        e_q = i_q_ref - i_q
 
-        # Ensure state is a flat numpy array
-        state = np.asarray(state).flatten()
-
-        # Extract from physical state
-        # state = [i_d, i_q, e_d, e_q]
-        i_d = float(state[0])
-        i_q = float(state[1])
-        e_d = float(state[2])
-        e_q = float(state[3])
-
-        # PI control
         # P term
         u_d_p = self.kp_d * e_d
         u_q_p = self.kp_q * e_q
 
-        # I term (with Ts multiplication for discrete integration)
+        # I term
         self.integral_d += e_d * self.params.Ts
         self.integral_q += e_q * self.params.Ts
-
         u_d_i = self.ki_d * self.integral_d
         u_q_i = self.ki_q * self.integral_q
 
-        # Total PI output
         u_d = u_d_p + u_d_i
         u_q = u_q_p + u_q_i
 
-        # Decoupling compensation
-        if self.decoupling:
-            # Cross-coupling terms
-            u_d_dec = -self.omega_el * self.params.L_q * i_q
-            u_q_dec = (
-                self.omega_el * self.params.L_d * i_d
-                + self.omega_el * self.params.psi_pm
-            )
-
-            u_d += u_d_dec
-            u_q += u_q_dec
+        # Decoupling
+        if self.decoupling and "omega" in state:
+            omega_el = state["omega"] * self.params.p
+            u_d += -omega_el * self.params.L_q * i_q
+            u_q += omega_el * self.params.L_d * i_d + omega_el * self.params.psi_pm
 
         # Voltage limiting
         u_mag = float(np.sqrt(u_d**2 + u_q**2))
-        u_limit = self.params.u_max * 0.95  # 95% to have margin
+        u_limit = self.params.u_max * 0.95
 
         if u_mag > u_limit:
             scale = u_limit / u_mag
-            u_d = float(u_d * scale)
-            u_q = float(u_q * scale)
-
-            # Anti-windup: limit integrator growth
+            u_d *= scale
+            u_q *= scale
             if self.anti_windup:
                 self.integral_d *= 0.99
                 self.integral_q *= 0.99
 
-        return np.array([u_d, u_q], dtype=np.float32)
+        return {"v_d": float(u_d), "v_q": float(u_q)}
 
-    def reset_hooks(self):
-        """NeuroBench compatibility: reset any registered hooks."""
-
-
-# =============================================================================
-# PyTorch Wrapper for NeuroBench Compatibility
-# =============================================================================
-
-
-class PIControllerTorchAgent(nn.Module):
-    """
-    PyTorch wrapper around PI controller for NeuroBench TorchAgent compatibility.
-
-    This wraps the PI controller as a PyTorch module so it can be used
-    with NeuroBench's TorchAgent interface for metrics computation.
-    """
-
-    def __init__(self, params: PIParameters | None = None):
-        super().__init__()
-        self.pi_controller = PIControllerAgent(params)
-
-        self.INPUT_SPACE = self.pi_controller.INPUT_SPACE
-        self.OUTPUT_SPACE = self.pi_controller.OUTPUT_SPACE
-
-        # Dummy parameter so PyTorch recognizes this as a module
-        self.dummy_param = nn.Parameter(torch.zeros(1), requires_grad=False)
-
-    def forward(self, state: torch.Tensor) -> torch.Tensor:
-        """Forward pass - compute control action."""
-        # Handle batch dimension
-        if state.dim() == 1:
-            # Single sample without batch dim
-            action = self.pi_controller(state.cpu().numpy())
-            return torch.tensor(action, dtype=torch.float32).unsqueeze(0)
-        elif state.dim() == 2:
-            # Batched input - process each sample
-            batch_size = state.shape[0]
-            actions = []
-            for i in range(batch_size):
-                action = self.pi_controller(state[i].cpu().numpy())
-                actions.append(action)
-            return torch.tensor(np.stack(actions), dtype=torch.float32)
-        else:
-            raise ValueError(f"Expected 1D or 2D input, got {state.dim()}D")
-
-    def reset(self):
-        """Reset controller state."""
-        self.pi_controller.reset()
+    @classmethod
+    def from_system_config(
+        cls, config, tuning: str = "technical_optimum"
+    ) -> "PIControllerAgent":
+        """Factory method for auto-tuning from system config."""
+        params = PIParameters(
+            L_d=getattr(config, "l_d", DEFAULT_PMSM.l_d),
+            L_q=getattr(config, "l_q", DEFAULT_PMSM.l_q),
+            R_s=getattr(config, "r_s", DEFAULT_PMSM.r_s),
+            psi_pm=getattr(config, "psi_p", DEFAULT_PMSM.psi_p),
+            p=getattr(config, "p", DEFAULT_PMSM.p),
+            u_max=config.u_max,
+            Ts=config.tau,
+        )
+        return cls(params=params)
 
 
 # =============================================================================
-# SNN Controller Agent
+# SNN Controller Agent (TensorController Protocol)
 # =============================================================================
 
 
-class SNNControllerAgent:
+class SNNControllerAgent(TensorController):
+    """Spiking Neural Network controller implementing TensorController protocol.
+
+    Uses a trained SNN model from evaluation.snn.models. Handles normalization
+    internally and tracks spike statistics for neuromorphic metrics.
     """
-    Spiking Neural Network controller for PMSM current control.
-
-    Uses a trained SNN model (MembraneSNNController or PopulationSNNController)
-    from evaluation.snn.models.
-
-    The SNN uses slow-leak LIF output neurons whose membrane potential
-    directly encodes the voltage command (no external integrator needed),
-    OR a population-coded output layer for Akida compatibility.
-
-    Following NeuroBench/literature recommendations, this agent supports
-    multiple internal SNN timesteps per control step for proper spike
-    integration (Option B from literature review).
-
-    IMPORTANT: The SNN is trained on normalized data (inputs divided by i_max,
-    outputs divided by u_max). This agent handles normalization/denormalization
-    internally so it can interface with PMSMEnv which uses physical units.
-
-    Parameters
-    ----------
-    checkpoint_path : str
-        Path to trained model checkpoint (.pt file)
-    device : str
-        Device for inference ('cpu' or 'cuda')
-    track_spikes : bool
-        Whether to track spike activity for neuromorphic metrics
-    num_inference_steps : int
-        Number of SNN timesteps per control step (default 1).
-        Higher values allow better spike integration but increase latency.
-        Literature recommends 5-20 for control tasks.
-    i_max : float
-        Maximum current for normalization [A]. Should match training data.
-    u_max : float
-        Maximum voltage for denormalization [V]. Should match training data.
-
-    Example
-    -------
-        agent = SNNControllerAgent("snn/checkpoints/best_model.pt", num_inference_steps=10)
-        state, _ = env.reset()
-        agent.reset()  # Reset neuron states for new episode
-        action = agent(state)  # Returns physical [u_d, u_q] in Volts
-
-        # After episode, get spike statistics
-        spike_stats = agent.get_spike_statistics()
-    """
-
-    # Agent interface: accepts physical units, outputs physical units
-    # (normalization/denormalization handled internally)
-    INPUT_SPACE = "physical"
-    OUTPUT_SPACE = "physical"
 
     def __init__(
         self,
@@ -357,11 +221,9 @@ class SNNControllerAgent:
         i_max: float = DEFAULT_PMSM.i_max,
         u_max: float = DEFAULT_PMSM.u_max,
     ):
-        # Import SNN model here to avoid circular imports
         import sys
         from pathlib import Path
 
-        # Add project root to path if needed
         project_root = Path(__file__).resolve().parents[2]
         if str(project_root) not in sys.path:
             sys.path.insert(0, str(project_root))
@@ -372,31 +234,26 @@ class SNNControllerAgent:
         self.checkpoint_path = checkpoint_path
         self.track_spikes = track_spikes
         self.num_inference_steps = num_inference_steps
+        self.i_max = i_max
+        self.u_max = u_max
 
-        # Normalization parameters (must match training data!)
-        self.i_max = i_max  # For normalizing inputs (currents and errors)
-        self.u_max = u_max  # For denormalizing outputs (voltages)
-
-        # Load trained model (detects type automatically)
         self.model = load_snn_model(checkpoint_path, device=device)
         self.model.eval()
 
-        # SNN state (membrane potentials) - persists across timesteps
         self._snn_state: tuple | None = None
-
-        # Spike tracking for neuromorphic metrics
-        self._spike_counts_per_step: list = []  # List of spike counts per timestep
-        self._layer_spike_counts: np.ndarray | None = None  # Cumulative spikes per layer
-        self._sparsities_per_step: list = []  # List of sparsities per timestep
-        self._inference_times: list = []  # Inference latencies
+        self._spike_counts_per_step: list = []
+        self._layer_spike_counts: np.ndarray | None = None
+        self._sparsities_per_step: list = []
+        self._inference_times: list = []
         self._total_spikes: int = 0
-        self._total_control_steps: int = 0  # For spikes per control step
-
-        # Network stats (cached)
+        self._total_control_steps: int = 0
         self._network_stats = self.model.get_network_stats()
 
-    def reset(self):
-        """Reset neuron membrane potentials and spike tracking for new episode."""
+        # Last inference info for metrics
+        self.last_info: dict[str, Any] | None = None
+
+    def reset(self) -> None:
+        """Reset neuron membrane potentials and spike tracking."""
         self._snn_state = None
         self._spike_counts_per_step = []
         self._layer_spike_counts = None
@@ -404,136 +261,80 @@ class SNNControllerAgent:
         self._inference_times = []
         self._total_spikes = 0
         self._total_control_steps = 0
+        self.last_info = None
 
-    def __call__(self, state: np.ndarray) -> np.ndarray:
+    def get_state(self) -> dict[str, Any]:
+        """Serialize internal state for checkpointing."""
+        return {"snn_state": self._snn_state}
+
+    def set_state(self, state: dict[str, Any]) -> None:
+        """Restore internal state from checkpoint."""
+        self._snn_state = state.get("snn_state")
+
+    def forward(self, observation: torch.Tensor) -> torch.Tensor:
+        """Compute SNN control action from observation tensor.
+
+        Args:
+            observation: Normalized observation tensor [i_d, i_q, e_d, e_q, n]
+
+        Returns:
+            Normalized action tensor [v_d, v_q] in [-1, 1]
         """
-        Compute SNN control action.
-
-        Runs the SNN for num_inference_steps internal timesteps per control step.
-        This allows proper spike integration following NeuroBench recommendations.
-
-        Parameters
-        ----------
-        state : np.ndarray
-            Physical state [i_d, i_q, e_d, e_q] from PMSMEnv in Amps
-
-        Returns
-        -------
-        np.ndarray
-            Physical voltage command [u_d, u_q] in Volts
-        """
-        import time
-
-        # Handle torch tensor input
-        if isinstance(state, torch.Tensor):
-            state_np = state.cpu().numpy().flatten()
-        else:
-            state_np = np.asarray(state).flatten()
-
-        # === NORMALIZE INPUTS ===
-        # State from env is [i_d, i_q, e_d, e_q, n_rpm] in physical units [A, A, A, A, RPM]
-        
-        # 1. Currents and Errors
-        i_d = state_np[0]
-        i_q = state_np[1]
-        e_d = state_np[2]
-        e_q = state_np[3]
-        
-        # 2. Speed (if available, otherwise 0)
-        if len(state_np) >= 5:
-            n_rpm = state_np[4]
-        else:
-            n_rpm = 0.0 # Fallback
-            
-        # 3. Normalize
-        i_d_norm = i_d / self.i_max
-        i_q_norm = i_q / self.i_max
-        e_d_norm = e_d / self.i_max
-        e_q_norm = e_q / self.i_max
-        
-        # Normalize Speed (using same N_MAX as dataset.py)
-        N_MAX = 4000.0
-        n_norm = n_rpm / N_MAX
-        
-        # 4. Stack Inputs [i_d, i_q, e_d, e_q, n]
-        state_normalized = np.array([i_d_norm, i_q_norm, e_d_norm, e_q_norm, n_norm], dtype=np.float32)
-
-        # Convert to tensor
-        state_tensor = torch.tensor(
-            state_normalized, dtype=torch.float32, device=self.device
-        )
-
-        # Ensure shape is [batch, features]
-        if state_tensor.dim() == 1:
-            state_tensor = state_tensor.unsqueeze(0)
-
-        # Forward pass through SNN with timing
-        # Run multiple internal timesteps per control step
         t_start = time.perf_counter()
+        
+        # Initialize accumulation variables
         step_spikes = 0
         step_sparsities = []
+        voltage_normalized = torch.zeros(
+            observation.shape[0], 2, device=observation.device
+        )
+        spike_info = None  # Will hold last info if available
+
+        if observation.dim() == 1:
+            observation = observation.unsqueeze(0)
 
         with torch.no_grad():
             for _ in range(self.num_inference_steps):
-                voltage_normalized, self._snn_state, spike_info = self.model(
-                    state_tensor, self._snn_state, return_spikes=self.track_spikes
+                voltage_normalized, self._snn_state, current_spike_info = self.model(
+                    observation, self._snn_state, return_spikes=self.track_spikes
                 )
 
-                # Aggregate spike info across internal steps
-                if self.track_spikes and spike_info is not None:
-                    step_spikes += spike_info["total_spikes"]
-                    step_sparsities.append(spike_info["layer_sparsities"])
-                    
-                    # Accumulate layer spikes
-                    current_layer_counts = np.array(spike_info["spike_counts"])
+                if self.track_spikes and current_spike_info is not None:
+                    # Accumulate stats from this step
+                    step_spikes += current_spike_info["total_spikes"]
+                    step_sparsities.append(current_spike_info["layer_sparsities"])
+
+                    current_layer_counts = np.array(current_spike_info["spike_counts"])
                     if self._layer_spike_counts is None:
                         self._layer_spike_counts = np.zeros_like(current_layer_counts)
-                    
-                    # Handle potential size mismatch if model changes (unlikely)
                     if self._layer_spike_counts.shape == current_layer_counts.shape:
                         self._layer_spike_counts += current_layer_counts
+                    
+                    # Keep last valid info structure for updating last_info later
+                    spike_info = current_spike_info
 
         t_end = time.perf_counter()
 
-        # Track spike activity (aggregated per control step)
-        if self.track_spikes and spike_info is not None:
+        # Update statistics if we tracked any spikes (even if last step returned None)
+        if self.track_spikes and (step_spikes > 0 or spike_info is not None):
             self._spike_counts_per_step.append([step_spikes])
             if step_sparsities:
-                # Average sparsity across internal steps
                 avg_sparsity = np.mean(step_sparsities, axis=0).tolist()
                 self._sparsities_per_step.append(avg_sparsity)
             self._total_spikes += step_spikes
             self._inference_times.append(t_end - t_start)
             self._total_control_steps += 1
 
-        # Convert to numpy and ensure shape
-        # SNN outputs normalized voltage in [-1, 1] (due to tanh)
-        action_normalized = voltage_normalized.cpu().numpy().flatten()
+            self.last_info = {
+                "total_spikes": step_spikes,
+                "sparsity": np.mean(step_sparsities) if step_sparsities else 0.0,
+                "latency_s": t_end - t_start,
+            }
 
-        # Clip to valid normalized range
-        action_normalized = np.clip(action_normalized, -1.0, 1.0)
-
-        # === DENORMALIZE OUTPUTS ===
-        # Convert from normalized [-1, 1] to physical voltage [V]
-        action_physical = action_normalized * self.u_max
-
-        return action_physical.astype(np.float32)
+        return torch.clamp(voltage_normalized, -1.0, 1.0)
 
     def get_info(self) -> dict[str, Any]:
-        """Return controller metadata for benchmark reporting.
-
-        Returns
-        -------
-        dict
-            Controller metadata including:
-            - name: Controller identifier
-            - type: Controller type ('snn')
-            - checkpoint: Path to model checkpoint
-            - hidden_size: Number of neurons per hidden layer
-            - num_layers: Total number of layers
-            - parameters: Total trainable parameters
-            - model_class: The class name of the loaded model
-        """
+        """Return controller metadata for benchmark reporting."""
         return {
             "name": "SNN-PI-Imitation",
             "type": "snn",
@@ -544,127 +345,65 @@ class SNNControllerAgent:
             "model_class": self.model.__class__.__name__,
         }
 
-    def get_sparsity(self, state: np.ndarray) -> dict:
-        """
-        Get activation sparsity for neuromorphic metrics.
-
-        Returns fraction of neurons that did NOT spike (higher = more efficient).
-
-        Parameters
-        ----------
-        state : np.ndarray
-            Physical state [i_d, i_q, e_d, e_q] in Amps
-        """
-        # Handle torch tensor input
-        if isinstance(state, torch.Tensor):
-            state_np = state.cpu().numpy().flatten()
-        else:
-            state_np = np.asarray(state).flatten()
-
-        # Normalize input (same as __call__)
-        state_normalized = state_np / self.i_max
-        state_tensor = torch.tensor(
-            state_normalized, dtype=torch.float32, device=self.device
-        )
-
-        if state_tensor.dim() == 1:
-            state_tensor = state_tensor.unsqueeze(0)
-
-        return self.model.get_sparsity(state_tensor, self._snn_state)
-
     def get_spike_statistics(self) -> dict:
-        """
-        Get aggregated spike statistics for neuromorphic metrics.
-
-        Returns
-        -------
-        dict
-            Contains:
-            - total_spikes: total spikes across all timesteps
-            - spikes_per_control_step: average spikes per control step
-            - mean_sparsity: average activation sparsity
-            - inference_latency_mean/max/std: timing statistics
-            - network_stats: neuron/synapse counts
-            - num_inference_steps: internal SNN steps per control step
-            - total_syops: Total synaptic operations (estimated)
-            - syops_per_timestep: SyOps per control step
-        """
+        """Get aggregated spike statistics for neuromorphic metrics."""
         if not self._spike_counts_per_step:
             return {"error": "No spike data collected. Enable track_spikes=True"}
 
-        _spike_counts = np.array(self._spike_counts_per_step)  # noqa: F841
         sparsities = (
             np.array(self._sparsities_per_step)
             if self._sparsities_per_step
             else np.array([[0.0]])
         )
 
-        # Calculate SyOps
         total_syops = 0
         if self._layer_spike_counts is not None:
-            # Helper to get output features of a layer safely
+
             def get_out_features(layer_idx):
-                # If it's a hidden layer
                 if layer_idx < len(self.model.layers):
                     return self.model.layers[layer_idx].out_features
-                # If it's the output layer
-                # Try common names
                 if hasattr(self.model, "fc_out"):
                     return self.model.fc_out.out_features
-                elif hasattr(self.model, "pop_out") and hasattr(self.model.pop_out, "fc"):
+                elif hasattr(self.model, "pop_out") and hasattr(
+                    self.model.pop_out, "fc"
+                ):
                     return self.model.pop_out.fc.out_features
-                elif hasattr(self.model, "ttfs_out") and hasattr(self.model.ttfs_out, "fc"):
+                elif hasattr(self.model, "ttfs_out") and hasattr(
+                    self.model.ttfs_out, "fc"
+                ):
                     return self.model.ttfs_out.fc.out_features
                 return 0
 
-            # Iterate through hidden layers
-            # spike_counts has counts for each neuron layer
-            # layer[i] feeds into layer[i+1]
             num_hidden = len(self.model.layers)
-            
-            # Check for recurrence
             is_recurrent = "RecurrentSNNController" in self.model.__class__.__name__
 
             for i, count in enumerate(self._layer_spike_counts):
-                # Skip if this is an output layer spike count (e.g. Population/TTFS)
-                # We only care about spikes that TRIGGER operations.
-                # Hidden neurons trigger ops in next layer.
                 if i >= num_hidden:
                     break
-                
-                # 1. Feedforward ops to next layer
-                # Current neurons (layer i) -> Next Linear Layer (layer i+1 or output)
                 next_layer_width = get_out_features(i + 1)
                 total_syops += int(count * next_layer_width)
-                
-                # 2. Recurrent ops (if applicable)
                 if is_recurrent:
-                    # Assuming full recurrence in hidden layers
-                    # RLeaky is usually all-to-all
-                    current_layer_width = get_out_features(i) # approx hidden size
+                    current_layer_width = get_out_features(i)
                     total_syops += int(count * current_layer_width)
 
         stats = {
-            # Spike counts
             "total_spikes": int(self._total_spikes),
             "num_control_steps": self._total_control_steps,
             "num_inference_steps_per_control": self.num_inference_steps,
             "spikes_per_control_step": float(
                 self._total_spikes / max(1, self._total_control_steps)
             ),
-            # Sparsity
             "mean_sparsity": float(sparsities.mean()) if sparsities.size > 0 else 0.0,
             "sparsity_per_layer": sparsities.mean(axis=0).tolist()
             if sparsities.size > 0
             else [],
-            # SyOps
             "total_syops": total_syops,
-            "syops_per_timestep": float(total_syops / max(1, self._total_control_steps)),
-            # Network architecture
+            "syops_per_timestep": float(
+                total_syops / max(1, self._total_control_steps)
+            ),
             **self._network_stats,
         }
 
-        # Timing statistics
         if self._inference_times:
             times = np.array(self._inference_times)
             stats.update(
@@ -681,32 +420,14 @@ class SNNControllerAgent:
 
         return stats
 
-    def get_weight_matrix(self) -> np.ndarray:
-        """Get weight matrix for neuromorphic metrics calculation."""
-        return self.model.get_weight_matrix()
 
-    def reset_hooks(self):
-        """NeuroBench compatibility: reset any registered hooks."""
-        pass
+# =============================================================================
+# Wrapper for SNN as nn.Module (for NeuroBench TorchAgent compatibility)
+# =============================================================================
 
 
 class SNNControllerTorchAgent(nn.Module):
-    """
-    PyTorch wrapper around SNN controller for NeuroBench TorchAgent compatibility.
-
-    Parameters
-    ----------
-    checkpoint_path : str
-        Path to trained model checkpoint
-    device : str
-        Device for inference
-    num_inference_steps : int
-        Number of internal SNN timesteps per control step
-    i_max : float
-        Maximum current for normalization [A]
-    u_max : float
-        Maximum voltage for denormalization [V]
-    """
+    """PyTorch wrapper around SNN controller for NeuroBench TorchAgent compatibility."""
 
     def __init__(
         self,
@@ -725,29 +446,11 @@ class SNNControllerTorchAgent(nn.Module):
             i_max=i_max,
             u_max=u_max,
         )
-
-        self.INPUT_SPACE = self.snn_controller.INPUT_SPACE
-        self.OUTPUT_SPACE = self.snn_controller.OUTPUT_SPACE
-
-        # Dummy parameter so PyTorch recognizes this as a module
         self.dummy_param = nn.Parameter(torch.zeros(1), requires_grad=False)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Forward pass - compute control action."""
-        # Handle batch dimension
-        if state.dim() == 1:
-            action = self.snn_controller(state.cpu().numpy())
-            return torch.tensor(action, dtype=torch.float32).unsqueeze(0)
-        elif state.dim() == 2:
-            # Batched input - process each sample
-            batch_size = state.shape[0]
-            actions = []
-            for i in range(batch_size):
-                action = self.snn_controller(state[i].cpu().numpy())
-                actions.append(action)
-            return torch.tensor(np.stack(actions), dtype=torch.float32)
-        else:
-            raise ValueError(f"Expected 1D or 2D input, got {state.dim()}D")
+        return self.snn_controller.forward(state)
 
     def reset(self):
         """Reset controller state."""

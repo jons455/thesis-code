@@ -394,6 +394,38 @@ poetry run python scripts/test_benchmark_api.py
 
 *Last updated: 2026-01-23*
 
+## 2026-02-03
+    
+### Major Refactoring: NeuroBench Alignment
+
+**What was done**:
+- Refactored `embark/benchmark` to follow NeuroBench's modular harness architecture.
+- Created `TensorControllerAdapter` to bridge PyTorch-based SNNs with the unified `Controller` interface.
+- Implemented `PMSMCurrentControlTask` with dependency-injected reference generators.
+- Moved safety limits from Physics Engine to Task (two-phase check: Action -> Physics -> State).
+- Updated `ARCHITECTURE.md` with comprehensive diagrams and usage guides.
+- Removed legacy compatibility code to ensure clean forward-looking architecture.
+
+**Why**:
+- To ensure the benchmark framework is modular, maintainable, and aligned with community standards (NeuroBench).
+- To solve "data visibility" issues where metrics couldn't see internal SNN states (spikes).
+- To enable cleaner support for both PyTorch (SNN) and Non-PyTorch (Akida/Keras) controllers.
+
+**Key Components**:
+- **Harness**: `ClosedLoopHarness` (Unified loop, no if/else)
+- **Adapter**: `TensorControllerAdapter` (Wraps SNN + Processors, exposes model hooks)
+- **Task**: `PMSMCurrentControlTask` (Physics + Ref + Safety)
+- **Safety**: `SafetyLimits` (Two-phase checking for robust termination)
+
+**Next Steps**:
+- Verify SNN training with new architecture.
+- Run full benchmark comparison (PI vs SNN vs Akida).
+- Generate final thesis plots.
+
+---
+
+*Last updated: 2026-02-03*
+
 ## 2026-01-28
 
 ### WP4 Kickoff: Holy Trinity Scenarios Implemented

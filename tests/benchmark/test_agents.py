@@ -1,18 +1,15 @@
-"""
-Unit tests for controller agents.
+"""Unit tests for controller agents.
 
-Tests agent interfaces and basic functionality.
+Tests agent interfaces and basic functionality with new DictController/TensorController protocols.
 """
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 import torch
 
 from embark.benchmark.agents import (
     PIControllerAgent,
-    PIControllerTorchAgent,
     SNNControllerAgent,
     SNNControllerTorchAgent,
 )
@@ -20,7 +17,7 @@ from embark.utils.config import DEFAULT_PMSM
 
 
 class TestPIControllerAgent:
-    """Test PI controller agent."""
+    """Test PI controller agent implementing DictController protocol."""
 
     def test_creates_successfully(self):
         """Agent can be created with default parameters."""
@@ -38,86 +35,76 @@ class TestPIControllerAgent:
     def test_reset_clears_integrators(self):
         """Reset clears integrator states."""
         agent = PIControllerAgent()
-        # Simulate some calls to build up integrator
-        state = np.array([0.0, 0.0, 0.1, 0.2, 100.0, 0.0])
+        state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+        reference = {"i_d_ref": 0.1, "i_q_ref": 0.2}
         for _ in range(10):
-            agent(state)
+            agent(state, reference)
         agent.reset()
         assert agent.integral_d == 0.0
         assert agent.integral_q == 0.0
 
-    def test_call_returns_action(self):
-        """Calling agent returns action array."""
+    def test_call_returns_action_dict(self):
+        """Calling agent returns action dict."""
         agent = PIControllerAgent()
-        state = np.array([0.0, 0.0, 0.1, 0.2, 100.0, 0.0])
-        action = agent(state)
-        assert isinstance(action, np.ndarray)
-        assert action.shape == (2,)
+        state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+        reference = {"i_d_ref": 0.1, "i_q_ref": 0.2}
+        action = agent(state, reference)
+        assert isinstance(action, dict)
+        assert "v_d" in action
+        assert "v_q" in action
 
     def test_action_in_valid_range(self):
         """Agent outputs actions in physical range."""
         agent = PIControllerAgent()
-        state = np.array([0.0, 0.0, 0.5, 0.5, 100.0, 0.0])
-        action = agent(state)
-        assert np.all(action >= -DEFAULT_PMSM.u_max)
-        assert np.all(action <= DEFAULT_PMSM.u_max)
+        state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+        reference = {"i_d_ref": 0.5, "i_q_ref": 0.5}
+        action = agent(state, reference)
+        assert abs(action["v_d"]) <= DEFAULT_PMSM.u_max
+        assert abs(action["v_q"]) <= DEFAULT_PMSM.u_max
 
     def test_responds_to_error(self):
         """Agent produces non-zero action for non-zero error."""
         agent = PIControllerAgent()
-        state = np.array([0.0, 0.0, 1.0, 1.0, 100.0, 0.0])
-        action = agent(state)
-        assert not np.allclose(action, [0.0, 0.0])
+        state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+        reference = {"i_d_ref": 1.0, "i_q_ref": 1.0}
+        action = agent(state, reference)
+        assert action["v_d"] != 0.0 or action["v_q"] != 0.0
 
-    def test_zero_error_converges(self):
+    def test_zero_error_minimal_action(self):
         """Agent produces minimal action when error is zero."""
         agent = PIControllerAgent()
         agent.reset()
-        state = np.array([2.0, 2.0, 0.0, 0.0, 100.0, 0.0])
-        action = agent(state)
-        assert np.all(np.abs(action) < 1.0)
+        state = {"i_d": 2.0, "i_q": 2.0, "omega": 0.0}
+        reference = {"i_d_ref": 2.0, "i_q_ref": 2.0}
+        action = agent(state, reference)
+        assert abs(action["v_d"]) < 1.0
+        assert abs(action["v_q"]) < 1.0
 
+    def test_get_state_and_set_state(self):
+        """Agent can serialize and restore state."""
+        agent = PIControllerAgent()
+        state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+        reference = {"i_d_ref": 0.1, "i_q_ref": 0.2}
+        for _ in range(5):
+            agent(state, reference)
 
-class TestPIControllerTorchAgent:
-    """Test PyTorch-wrapped PI controller for NeuroBench compatibility."""
+        saved_state = agent.get_state()
+        assert saved_state["integral_d"] != 0.0
 
-    def test_creates_successfully(self):
-        """Agent can be created."""
-        agent = PIControllerTorchAgent()
-        assert agent is not None
-
-    def test_is_torch_module(self):
-        """Agent is a PyTorch module."""
-        agent = PIControllerTorchAgent()
-        assert isinstance(agent, torch.nn.Module)
-
-    def test_forward_accepts_tensor(self):
-        """Forward accepts PyTorch tensor input."""
-        agent = PIControllerTorchAgent()
-        state = torch.tensor([[0.0, 0.0, 0.1, 0.2, 100.0, 0.0]])
-        action = agent(state)
-        assert isinstance(action, torch.Tensor)
-
-    def test_forward_returns_correct_shape(self):
-        """Forward returns action with correct shape."""
-        agent = PIControllerTorchAgent()
-        state = torch.tensor([[0.0, 0.0, 0.1, 0.2, 100.0, 0.0]])
-        action = agent(state)
-        assert action.shape == (1, 2)
-
-    def test_forward_batch(self):
-        """Forward handles batch inputs."""
-        agent = PIControllerTorchAgent()
-        batch_size = 4
-        state = torch.randn(batch_size, 6)
-        action = agent(state)
-        assert action.shape == (batch_size, 2)
-
-    def test_has_reset_method(self):
-        """Agent has reset method."""
-        agent = PIControllerTorchAgent()
-        assert hasattr(agent, "reset")
         agent.reset()
+        assert agent.integral_d == 0.0
+
+        agent.set_state(saved_state)
+        assert agent.integral_d == saved_state["integral_d"]
+
+    def test_from_system_config(self):
+        """Agent can be created from system config."""
+        from embark.benchmark.physics import PMSMConfig
+
+        config = PMSMConfig()
+        agent = PIControllerAgent.from_system_config(config)
+        assert agent is not None
+        assert agent.params.u_max == config.u_max
 
 
 class TestAgentInterface:
@@ -128,21 +115,31 @@ class TestAgentInterface:
         agent = PIControllerAgent()
         assert callable(agent)
 
-    def test_torch_agent_callable(self):
-        """Torch agent is callable."""
-        agent = PIControllerTorchAgent()
-        assert callable(agent)
-
     def test_agents_have_reset(self):
         """All agents have reset method."""
-        agents = [PIControllerAgent(), PIControllerTorchAgent()]
+        agents = [PIControllerAgent()]
         for agent in agents:
             assert hasattr(agent, "reset")
+
+    def test_agents_have_get_state(self):
+        """Agents have get_state/set_state methods."""
+        agent = PIControllerAgent()
+        assert hasattr(agent, "get_state")
+        assert hasattr(agent, "set_state")
 
 
 def _get_trained_model_checkpoint() -> Path:
     repo_root = Path(__file__).parent.parent.parent
-    preferred = ["membrane", "delta", "population", "recurrent", "ttfs"]
+    # Look for both new "speed_final" naming and original model types
+    preferred = [
+        "linear_speed_final",
+        "population_speed_final",
+        "membrane",
+        "delta",
+        "population",
+        "recurrent",
+        "ttfs",
+    ]
     for model_name in preferred:
         candidate = repo_root / "trained_models" / model_name / "best_model.pt"
         if candidate.exists():
@@ -152,7 +149,7 @@ def _get_trained_model_checkpoint() -> Path:
 
 
 class TestSNNControllerAgent:
-    """Test SNN controller agent."""
+    """Test SNN controller agent implementing TensorController protocol."""
 
     @pytest.fixture
     def checkpoint_path(self):
@@ -186,39 +183,39 @@ class TestSNNControllerAgent:
             pytest.skip("No SNN checkpoint available")
 
         agent = SNNControllerAgent(str(checkpoint_path))
-
-        state = np.array([0.0, 0.0, 0.1, 0.2])
+        # Provide 5 features [i_d, i_q, e_d, e_q, n]
+        obs = torch.randn(1, 5)
         for _ in range(10):
-            agent(state)
+            agent.forward(obs)
 
         assert agent._snn_state is not None
 
         agent.reset()
         assert agent._snn_state is None
 
-    def test_call_returns_action(self, checkpoint_path):
-        """Calling agent returns action array."""
+    def test_forward_returns_tensor(self, checkpoint_path):
+        """Forward returns action tensor."""
         if not checkpoint_path.exists():
             pytest.skip("No SNN checkpoint available")
 
         agent = SNNControllerAgent(str(checkpoint_path))
-        state = np.array([0.0, 0.0, 0.1, 0.2])
-        action = agent(state)
+        obs = torch.randn(1, 5)
+        action = agent.forward(obs)
 
-        assert isinstance(action, np.ndarray)
-        assert action.shape == (2,)
+        assert isinstance(action, torch.Tensor)
+        assert action.shape[-1] == 2
 
     def test_action_in_valid_range(self, checkpoint_path):
-        """Agent outputs actions in physical range."""
+        """Agent outputs actions in [-1, 1] range."""
         if not checkpoint_path.exists():
             pytest.skip("No SNN checkpoint available")
 
         agent = SNNControllerAgent(str(checkpoint_path))
-        state = np.array([0.0, 0.0, 0.5, 0.5])
-        action = agent(state)
+        obs = torch.randn(1, 5) * 0.5
+        action = agent.forward(obs)
 
-        assert np.all(action >= -DEFAULT_PMSM.u_max)
-        assert np.all(action <= DEFAULT_PMSM.u_max)
+        assert torch.all(action >= -1.0)
+        assert torch.all(action <= 1.0)
 
     def test_state_persists_across_calls(self, checkpoint_path):
         """Membrane state persists across timesteps."""
@@ -228,31 +225,16 @@ class TestSNNControllerAgent:
         agent = SNNControllerAgent(str(checkpoint_path))
         agent.reset()
 
-        state = np.array([0.0, 0.0, 0.1, 0.2])
+        obs = torch.randn(1, 5)
 
-        agent(state)
+        agent.forward(obs)
         state_after_1 = agent._snn_state
 
-        agent(state)
+        agent.forward(obs)
         state_after_2 = agent._snn_state
 
         assert state_after_1 is not None
         assert state_after_2 is not None
-
-    def test_get_sparsity(self, checkpoint_path):
-        """Agent reports activation sparsity."""
-        if not checkpoint_path.exists():
-            pytest.skip("No SNN checkpoint available")
-
-        agent = SNNControllerAgent(str(checkpoint_path))
-        state = np.array([0.0, 0.0, 0.1, 0.2])
-
-        sparsity = agent.get_sparsity(state)
-
-        assert isinstance(sparsity, dict)
-        assert len(sparsity) > 0
-        for key, val in sparsity.items():
-            assert 0.0 <= val <= 1.0
 
     def test_no_nan_output(self, checkpoint_path):
         """Agent should not produce NaN outputs."""
@@ -263,9 +245,25 @@ class TestSNNControllerAgent:
         agent.reset()
 
         for _ in range(100):
-            state = np.random.randn(4) * 0.5
-            action = agent(state)
-            assert not np.isnan(action).any(), "NaN detected in output"
+            obs = torch.randn(1, 5) * 0.5
+            action = agent.forward(obs)
+            assert not torch.isnan(action).any(), "NaN detected in output"
+
+    def test_get_spike_statistics(self, checkpoint_path):
+        """Agent returns spike statistics."""
+        if not checkpoint_path.exists():
+            pytest.skip("No SNN checkpoint available")
+
+        agent = SNNControllerAgent(str(checkpoint_path), track_spikes=True)
+        agent.reset()
+
+        for _ in range(10):
+            obs = torch.randn(1, 5) * 0.5
+            agent.forward(obs)
+
+        stats = agent.get_spike_statistics()
+        assert isinstance(stats, dict)
+        assert "total_spikes" in stats
 
 
 class TestSNNControllerTorchAgent:

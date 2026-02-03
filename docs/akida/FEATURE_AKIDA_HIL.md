@@ -95,19 +95,19 @@ class RemoteAkidaPolicy(TensorController):
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         # 1. Serialize
         data = obs.detach().cpu().numpy().astype(np.float32).tobytes()
-        
+
         # 2. Send (Length + Data)
         self.socket.sendall(struct.pack('!I', len(data)) + data)
-        
+
         # 3. Receive Response Length
         len_bytes = self.recv_all(4)
         if not len_bytes:
             raise ConnectionError("Server closed connection")
         response_len = struct.unpack('!I', len_bytes)[0]
-        
+
         # 4. Receive Response Data
         response_data = self.recv_all(response_len)
-        
+
         # 5. Deserialize
         action_np = np.frombuffer(response_data, dtype=np.float32)
         return torch.from_numpy(action_np)
@@ -132,36 +132,36 @@ import numpy as np
 
 def run_server(host='0.0.0.0', port=5000, model_path='model.fbz'):
     # model = Model(model_path) # Load Akida model
-    
+
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host, port))
     server.listen(1)
     print(f"Listening on {host}:{port}...")
-    
+
     conn, addr = server.accept()
     print(f"Connected by {addr}")
-    
+
     while True:
         # Receive header
         len_bytes = recv_all(conn, 4)
         if not len_bytes: break
         length = struct.unpack('!I', len_bytes)[0]
-        
+
         # Receive data
         data = recv_all(conn, length)
         inputs = np.frombuffer(data, dtype=np.float32)
-        
+
         # INFERENCE
         # inputs = inputs.reshape(1, 1, -1) # Reshape for Akida
         # outputs = model.predict(inputs)
         # response_data = outputs.astype(np.float32).tobytes()
-        
+
         # Mock Response (Echo)
-        response_data = inputs.tobytes() 
-        
+        response_data = inputs.tobytes()
+
         # Send back
         conn.sendall(struct.pack('!I', len(response_data)) + response_data)
-        
+
     conn.close()
 
 def recv_all(sock, n):

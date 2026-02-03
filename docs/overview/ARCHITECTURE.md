@@ -270,6 +270,21 @@ self.states.append(state.copy())  # ✅ Not state (mutable reference)
 **Package**: `neurobench` (installed from 2025_GC branch, 2026-01-13)
 **Key Class**: `BenchmarkClosedLoop`
 
+**Important**: All refactoring and new modules must align with the NeuroBench
+architecture and coding standards enforced by this repo's pre-commit hooks so
+that all checks pass consistently.
+
+**Pre-commit hooks include**:
+- `trailing-whitespace`
+- `end-of-file-fixer`
+- `check-yaml`
+- `check-added-large-files` (max 1000 KB)
+- `check-merge-conflict`
+- `check-toml`
+- `debug-statements`
+- `ruff` (lint + autofix)
+- `ruff-format` (formatting)
+
 ```python
 from neurobench.benchmarks import BenchmarkClosedLoop
 from neurobench.models import SNNTorchAgent

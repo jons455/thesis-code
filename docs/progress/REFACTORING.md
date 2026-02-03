@@ -132,39 +132,39 @@ from typing import Protocol, Any
 
 class PhysicsEngine(Protocol):
     """Abstract interface for physical dynamical systems."""
-    
+
     @property
     def config(self) -> "SystemConfig":
         """Immutable physical properties (R, L, J, friction, limits)."""
         ...
-    
+
     def reset(self, seed: int | None = None) -> dict[str, float]:
         """Reset to initial state. Returns initial state dict."""
         ...
-    
+
     def step(self, action: dict[str, float]) -> tuple[dict[str, float], dict[str, Any]]:
         """
         Execute one physics step.
-        
+
         Args:
             action: Physical units (e.g., {"v_alpha": 12.0, "v_beta": -5.0} in Volts)
-        
+
         Returns:
             (next_state, debug_info)
             - next_state: Physical state dict (e.g., {"i_d": 1.2, "i_q": 5.0, ...})
             - debug_info: Optional diagnostics (e.g., {"solver_steps": 3})
         """
         ...
-    
+
     def close(self) -> None:
         """Clean up resources (simulator handles, etc.)."""
         ...
-    
+
     @property
     def state_keys(self) -> set[str]:
         """Keys present in state dict."""
         ...
-    
+
     @property
     def action_keys(self) -> set[str]:
         """Keys expected in action dict."""
@@ -178,35 +178,35 @@ The task defines the goal. It composes a physics engine and generates references
 ```python
 class ClosedLoopTask(Protocol):
     """Defines the control objective. Owns a PhysicsEngine."""
-    
+
     @property
     def physics_engine(self) -> PhysicsEngine:
         """The underlying dynamical system."""
         ...
-    
+
     @property
     def reference_keys(self) -> set[str]:
         """Keys provided in reference dict (e.g., {'i_q_ref', 'i_d_ref'})."""
         ...
-    
+
     @property
     def max_steps(self) -> int | None:
         """Maximum episode length (None for infinite)."""
         ...
-    
+
     def reset(self, seed: int | None = None) -> tuple[dict[str, float], dict[str, float]]:
         """
         Reset task and physics.
-        
+
         Returns:
             (initial_state, initial_reference)
         """
         ...
-    
+
     def step(self, action: dict[str, float]) -> tuple[dict[str, float], dict[str, float], bool]:
         """
         Step physics and update reference.
-        
+
         Returns:
             (next_state, next_reference, done)
         """
@@ -222,19 +222,19 @@ import torch
 
 class TensorController(Protocol):
     """Neural network controllers (SNN, ANN)."""
-    
+
     def reset(self) -> None:
         """Reset internal state (membrane potentials, hidden states)."""
         ...
-    
+
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Compute action from observation tensor."""
         ...
-    
+
     def get_state(self) -> dict[str, Any]:
         """Serialize internal state for checkpointing."""
         ...
-    
+
     def set_state(self, state: dict[str, Any]) -> None:
         """Restore internal state from checkpoint."""
         ...
@@ -242,31 +242,31 @@ class TensorController(Protocol):
 
 class DictController(Protocol):
     """Classical controllers (PI, PID, MPC)."""
-    
+
     def reset(self) -> None:
         """Reset internal state (integrator windup, etc.)."""
         ...
-    
+
     def __call__(
-        self, 
-        state: dict[str, float], 
+        self,
+        state: dict[str, float],
         reference: dict[str, float]
     ) -> dict[str, float]:
         """Compute action from state and reference."""
         ...
-    
+
     def get_state(self) -> dict[str, Any]:
         """Serialize internal state."""
         ...
-    
+
     def set_state(self, state: dict[str, Any]) -> None:
         """Restore internal state."""
         ...
-    
+
     @classmethod
     def from_system_config(
-        cls, 
-        config: "SystemConfig", 
+        cls,
+        config: "SystemConfig",
         tuning: str = "technical_optimum"
     ) -> "DictController":
         """Factory method for auto-tuning."""
@@ -280,19 +280,19 @@ Processors handle the conversion between physics (dicts) and controllers (tensor
 ```python
 class StateProcessor(Protocol):
     """Converts physics state dict → controller observation tensor."""
-    
+
     def configure(self, physics_config: "SystemConfig", task: ClosedLoopTask) -> None:
         """Called once at harness setup to learn normalization bounds."""
         ...
-    
+
     def __call__(
-        self, 
-        state: dict[str, float], 
+        self,
+        state: dict[str, float],
         reference: dict[str, float]
     ) -> torch.Tensor:
         """Process state and reference into observation tensor."""
         ...
-    
+
     @property
     def output_dim(self) -> int:
         """Dimension of output tensor."""
@@ -301,14 +301,14 @@ class StateProcessor(Protocol):
 
 class ActionProcessor(Protocol):
     """Converts controller action tensor → physics action dict."""
-    
+
     def configure(self, physics_config: "SystemConfig") -> None:
         """Called once at harness setup to learn action bounds."""
         ...
-    
+
     def __call__(
-        self, 
-        action: torch.Tensor, 
+        self,
+        action: torch.Tensor,
         physics_config: "SystemConfig"
     ) -> dict[str, float]:
         """Convert action tensor to physical units."""
@@ -322,16 +322,16 @@ Metrics observe the raw control loop data and compute statistics.
 ```python
 class MetricAccumulator(Protocol):
     """Stateful metric that observes the control loop."""
-    
+
     @property
     def name(self) -> str:
         """Unique identifier for this metric."""
         ...
-    
+
     def reset(self) -> None:
         """Reset accumulated state."""
         ...
-    
+
     def update(
         self,
         state: dict[str, float],
@@ -342,7 +342,7 @@ class MetricAccumulator(Protocol):
     ) -> None:
         """
         Update metric with one timestep of data.
-        
+
         Args:
             state: Current physical state
             reference: Current reference
@@ -351,7 +351,7 @@ class MetricAccumulator(Protocol):
             controller_info: Optional controller internals (spikes, etc.)
         """
         ...
-    
+
     def compute(self) -> float | dict[str, float]:
         """Compute final metric value(s)."""
         ...
@@ -364,7 +364,7 @@ The main orchestrator that runs the benchmark.
 ```python
 class ClosedLoopHarness:
     """NeuroBench-style harness for closed-loop control benchmarks."""
-    
+
     def __init__(
         self,
         task: ClosedLoopTask,
@@ -378,20 +378,20 @@ class ClosedLoopHarness:
         self.state_proc = state_processor
         self.action_proc = action_processor
         self.metrics = metrics or []
-        
+
         # Detect controller type
         self._uses_tensors = hasattr(controller, 'forward')
-        
+
         # Configure processors if present
         if self.state_proc:
             self.state_proc.configure(task.physics_engine.config, task)
         if self.action_proc:
             self.action_proc.configure(task.physics_engine.config)
-    
+
     def run(self, max_steps: int | None = None) -> dict[str, Any]:
         """
         Run one episode of the benchmark.
-        
+
         Returns:
             Dictionary of metric results
         """
@@ -399,11 +399,11 @@ class ClosedLoopHarness:
         self.controller.reset()
         for m in self.metrics:
             m.reset()
-        
+
         effective_max = max_steps or self.task.max_steps or float('inf')
         step = 0
         done = False
-        
+
         while not done and step < effective_max:
             # Compute action
             if self._uses_tensors:
@@ -414,17 +414,17 @@ class ClosedLoopHarness:
             else:
                 action = self.controller(state, reference)
                 controller_info = None
-            
+
             # Step physics
             next_state, next_ref, done = self.task.step(action)
-            
+
             # Update metrics (observe raw truth)
             for m in self.metrics:
                 m.update(state, reference, action, next_state, controller_info)
-            
+
             state, reference = next_state, next_ref
             step += 1
-        
+
         # Compute final metrics
         results = {"steps": step}
         for m in self.metrics:
@@ -433,7 +433,7 @@ class ClosedLoopHarness:
                 results.update(result)
             else:
                 results[m.name] = result
-        
+
         return results
 ```
 
