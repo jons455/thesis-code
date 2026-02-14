@@ -1,0 +1,73 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Experiments & Logs
+experiments/
+logs/
+*.log
+results/
+*.png
+
+
+# Model checkpoints (too large for git)
+snn/checkpoints/
+checkpoints/
+*.pth
+*.csv
+/export
+
+# Explicitly ignore epoch checkpoints
+epoch_*.keras
+epoch_*.pt
+
+# MATLAB
+*.asv
+*.slxc
+*.slx.r*           # Versions-Backups (z.B. .slx.r2024b)
+slprj/
+# Hinweis: .slx Hauptmodelle NICHT ignorieren (foc_pmsm.slx bleibt in Git)
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (too large for git)
+data/
+evaluation/data-preperation/data/
+pmsm-matlab/export/
+embark/pmsm-pem/export/
+edge_impulse_data/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+history.json
+.claude/
