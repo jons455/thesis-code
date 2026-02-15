@@ -4,9 +4,9 @@ local)."""
 import sys
 from pathlib import Path
 
-# Add project root to Python path so Sphinx can import embark
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add src to Python path so Sphinx can import embark (src layout)
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root / "src"))
 
 # -- Project information -----------------------------------------------------
 

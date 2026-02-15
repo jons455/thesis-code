@@ -7,11 +7,6 @@ from typing import Any
 
 import torch
 
-from embark.benchmark.contrib.neurobench.metric_adapters import (
-    NeuroBenchStaticMetricAdapter,
-    NeuroBenchWorkloadMetricAdapter,
-    discover_neurobench_metric_classes,
-)
 from embark.benchmark.interfaces import MetricAccumulator
 from embark.benchmark.metrics.accumulators import (
     MaximumError,
@@ -61,7 +56,18 @@ def _controller_has_model(controller: Any | None) -> bool:
 
 
 def _create_neurobench_adapters(controller: Any) -> list[MetricAccumulator]:
-    """Instantiate all applicable NeuroBench static/workload metric adapters."""
+    """Instantiate all applicable NeuroBench static/workload metric adapters.
+    Returns empty list if neurobench is not installed.
+    """
+    try:
+        from embark.benchmark.contrib.neurobench.metric_adapters import (
+            NeuroBenchStaticMetricAdapter,
+            NeuroBenchWorkloadMetricAdapter,
+            discover_neurobench_metric_classes,
+        )
+    except ImportError:
+        return []
+
     static_classes, workload_classes = discover_neurobench_metric_classes()
     adapters: list[MetricAccumulator] = []
 

@@ -174,16 +174,22 @@ def test_create_neurobench_adapters_filters_required_constructors(monkeypatch):
         def __init__(self, controller, metric_cls):
             self.name = f"workload:{metric_cls.__name__}"
 
+    # Patch where the function is imported from (inside _create_neurobench_adapters)
     monkeypatch.setattr(
-        nf,
-        "discover_neurobench_metric_classes",
+        "embark.benchmark.contrib.neurobench.metric_adapters.discover_neurobench_metric_classes",
         lambda: (
             [_StaticNoArg, _StaticNeedsArg],
             [_WorkloadNoArg, _WorkloadNeedsArg],
         ),
     )
-    monkeypatch.setattr(nf, "NeuroBenchStaticMetricAdapter", _DummyStaticAdapter)
-    monkeypatch.setattr(nf, "NeuroBenchWorkloadMetricAdapter", _DummyWorkloadAdapter)
+    monkeypatch.setattr(
+        "embark.benchmark.contrib.neurobench.metric_adapters.NeuroBenchStaticMetricAdapter",
+        _DummyStaticAdapter,
+    )
+    monkeypatch.setattr(
+        "embark.benchmark.contrib.neurobench.metric_adapters.NeuroBenchWorkloadMetricAdapter",
+        _DummyWorkloadAdapter,
+    )
 
     adapters = nf._create_neurobench_adapters(controller=object())
     names = [adapter.name for adapter in adapters]

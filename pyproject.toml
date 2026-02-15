@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "embark"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10"
 numpy = ">=1.26.0,<2.2.0"
 pandas = "^2.0.0"
 matplotlib = "^3.7.0"
@@ -69,7 +69,7 @@ check_untyped_defs = true
 ignore_missing_imports = true
 disallow_untyped_defs = false
 show_error_codes = true
-exclude = ["examples/", "embark/pmsm-pem/"]
+exclude = ["examples/", "src/embark/pmsm-pem/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

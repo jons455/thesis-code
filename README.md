@@ -20,6 +20,8 @@ cd embark
 poetry install
 ```
 
+On **Windows**, use `poetry install --only main --only dev` to skip optional groups (NeuroBench/Akida) that pull in TensorFlow and may have no Windows wheels.
+
 Activate the environment: `poetry shell`
 
 Optional (dev + pre-commit):
@@ -39,10 +41,8 @@ git init
 git remote add origin git@git.informatik.fh-nuernberg.de:reifjo96249/embark.git
 git add .
 git commit -m "Initial commit"
-git push -u origin main
+git push -u origin master
 ```
-
-(Use `master` instead of `main` if your server default branch is `master`.)
 
 ## Run tests
 
@@ -52,7 +52,7 @@ poetry run pytest
 
 ## Project layout
 
-- `embark/` — benchmarking pipeline (harness, metrics, controllers, physics)
+- `src/embark/` — benchmarking pipeline (harness, metrics, controllers, physics)
 - `tests/` — pytest tests
 - `docs/` — documentation
 

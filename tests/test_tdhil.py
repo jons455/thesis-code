@@ -29,6 +29,13 @@ try:
 except ImportError:
     tensorflow = None
 
+try:
+    import evaluation.akida.core.deploy  # noqa: F401
+except ImportError:
+    evaluation_deploy = None
+else:
+    evaluation_deploy = True
+
 from embark.benchmark.adapters import TensorControllerAdapter
 from embark.benchmark.controllers.remote.akida_policy import RemoteAkidaPolicy
 from embark.benchmark.harness import ClosedLoopHarness
@@ -435,7 +442,10 @@ class TestEndToEndHIL:
         assert len(latencies2) == results2["steps"]
 
 
-@pytest.mark.skipif(tensorflow is None, reason="akida/tensorflow not installed")
+@pytest.mark.skipif(
+    tensorflow is None or evaluation_deploy is None,
+    reason="akida/tensorflow or evaluation.akida.core.deploy not installed",
+)
 class TestDeployArgParsing:
     """Test that evaluation/snn_keras/deploy.py CLI is importable and argument parser
     works."""
