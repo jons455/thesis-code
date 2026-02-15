@@ -91,26 +91,26 @@ class ScenarioDefinition:
 # ============================================================================
 
 STANDARD_SCENARIOS: list[ScenarioDefinition] = [
-    # Scenario 1: Single-Step Low Speed (500 RPM, 0→2A i_q)
+    # Scenario 1: Single-Step Low Speed (500 RPM, 0->2A i_q)
     ScenarioDefinition(
         name="step_low_speed_500rpm_2A",
-        description="Step response at low speed (500 RPM, 0→2A i_q)",
+        description="Step response at low speed (500 RPM, 0->2A i_q)",
         n_rpm=500.0,
         reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
         max_steps=3000,  # 0.3s at 100µs sampling
     ),
-    # Scenario 2: Single-Step Mid Speed (1500 RPM, 0→2A i_q) - PRIMARY REFERENCE
+    # Scenario 2: Single-Step Mid Speed (1500 RPM, 0->2A i_q) - PRIMARY REFERENCE
     ScenarioDefinition(
         name="step_mid_speed_1500rpm_2A",
-        description="Step response at nominal speed (1500 RPM, 0→2A i_q) - primary reference",
+        description="Step response at nominal speed (1500 RPM, 0->2A i_q) - primary reference",
         n_rpm=1500.0,
         reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
         max_steps=3000,  # 0.3s at 100µs sampling
     ),
-    # Scenario 3: Single-Step High Speed (2500 RPM, 0→2A i_q)
+    # Scenario 3: Single-Step High Speed (2500 RPM, 0->2A i_q)
     ScenarioDefinition(
         name="step_high_speed_2500rpm_2A",
-        description="Step response at high speed (2500 RPM, 0→2A i_q)",
+        description="Step response at high speed (2500 RPM, 0->2A i_q)",
         n_rpm=2500.0,
         reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
         max_steps=3000,  # 0.3s at 100µs sampling
@@ -131,10 +131,10 @@ STANDARD_SCENARIOS: list[ScenarioDefinition] = [
         ),
         max_steps=10000,  # 1.0s at 100µs sampling
     ),
-    # Scenario 5: Four-Quadrant Transition (1500 RPM, +2A → -2A → 0)
+    # Scenario 5: Four-Quadrant Transition (1500 RPM, +2A -> -2A -> 0)
     ScenarioDefinition(
         name="four_quadrant_transition_1500rpm",
-        description="Four-quadrant transition with zero-crossing (1500 RPM, +2A → -2A → 0)",
+        description="Four-quadrant transition with zero-crossing (1500 RPM, +2A -> -2A -> 0)",
         n_rpm=1500.0,
         reference_generator=MultiStepReference(
             steps=[
@@ -149,7 +149,7 @@ STANDARD_SCENARIOS: list[ScenarioDefinition] = [
     # Scenario 6: Field-Weakening (2500 RPM, i_d and i_q steps)
     ScenarioDefinition(
         name="field_weakening_2500rpm",
-        description="Field-weakening operation (2500 RPM, i_d=-2A, i_q=0→2A)",
+        description="Field-weakening operation (2500 RPM, i_d=-2A, i_q=0->2A)",
         n_rpm=2500.0,
         reference_generator=MultiStepReference(
             steps=[

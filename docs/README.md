@@ -1,139 +1,264 @@
-# Benchmark Documentation
+# EMBARK Documentation Index
 
-This directory contains documentation for the `embark.benchmark` module.
+Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control) documentation.
 
-## Documentation Structure
+## Getting Started
 
-### Markdown Documentation
+### Quick Start
+- **[README.md](../README.md)** - Main project overview and quick start guide
+  - Installation instructions
+  - Basic usage example
+  - Feature configuration guide
+  - Quick comparison with PI baseline
 
-- **[BENCHMARK_INDEX.md](BENCHMARK_INDEX.md)** - Overview and navigation
+### First Steps
+1. Read the [README](../README.md) for installation and basic usage
+2. Review [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md) for scenario overview
+3. Run your first benchmark using the quick start example
+
+---
+
+## Core Documentation
+
+### API Documentation
 - **[BENCHMARK_API.md](BENCHMARK_API.md)** - Complete API reference
-- **[BENCHMARK_USER_GUIDE.md](BENCHMARK_USER_GUIDE.md)** - Usage guide with examples
-- **[BENCHMARK_QUICK_REFERENCE.md](BENCHMARK_QUICK_REFERENCE.md)** - Quick reference cheat sheet
-- **[METRICS.md](METRICS.md)** - Metric definitions and output formats
+  - Task interface
+  - Controller interface
+  - Metric interface
+  - Harness usage
 
-### Sphinx Documentation (Auto-generated from Docstrings)
+### Rate-SNN Specific Guide
+- **[RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-encoding SNN integration guide
+  - State processor configuration
+  - Action processor configuration
+  - Feature engineering
+  - Output mode selection
 
-The `source/` directory contains Sphinx configuration for auto-generating API documentation from code docstrings.
+---
 
-## Building Sphinx Documentation
+## Benchmark Scenarios (NEW)
 
-### Prerequisites
+### Quick Reference
+- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference guide
+  - Scenario summary table
+  - Usage examples
+  - Performance targets
+  - Interpretation tips
 
-Install Sphinx dependencies:
+### Comprehensive Guide
+- **[BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md)** - Detailed scenario specifications
+  - Design philosophy
+  - Scenario specifications (all 6 scenarios)
+  - Coverage matrix
+  - Metric computation
+  - Interpretation guide
+  - Best practices
 
-```bash
-poetry install --with dev
-```
+### Visual Reference
+- **[SCENARIO_TIMELINES.md](SCENARIO_TIMELINES.md)** - Visual timeline diagrams
+  - ASCII timeline diagrams for each scenario
+  - Operating point coverage visualization
+  - Difficulty ranking
+  - Design rationale
 
-### Build HTML Documentation
+### Scientific Background
+- **[SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md)** - Research-backed rationale
+  - Literature references
+  - Design principles
+  - Coverage analysis
+  - What was excluded and why
+  - Validation against alternatives
 
-From the `embark/docs/` directory:
+---
 
-```bash
-# Using Makefile (Linux/Mac)
-make html
+## Documentation Map
 
-# Or directly with sphinx-build
-sphinx-build -b html source build/html
-```
+### For Different User Types
 
-On Windows:
+#### **New Users** (First Time Using EMBARK)
+1. [README.md](../README.md) - Installation and quick start
+2. [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md) - Scenario overview
+3. [RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md) - Configure your SNN
 
-```bash
-# Using sphinx-build directly
-sphinx-build -b html source build/html
-```
+#### **Developers** (Implementing Controllers)
+1. [BENCHMARK_API.md](BENCHMARK_API.md) - API reference
+2. [RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md) - SNN integration
+3. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Understand what you're tested on
 
-### View Documentation
+#### **Researchers** (Publishing Results)
+1. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Scenario specifications
+2. [SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md) - Scientific background
+3. [SCENARIO_TIMELINES.md](SCENARIO_TIMELINES.md) - Visualization for papers
 
-After building, open `build/html/index.html` in your browser.
+#### **Contributors** (Extending EMBARK)
+1. [BENCHMARK_API.md](BENCHMARK_API.md) - Architecture overview
+2. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Design patterns
+3. [SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md) - Extension guidelines
 
-### Clean Build
+---
 
-```bash
-make clean
-# or
-rm -rf build/
-```
+## Key Concepts
 
-## Documentation Sources
+### The 6 Standard Scenarios
 
-The Sphinx documentation is auto-generated from:
+| # | Name | Purpose | Key Insight |
+|---|------|---------|-------------|
+| 1 | Low Speed (500 RPM) | Low-speed sensitivity | Parameter robustness |
+| 2 | **Mid Speed (1500 RPM)** ⭐ | **Primary reference** | **Nominal performance** |
+| 3 | High Speed (2500 RPM) | High-speed limits | Voltage saturation |
+| 4 | Multi-Step Bidirectional | Dynamic tracking | Consistency, memory effects |
+| 5 | Four-Quadrant Transition | Torque reversal | Regenerative braking |
+| 6 | Field-Weakening | Multivariable control | d-q decoupling |
 
-- **Docstrings** in Python modules (Google-style format)
-- **Type hints** in function signatures
-- **RST files** in `source/api/` that organize the modules
+⭐ **Scenario 2 is your primary reference** - use this for headline numbers.
 
-### Updating Documentation
+### Design Philosophy
 
-1. **Update docstrings** in Python code (Google-style format)
-2. **Rebuild** with `make html`
-3. **Commit** both code changes and rebuilt docs (if desired)
+The benchmark suite provides:
+- **Complete coverage** with minimum redundancy
+- **Fixed-speed operation** (constant RPM per scenario)
+- **Current control focus** (FOC inner loop)
+- **Rate-based SNN evaluation** vs PI baseline
+- **Manageable runtime** (~3 seconds total)
 
-### Docstring Format
+### Coverage Summary
 
-Use Google-style docstrings:
+✅ **Speed range**: 500, 1500, 2500 RPM  
+✅ **Transients**: Single-step, multi-step, reversal  
+✅ **Quadrants**: Motoring, generating, zero-crossing  
+✅ **Advanced**: Field-weakening, d-q coupling  
+✅ **Runtime**: ~5-10 seconds per controller
 
+---
+
+## Quick Links
+
+### Usage Examples
 ```python
-def my_function(param1: str, param2: int) -> dict[str, float]:
-    """Brief description.
-
-    Longer description if needed.
-
-    Args:
-        param1: Description of param1.
-        param2: Description of param2.
-
-    Returns:
-        Dictionary with result keys.
-
-    Example:
-        >>> result = my_function("test", 42)
-        >>> print(result)
-        {'key': 1.0}
-    """
-    ...
+# Full benchmark
+from embark.benchmark.harness import BenchmarkSuite
+suite = BenchmarkSuite()
+summary = suite.run(controller=my_controller, name="MySNN-v1")
+suite.print_summary(summary)
 ```
 
-## Module Coverage
+### Key Files
+- `embark/benchmark/harness/benchmark_suite.py` - Main suite implementation
+- `embark/benchmark/tasks/reference_generators.py` - Reference signal generators
+- `embark/benchmark/processors/rate_snn.py` - Rate-SNN processors
 
-The Sphinx documentation covers:
+### Important Constants
+- **Sampling time**: 100 µs (10 kHz)
+- **Settling threshold**: ±5% of reference
+- **Total scenarios**: 6 standard + 2 quick
+- **Total runtime**: ~3.1 seconds simulated time
 
-- `embark.benchmark` - Main module
-- `embark.benchmark.harness` - Benchmark harness
-- `embark.benchmark.agents` - Controller agents
-- `embark.benchmark.adapters` - Controller adapters
-- `embark.benchmark.tasks` - Benchmark tasks
-- `embark.benchmark.processors` - State/action processors
-- `embark.benchmark.metrics` - Metric accumulators
-- `embark.benchmark.physics` - Physics engines
-- `embark.benchmark.controllers` - Controller wrappers
-- `embark.benchmark.interfaces` - Protocol definitions
-- `embark.benchmark.contrib.neurobench` - NeuroBench integration
+---
 
-## Troubleshooting
+## FAQ
 
-### Import Errors
+### How do I choose which scenarios to run?
 
-If Sphinx can't import modules:
+**Development**: Use `QUICK_SCENARIOS` (2 scenarios, ~0.5s)
+```python
+from embark.benchmark.harness import QUICK_SCENARIOS
+suite = BenchmarkSuite(scenarios=QUICK_SCENARIOS)
+```
 
-1. Ensure you're in the project root
-2. Install dependencies: `poetry install`
-3. Check Python path in `conf.py`
+**Validation**: Use `STANDARD_SCENARIOS` (6 scenarios, ~3s)
+```python
+from embark.benchmark.harness import STANDARD_SCENARIOS
+suite = BenchmarkSuite(scenarios=STANDARD_SCENARIOS)  # or just BenchmarkSuite()
+```
 
-### Missing Documentation
+**Publication**: Use `STANDARD_SCENARIOS` + multiple runs
+```python
+results = [suite.run(controller, name=f"MySNN-seed{i}") for i in range(5)]
+```
 
-If a module/class doesn't appear:
+### How do I interpret the results?
 
-1. Check that it has docstrings
-2. Verify the module is listed in the appropriate `.rst` file
-3. Check for import errors in the build log
+See [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md#interpretation-guide) for detailed guidance.
 
-### Build Warnings
+**Quick check**:
+- ✅ MAE within 10% of PI baseline
+- ✅ Settling time within 20% of PI
+- ✅ Overshoot < 10%
+- ✅ Zero safety violations
 
-Common warnings:
+### How do I add custom scenarios?
 
-- `undoc-members` - Expected for private methods
-- `autodoc: failed to import` - Check dependencies
-- `duplicate object description` - Check for duplicate entries in `.rst` files
+See [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md#custom-scenarios) or [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md#extending-the-suite).
+
+### What's the difference between the documentation files?
+
+| File | Audience | Content | Length |
+|------|----------|---------|--------|
+| [README.md](../README.md) | Everyone | Quick start, basic usage | Medium |
+| [QUICK_REFERENCE](BENCHMARK_SUITE_QUICK_REFERENCE.md) | Developers | Usage patterns, quick lookup | Short |
+| [BENCHMARK_SCENARIOS](BENCHMARK_SCENARIOS.md) | Researchers | Complete specifications | Long |
+| [TIMELINES](SCENARIO_TIMELINES.md) | Visual learners | Diagrams, visualizations | Medium |
+| [SCIENTIFIC_RATIONALE](SCENARIO_SCIENTIFIC_RATIONALE.md) | Academics | Research background | Long |
+
+---
+
+## Version History
+
+### v2.0 (Current)
+- Updated to 6 optimal scenarios based on motor control best practices
+- Added comprehensive documentation suite
+- Added `MultiStepReference` generator
+- Improved scenario coverage and reduced redundancy
+
+### v1.0
+- Initial release with 6 scenarios
+- Basic documentation
+
+---
+
+## Contributing
+
+See the main [README.md](../README.md#contributing) for contribution guidelines.
+
+When adding new scenarios or features:
+1. Follow existing patterns
+2. Add tests
+3. Update documentation
+4. Consider scientific rationale
+
+---
+
+## Citations
+
+If you use EMBARK in your research, please cite:
+
+```bibtex
+@software{embark2025,
+  title={EMBARK: Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control},
+  author={[Your Name]},
+  year={2025},
+  url={https://github.com/[your-repo]/embark}
+}
+```
+
+### Research References
+
+The benchmark suite is based on:
+1. [Neuromorphic Motor Control Benchmarking](https://arxiv.org/html/2512.06603v1) - ArXiv, 2024
+2. [Transient Performance Evaluation](https://arxiv.org/html/2402.01782v1) - ArXiv, 2024
+3. [Regenerative Braking in PMSM Systems](https://www.nature.com/articles/s41598-025-02396-y) - Nature, 2025
+4. [Field-Oriented Control and d-q Decoupling](https://www.nature.com/articles/s41598-025-19384-x) - Nature, 2025
+
+---
+
+## Contact and Support
+
+- **Issues**: Open an issue on GitHub
+- **Questions**: See the [FAQ](#faq) or the detailed documentation
+- **Contributions**: Follow the [contribution guidelines](../README.md#contributing)
+
+---
+
+## License
+
+MIT License - see [LICENSE](../LICENSE) for details.
