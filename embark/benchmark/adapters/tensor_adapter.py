@@ -75,10 +75,17 @@ class TensorControllerAdapter:
         self.action_processor.configure(physics_config)
 
     def reset(self) -> None:
-        """Reset underlying controller state."""
+        """Reset underlying controller and processor state."""
         self.controller.reset()
         self._last_observation = None
         self._last_action_tensor = None
+        # Propagate reset to stateful processors (e.g. RateSNNStateProcessor,
+        # RateSNNActionProcessor) so that EMA, derivatives, integrals, and
+        # incremental accumulators start fresh each episode.
+        if hasattr(self.state_processor, "reset"):
+            self.state_processor.reset()
+        if hasattr(self.action_processor, "reset"):
+            self.action_processor.reset()
 
     def __call__(self, state: StateDict, reference: ReferenceDict) -> ActionDict:
         """
@@ -110,6 +117,15 @@ class TensorControllerAdapter:
 
         # Action tensor → action dict
         action = self.action_processor(self._last_action_tensor, self._physics_config)
+
+        # Feed back the produced action to the state processor so that
+        # models requiring previous-action features (e.g. v12 incremental)
+        # can include u_d_prev, u_q_prev in the next observation.
+        if hasattr(self.state_processor, "set_prev_action"):
+            self.state_processor.set_prev_action(
+                action.get("v_d", 0.0),
+                action.get("v_q", 0.0),
+            )
 
         return action
 

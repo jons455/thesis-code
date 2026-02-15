@@ -40,8 +40,9 @@ benchmark/
 │   ├── task.py            # ClosedLoopTask
 │   └── metrics.py         # MetricAccumulator
 ├── controllers/neural/    # Wrappers for trained models
-│   ├── snn_wrapper.py     # SNNControllerWrapper
-│   └── ann_wrapper.py     # ANNControllerWrapper
+│   └── snn_wrapper.py     # SNNControllerWrapper
+├── controllers/remote/
+│   └── akida_policy.py    # RemoteAkidaPolicy (hardware-in-the-loop)
 └── contrib/neurobench/    # Optional NeuroBench interop (experimental)
     ├── model_wrapper.py   # NeuroBenchClosedLoopModel
     └── result_exporter.py # ClosedLoopMetricExporter
@@ -109,7 +110,7 @@ from embark.benchmark import (
     SyOpsAccumulator,
 )
 from embark.benchmark.agents import SNNControllerAgent
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 # Create task
 task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=1000)
@@ -118,11 +119,14 @@ task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=100
 snn = SNNControllerAgent("path/to/checkpoint.pt", track_spikes=True)
 
 # Processors convert dict<->tensor
-state_proc = MinMaxProcessor(input_keys=["i_d", "i_q"], reference_keys=["i_d_ref", "i_q_ref"])
-action_proc = LinearActionProcessor(
-    output_keys=["v_d", "v_q"],
-    bounds={"v_d": (-48, 48), "v_q": (-48, 48)},
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+    n_max=4000.0,
 )
+action_proc = RateSNNActionProcessor(incremental=False, u_max=48.0)
 
 # Wrap with TensorControllerAdapter for unified interface
 controller = TensorControllerAdapter(

@@ -1,8 +1,8 @@
 """
-Test normalization consistency across training and evaluation pipeline.
+Test normalization consistency for rate-SNN processors.
 
-This test verifies that the SNNStateProcessor in the EMBARK benchmark uses the same
-normalization as the training datasets (PyTorch and Akida).
+This test verifies that RateSNNStateProcessor produces correct normalization
+for rate-encoding SNNs, matching the expected behavior from training datasets.
 
 """
 
@@ -12,18 +12,30 @@ import numpy as np
 import pytest
 import torch
 
-from embark.benchmark.processors.normalizers import SNNStateProcessor
+from embark.benchmark.processors import RateSNNStateProcessor
 from embark.utils.config import DEFAULT_PMSM
 
 
 class TestNormalizationConsistency:
-    """Test that training and evaluation use identical normalization."""
+    """Test that RateSNNStateProcessor normalization is correct."""
 
     @pytest.fixture
     def processor(self):
-        """Create a configured SNNStateProcessor."""
-        proc = SNNStateProcessor(error_gain=10.0, n_max=4000.0)
-        proc._i_max = DEFAULT_PMSM.i_max
+        """Create a configured RateSNNStateProcessor with basic features."""
+        proc = RateSNNStateProcessor(
+            include_currents=True,
+            include_errors=True,
+            include_speed=True,
+            error_gain=10.0,
+            n_max=4000.0,
+        )
+        # Configure with i_max
+        from unittest.mock import MagicMock
+        config = MagicMock()
+        config.i_max = DEFAULT_PMSM.i_max
+        task = MagicMock()
+        proc.configure(config, task)
+        proc.reset()
         return proc
 
     def test_current_normalization(self, processor):
@@ -36,6 +48,7 @@ class TestNormalizationConsistency:
         expected_i_d = 5.4 / DEFAULT_PMSM.i_max
         expected_i_q = 3.2 / DEFAULT_PMSM.i_max
 
+        # First two elements are i_d, i_q
         assert abs(float(result[0]) - expected_i_d) < 1e-6
         assert abs(float(result[1]) - expected_i_q) < 1e-6
 
@@ -51,6 +64,7 @@ class TestNormalizationConsistency:
         expected_e_d = -1.0
         expected_e_q = 1.0
 
+        # Elements: [i_d, i_q, e_d, e_q, n] → errors are at indices 2, 3
         assert abs(float(result[2]) - expected_e_d) < 1e-6
         assert abs(float(result[3]) - expected_e_q) < 1e-6
 
@@ -66,6 +80,7 @@ class TestNormalizationConsistency:
         expected_e_d = (5.1 - 5.0) / DEFAULT_PMSM.i_max * 10.0
         expected_e_q = (3.1 - 3.0) / DEFAULT_PMSM.i_max * 10.0
 
+        # Elements: [i_d, i_q, e_d, e_q, n] → errors are at indices 2, 3
         assert abs(float(result[2]) - expected_e_d) < 1e-6
         assert abs(float(result[3]) - expected_e_q) < 1e-6
 
@@ -217,8 +232,19 @@ class TestTrainingDatasetCompatibility:
         n_norm_dataset = n_rpm / n_max
 
         # Processor normalization
-        processor = SNNStateProcessor(error_gain=error_gain, n_max=n_max)
-        processor._i_max = i_max
+        proc = RateSNNStateProcessor(
+            include_currents=True,
+            include_errors=True,
+            include_speed=True,
+            error_gain=error_gain,
+            n_max=n_max,
+        )
+        from unittest.mock import MagicMock
+        config = MagicMock()
+        config.i_max = i_max
+        proc.configure(config, MagicMock())
+        proc.reset()
+        processor = proc
 
         omega = n_rpm * 2 * math.pi / 60.0
         state = {"i_d": i_d, "i_q": i_q, "omega": omega}
@@ -259,8 +285,19 @@ class TestTrainingDatasetCompatibility:
         n_norm_dataset = n_rpm / n_max
 
         # Processor normalization
-        processor = SNNStateProcessor(error_gain=error_gain, n_max=n_max)
-        processor._i_max = i_max
+        proc = RateSNNStateProcessor(
+            include_currents=True,
+            include_errors=True,
+            include_speed=True,
+            error_gain=error_gain,
+            n_max=n_max,
+        )
+        from unittest.mock import MagicMock
+        config = MagicMock()
+        config.i_max = i_max
+        proc.configure(config, MagicMock())
+        proc.reset()
+        processor = proc
 
         omega = n_rpm * 2 * math.pi / 60.0
         state = {"i_d": i_d, "i_q": i_q, "omega": omega}

@@ -124,8 +124,13 @@ suite.print_summary(summary)
 
 ```python
 snn = SNNControllerAgent("model.pt")
-state_proc = MinMaxProcessor(...)
-action_proc = LinearActionProcessor(...)
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+)
+action_proc = RateSNNActionProcessor(incremental=False, u_max=48.0)
 controller = TensorControllerAdapter(snn, state_proc, action_proc)
 controller.configure(task.physics_engine.config, task)
 ```

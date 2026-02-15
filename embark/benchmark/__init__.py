@@ -60,7 +60,7 @@ from .agents import (
     SNNControllerAgent,
     SNNControllerTorchAgent,
 )
-from .controllers import ANNControllerWrapper, SNNControllerWrapper
+from .controllers import SNNControllerWrapper
 from .harness import (
     BenchmarkSuite,
     BenchmarkSummary,
@@ -77,6 +77,7 @@ from .metrics import (
     TrackingMAE,
 )
 from .physics import PMSMConfig, PMSMPhysicsEngine
+from .processors import RateSNNActionProcessor, RateSNNStateProcessor
 from .tasks import PMSMCurrentControlTask, SafetyLimits
 
 __all__ = [
@@ -100,8 +101,10 @@ __all__ = [
     "PIParameters",
     "SNNControllerAgent",
     "SNNControllerTorchAgent",
-    "ANNControllerWrapper",
     "SNNControllerWrapper",
+    # Processors (Rate SNN)
+    "RateSNNActionProcessor",
+    "RateSNNStateProcessor",
     # Metrics
     "MaximumError",
     "Overshoot",

@@ -17,7 +17,7 @@ from embark.benchmark.agents import SNNControllerAgent
 from embark.benchmark import TensorControllerAdapter
 
 # Processors
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 # Metrics
 from embark.benchmark import TrackingMAE, TrackingITAE, SettlingTime, Overshoot
@@ -51,8 +51,13 @@ task.physics_engine.close()
 ```python
 task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0)
 snn = SNNControllerAgent("model.pt", track_spikes=True)
-state_proc = MinMaxProcessor(input_keys=["i_d", "i_q"], reference_keys=["i_d_ref", "i_q_ref"])
-action_proc = LinearActionProcessor(output_keys=["v_d", "v_q"], bounds={"v_d": (-48, 48), "v_q": (-48, 48)})
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+)
+action_proc = RateSNNActionProcessor(incremental=False, u_max=48.0)
 controller = TensorControllerAdapter(controller=snn, state_processor=state_proc, action_processor=action_proc)
 controller.configure(task.physics_engine.config, task)
 harness = ClosedLoopHarness(task=task, controller=controller)

@@ -2,9 +2,16 @@
 Multi-scenario benchmark suite for standardised PMSM controller evaluation.
 
 The ``BenchmarkSuite`` runs a controller through multiple operating scenarios
-(different speeds, load levels, reference profiles) using the same harness
+(different speeds, reference profiles, and transients) using the same harness
 and metric infrastructure.  Users only need to supply their controller —
 the suite handles task creation, metric aggregation, and result formatting.
+
+The suite includes 6 optimal scenarios based on motor control benchmarking
+best practices, providing minimum necessary coverage to comprehensively
+evaluate controller performance across the full operating envelope.
+
+For detailed information about scenario design, coverage, and interpretation,
+see ``docs/BENCHMARK_SCENARIOS.md``.
 
 Usage::
 
@@ -32,6 +39,7 @@ from embark.benchmark.tasks.pmsm_current_control import (
 )
 from embark.benchmark.tasks.reference_generators import (
     ConstantReference,
+    MultiStepReference,
     ReferenceGenerator,
     SinusoidalReference,
     StepReference,
@@ -83,61 +91,81 @@ class ScenarioDefinition:
 # ============================================================================
 
 STANDARD_SCENARIOS: list[ScenarioDefinition] = [
-    # --- Step Response Scenarios (different load levels) ---
+    # Scenario 1: Single-Step Low Speed (500 RPM, 0→2A i_q)
     ScenarioDefinition(
-        name="step_low_load",
-        description="Step response at low torque (1A i_q) and medium speed",
-        n_rpm=1000.0,
-        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=1.0),
-        max_steps=2000,
+        name="step_low_speed_500rpm_2A",
+        description="Step response at low speed (500 RPM, 0→2A i_q)",
+        n_rpm=500.0,
+        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
+        max_steps=3000,  # 0.3s at 100µs sampling
     ),
+    # Scenario 2: Single-Step Mid Speed (1500 RPM, 0→2A i_q) - PRIMARY REFERENCE
     ScenarioDefinition(
-        name="step_mid_load",
-        description="Step response at medium torque (5A i_q) and medium speed",
-        n_rpm=1000.0,
-        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=5.0),
-        max_steps=2000,
+        name="step_mid_speed_1500rpm_2A",
+        description="Step response at nominal speed (1500 RPM, 0→2A i_q) - primary reference",
+        n_rpm=1500.0,
+        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
+        max_steps=3000,  # 0.3s at 100µs sampling
     ),
+    # Scenario 3: Single-Step High Speed (2500 RPM, 0→2A i_q)
     ScenarioDefinition(
-        name="step_high_load",
-        description="Step response at high torque (9A i_q) near current limit",
-        n_rpm=1000.0,
-        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=9.0),
-        max_steps=2000,
-    ),
-    # --- Speed Variation Scenarios ---
-    ScenarioDefinition(
-        name="step_high_speed",
-        description="Step response at high speed (2500 RPM) with medium load",
+        name="step_high_speed_2500rpm_2A",
+        description="Step response at high speed (2500 RPM, 0→2A i_q)",
         n_rpm=2500.0,
-        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=5.0),
-        max_steps=2000,
+        reference_generator=StepReference(i_d_ref=0.0, i_q_ref=2.0),
+        max_steps=3000,  # 0.3s at 100µs sampling
     ),
-    # --- Sinusoidal Tracking (dynamic performance) ---
+    # Scenario 4: Multi-Step Bidirectional (1500 RPM, ±2A i_q, 4 steps)
     ScenarioDefinition(
-        name="sinusoidal_tracking",
-        description="Sinusoidal i_q reference (2A amplitude, 10Hz) for tracking evaluation",
-        n_rpm=1000.0,
-        reference_generator=SinusoidalReference(
-            i_d_ref=0.0, i_q_amp=2.0, i_q_offset=3.0, frequency_hz=10.0
+        name="multi_step_bidirectional_1500rpm",
+        description="Multi-step bidirectional tracking (1500 RPM, ±2A i_q, 4 steps)",
+        n_rpm=1500.0,
+        reference_generator=MultiStepReference(
+            steps=[
+                (0.0, 0.0, 0.0),     # Initial: 0A
+                (0.1, 0.0, 2.0),     # Step 1: +2A (motoring)
+                (0.35, 0.0, -2.0),   # Step 2: -2A (generating)
+                (0.6, 0.0, 2.0),     # Step 3: +2A (motoring)
+                (0.85, 0.0, -2.0),   # Step 4: -2A (generating)
+            ]
         ),
-        max_steps=3000,
+        max_steps=10000,  # 1.0s at 100µs sampling
     ),
-    # --- Flux Weakening (field-weakening region) ---
+    # Scenario 5: Four-Quadrant Transition (1500 RPM, +2A → -2A → 0)
     ScenarioDefinition(
-        name="flux_weakening",
-        description="Negative i_d reference at high speed (field-weakening operation)",
+        name="four_quadrant_transition_1500rpm",
+        description="Four-quadrant transition with zero-crossing (1500 RPM, +2A → -2A → 0)",
+        n_rpm=1500.0,
+        reference_generator=MultiStepReference(
+            steps=[
+                (0.0, 0.0, 0.0),     # Initial: 0A
+                (0.1, 0.0, 2.0),     # Motoring: +2A
+                (0.4, 0.0, -2.0),    # Regenerative braking: -2A
+                (0.7, 0.0, 0.0),     # Zero crossing
+            ]
+        ),
+        max_steps=9000,  # 0.9s at 100µs sampling
+    ),
+    # Scenario 6: Field-Weakening (2500 RPM, i_d and i_q steps)
+    ScenarioDefinition(
+        name="field_weakening_2500rpm",
+        description="Field-weakening operation (2500 RPM, i_d=-2A, i_q=0→2A)",
         n_rpm=2500.0,
-        reference_generator=StepReference(i_d_ref=-3.0, i_q_ref=3.0),
-        max_steps=2000,
+        reference_generator=MultiStepReference(
+            steps=[
+                (0.0, 0.0, 0.0),     # Initial: no current
+                (0.1, -2.0, 0.0),    # Step i_d to -2A (field weakening)
+                (0.35, -2.0, 2.0),   # Step i_q to 2A (with active i_d)
+            ]
+        ),
+        max_steps=6000,  # 0.6s at 100µs sampling
     ),
 ]
 
-#: Minimal scenario set for quick validation (subset of standard).
+#: Minimal scenario set for quick validation (primary reference + one edge case).
 QUICK_SCENARIOS: list[ScenarioDefinition] = [
-    STANDARD_SCENARIOS[0],  # step_low_load
-    STANDARD_SCENARIOS[1],  # step_mid_load
-    STANDARD_SCENARIOS[4],  # sinusoidal_tracking
+    STANDARD_SCENARIOS[1],  # step_mid_speed_1500rpm_2A (primary reference)
+    STANDARD_SCENARIOS[3],  # multi_step_bidirectional_1500rpm
 ]
 
 

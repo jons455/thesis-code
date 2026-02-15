@@ -1,8 +1,7 @@
 """Controller implementations."""
 
-from .neural import ANNControllerWrapper, SNNControllerWrapper
+from .neural import SNNControllerWrapper
 
 __all__ = [
-    "ANNControllerWrapper",
     "SNNControllerWrapper",
 ]

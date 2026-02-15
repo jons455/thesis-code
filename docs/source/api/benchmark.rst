@@ -142,14 +142,6 @@ SNN Wrapper
    :undoc-members:
    :show-inheritance:
 
-ANN Wrapper
-^^^^^^^^^^^
-
-.. automodule:: embark.benchmark.controllers.neural.ann_wrapper
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Remote Controllers
 ~~~~~~~~~~~~~~~~~~
 

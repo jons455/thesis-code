@@ -69,3 +69,21 @@ class SinusoidalReference:
             2 * math.pi * self.frequency_hz * time_s
         )
         return {"i_d_ref": self.i_d_ref, "i_q_ref": i_q_ref}
+
+
+@dataclass
+class MultiStepReference:
+    """Multi-step reference generator with configurable transitions."""
+
+    steps: list[tuple[float, float, float]]  # List of (time_s, i_d_ref, i_q_ref)
+
+    def reset(self) -> None:
+        pass
+
+    def __call__(self, step: int, time_s: float) -> ReferenceDict:
+        # Find the active step based on time
+        i_d_ref, i_q_ref = 0.0, 0.0
+        for step_time, i_d, i_q in self.steps:
+            if time_s >= step_time:
+                i_d_ref, i_q_ref = i_d, i_q
+        return {"i_d_ref": i_d_ref, "i_q_ref": i_q_ref}

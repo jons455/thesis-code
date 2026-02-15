@@ -3,6 +3,7 @@
 from .pmsm_current_control import PMSMCurrentControlTask, SafetyLimits
 from .reference_generators import (
     ConstantReference,
+    MultiStepReference,
     ReferenceGenerator,
     SinusoidalReference,
     StepReference,
@@ -10,6 +11,7 @@ from .reference_generators import (
 
 __all__ = [
     "ConstantReference",
+    "MultiStepReference",
     "PMSMCurrentControlTask",
     "ReferenceGenerator",
     "SafetyLimits",

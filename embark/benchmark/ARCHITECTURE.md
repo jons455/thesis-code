@@ -6,6 +6,22 @@ Closed-loop benchmark framework for neuromorphic PMSM current control, **adapted
 > We redefine `MetricAccumulator` (vs NeuroBench's `AccumulatedMetric`) to support closed-loop control.
 > For true NeuroBench alignment, wrap official `neurobench.metrics.WorkloadMetric` inside our accumulators.
 
+## Framework Scope
+
+**Primary framework:** PyTorch
+- Neural controllers: `SNNControllerWrapper` wraps PyTorch `nn.Module` models
+- Processors: `RateSNNStateProcessor`, `RateSNNActionProcessor` use `torch.Tensor`
+- Focus: Rate-encoded spiking neural networks (SNNs)
+
+**Hardware-in-the-loop exception:**
+- `RemoteAkidaPolicy` implements framework-agnostic `Controller` interface for Akida neuromorphic hardware
+- Uses numpy arrays and TCP communication, bypassing PyTorch stack
+
+**Extension path for other frameworks (JAX, TensorFlow, Keras):**
+- Implement `Controller` protocol directly (not `TensorController`)
+- Handle preprocessing/postprocessing manually (dict → tensor → dict)
+- See `RemoteAkidaPolicy` (lines 418-443) as reference implementation
+
 ## Overview
 
 This framework extends NeuroBench patterns for **closed-loop control** benchmarks with:
@@ -272,9 +288,10 @@ embark/benchmark/
 │   ├── pmsm_current_control.py  # PMSMCurrentControlTask, SafetyLimits
 │   └── reference_generators.py  # StepReference, SinusoidalReference, etc.
 ├── processors/
-│   ├── normalizers.py        # MinMaxProcessor, StandardScalerProcessor
-│   ├── decoders.py           # LinearActionProcessor
-│   └── identity.py           # IdentityStateProcessor
+│   ├── rate_snn.py           # RateSNNStateProcessor, RateSNNActionProcessor
+│   ├── normalizers.py        # MinMaxProcessor, StandardScalerProcessor (generic)
+│   ├── decoders.py           # PWMActionProcessor (hardware deployment)
+│   └── identity.py           # IdentityStateProcessor/ActionProcessor (debugging)
 ├── metrics/accumulators/
 │   ├── tracking.py           # TrackingRMSE (update=O(1), compute=sqrt)
 │   ├── dynamics.py           # SettlingTime, Overshoot
@@ -288,8 +305,9 @@ embark/benchmark/
 │   ├── metrics.py
 │   └── types.py
 ├── controllers/neural/
-│   ├── snn_wrapper.py
-│   └── ann_wrapper.py
+│   └── snn_wrapper.py        # SNNControllerWrapper
+├── controllers/remote/
+│   └── akida_policy.py       # RemoteAkidaPolicy (hardware-in-the-loop)
 └── contrib/neurobench/       # Optional NeuroBench interop (experimental)
     ├── model_wrapper.py      # NeuroBenchClosedLoopModel
     └── result_exporter.py    # ClosedLoopMetricExporter
@@ -346,23 +364,29 @@ from embark.benchmark import (
     TrackingRMSE,
     SyOpsAccumulator,
 )
-from embark.benchmark.agents import SNNControllerAgent
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.controllers import SNNControllerWrapper
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 # Create task
 task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=1000)
 
-# Create neural controller (TensorController)
-snn = SNNControllerAgent("path/to/checkpoint.pt", track_spikes=True)
+# Load your PyTorch SNN model
+my_snn = MySNNModel()  # Your nn.Module
 
-# Create processors
-state_proc = MinMaxProcessor(
-    input_keys=["i_d", "i_q"],
-    reference_keys=["i_d_ref", "i_q_ref"],
+# Wrap to add TensorController interface
+snn = SNNControllerWrapper(my_snn)
+
+# Create processors with feature flags
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+    n_max=3000.0,
 )
-action_proc = LinearActionProcessor(
-    output_keys=["v_d", "v_q"],
-    bounds={"v_d": (-48, 48), "v_q": (-48, 48)},
+action_proc = RateSNNActionProcessor(
+    incremental=False,  # Absolute voltage output
+    u_max=48.0,
 )
 
 # Wrap into unified Controller interface
@@ -417,37 +441,41 @@ task.physics_engine.close()
 
 ## Non-PyTorch Controllers (Akida, Keras, TensorFlow)
 
-The architecture is **framework-agnostic**. While `TensorControllerAdapter` is a convenience for PyTorch, you can use any framework by implementing the `Controller` protocol directly.
+The architecture is **framework-agnostic at the Controller level**. While `TensorControllerAdapter` + processors are PyTorch-specific conveniences, you can use any framework by implementing the `Controller` protocol directly.
 
-**Example: Akida Agent**
+**Example: Akida Hardware-in-the-Loop**
+
+The `RemoteAkidaPolicy` bypasses PyTorch entirely by implementing `Controller` directly:
 
 ```python
-class AkidaControllerAgent(Controller):
-    def __init__(self, model_path):
-        self.model = akida.Model(model_path)
-
+class RemoteAkidaPolicy(Controller):  # NOT TensorController!
+    """TCP client that forwards observations to remote Akida neuromorphic hardware."""
+    
     def __call__(self, state: StateDict, reference: ReferenceDict) -> ActionDict:
-        # 1. Manual Preprocessing (Dict -> Numpy)
-        # (Or use a custom NumpyProcessor)
-        obs_numpy = my_numpy_normalizer(state, reference)
-
-        # 2. Inference
-        action_numpy = self.model.predict(obs_numpy)
-
-        # 3. Manual Postprocessing (Numpy -> Dict)
+        # 1. Manual preprocessing (dict → numpy)
+        obs = my_numpy_normalizer(state, reference)
+        
+        # 2. Send to hardware via TCP, get response
+        action_numpy = self._send_to_akida_hardware(obs)
+        
+        # 3. Manual postprocessing (numpy → dict)
         return {"v_d": float(action_numpy[0]), "v_q": float(action_numpy[1])}
-
+    
     def reset(self):
-        # Reset Akida states
-        pass
+        self._reconnect()  # Reset TCP connection
 ```
 
 You would then use it in the harness exactly like a PI controller:
 
 ```python
-akida_agent = AkidaControllerAgent("model.fbz")
+akida_agent = RemoteAkidaPolicy(host="192.168.1.100", port=5000)
 harness = ClosedLoopHarness(task=task, controller=akida_agent)
 ```
+
+**For other frameworks (JAX, TensorFlow, Keras):**
+- Follow the same pattern: implement `Controller` directly
+- Handle normalization/denormalization manually
+- No need for `TensorControllerAdapter` or PyTorch processors
 
 ## Comparison with NeuroBench
 

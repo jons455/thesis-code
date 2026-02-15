@@ -1,4 +1,4 @@
-"""Unit tests for processors (normalization/denormalization/PWM)."""
+"""Unit tests for processors (PWM and identity processors)."""
 
 from dataclasses import dataclass
 from unittest.mock import MagicMock
@@ -7,102 +7,12 @@ import pytest
 import torch
 
 from embark.benchmark.physics import PMSMConfig
-from embark.benchmark.processors.decoders import (
-    LinearActionProcessor,
-    PWMActionProcessor,
-)
-from embark.benchmark.processors.identity import (
+from embark.benchmark.processors import (
     IdentityActionProcessor,
     IdentityStateProcessor,
-)
-from embark.benchmark.processors.normalizers import (
-    MinMaxProcessor,
-    SNNStateProcessor,
-    StandardScalerProcessor,
+    PWMActionProcessor,
 )
 from embark.benchmark.processors.pwm import PWMConverter
-
-
-class TestMinMaxProcessor:
-    """Test MinMax normalization."""
-
-    def test_normalization_math(self):
-        """Verify normalization logic with explicit bounds."""
-        processor = MinMaxProcessor(input_keys=["val"], reference_keys=[])
-        # Manually set bounds to avoid needing a config object for this specific test
-        processor.bounds = {"val": (-10.0, 10.0)}
-
-        # Test -10 -> -1
-        res = processor({"val": -10.0}, {})
-        assert res[0].item() == pytest.approx(-1.0)
-
-        # Test 10 -> 1
-        res = processor({"val": 10.0}, {})
-        assert res[0].item() == pytest.approx(1.0)
-
-        # Test 0 -> 0
-        res = processor({"val": 0.0}, {})
-        assert res[0].item() == pytest.approx(0.0)
-
-        # Test 5 -> 0.5
-        res = processor({"val": 5.0}, {})
-        assert res[0].item() == pytest.approx(0.5)
-
-    def test_configure_sets_correct_bounds(self):
-        """Verify configure method sets bounds based on physics config."""
-        config = PMSMConfig(i_max=20.0, u_max=100.0)
-        processor = MinMaxProcessor(
-            input_keys=["i_d", "omega", "other"], reference_keys=["i_q_ref"]
-        )
-
-        processor.configure(config, MagicMock())
-
-        # Current should be +/- i_max
-        assert processor.bounds["i_d"] == (-20.0, 20.0)
-        assert processor.bounds["i_q_ref"] == (-20.0, 20.0)
-
-        # Other should be default +/- 1.0
-        assert processor.bounds["other"] == (-1.0, 1.0)
-
-
-class TestLinearActionProcessor:
-    """Test LinearAction denormalization."""
-
-    def test_denormalization_math(self):
-        """Verify denormalization logic with explicit bounds."""
-        processor = LinearActionProcessor(
-            output_keys=["val"], bounds={"val": (-100.0, 100.0)}
-        )
-
-        # Test -1.0 -> -100.0
-        tensor = torch.tensor([-1.0])
-        res = processor(tensor, MagicMock())
-        assert res["val"] == pytest.approx(-100.0)
-
-        # Test 1.0 -> 100.0
-        tensor = torch.tensor([1.0])
-        res = processor(tensor, MagicMock())
-        assert res["val"] == pytest.approx(100.0)
-
-        # Test 0.0 -> 0.0
-        tensor = torch.tensor([0.0])
-        res = processor(tensor, MagicMock())
-        assert res["val"] == pytest.approx(0.0)
-
-        # Test 0.5 -> 50.0
-        tensor = torch.tensor([0.5])
-        res = processor(tensor, MagicMock())
-        assert res["val"] == pytest.approx(50.0)
-
-    def test_dimension_mismatch_raises_error(self):
-        """Verify error raised if tensor is too small."""
-        processor = LinearActionProcessor(
-            output_keys=["v_d", "v_q"], bounds={"v_d": (-1, 1), "v_q": (-1, 1)}
-        )
-
-        tensor = torch.tensor([0.5])  # Only 1 value, need 2
-        with pytest.raises(ValueError, match="smaller than number of output keys"):
-            processor(tensor, MagicMock())
 
 
 # ---------------------------------------------------------------------------
@@ -338,42 +248,3 @@ def test_identity_action_processor_raises_on_too_small_tensor():
 
     with pytest.raises(ValueError, match="smaller than number of action keys"):
         proc(torch.tensor([0.1]), _ConfigStub())
-
-
-def test_standard_scaler_default_config_and_transform():
-    proc = StandardScalerProcessor(
-        input_keys=["i_d", "i_q"],
-        reference_keys=["i_d_ref", "i_q_ref"],
-    )
-    proc.configure(_ConfigStub(), _TaskStub())
-
-    out = proc(
-        state={"i_d": 1.0, "i_q": -1.0},
-        reference={"i_d_ref": 2.0, "i_q_ref": -2.0},
-    )
-
-    assert out.tolist() == pytest.approx([1.0, -1.0, 2.0, -2.0])
-    assert proc.output_dim == 4
-
-
-def test_snn_state_processor_configure_reads_i_max():
-    proc = SNNStateProcessor(error_gain=10.0, n_max=4000.0)
-    proc.configure(_ConfigStub(i_max=12.0), _TaskStub())
-
-    out = proc(
-        state={"i_d": 6.0, "i_q": 0.0, "omega": 0.0},
-        reference={"i_d_ref": 6.0, "i_q_ref": 0.0},
-    )
-    assert float(out[0]) == pytest.approx(0.5)
-
-
-def test_minmax_processor_normalizes_reference_branch_and_output_dim():
-    proc = MinMaxProcessor(input_keys=["i_d"], reference_keys=["i_q_ref"])
-    proc.configure(_ConfigStub(i_max=10.0), _TaskStub())
-
-    out = proc(
-        state={"i_d": 5.0},
-        reference={"i_q_ref": -5.0},
-    )
-    assert out.tolist() == pytest.approx([0.5, -0.5])
-    assert proc.output_dim == 2

@@ -326,11 +326,17 @@ TensorControllerAdapter(
 **Example:**
 ```python
 from embark.benchmark import TensorControllerAdapter
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 snn = SNNControllerAgent("path/to/model.pt", track_spikes=True)
-state_proc = MinMaxProcessor(input_keys=["i_d", "i_q"], reference_keys=["i_d_ref", "i_q_ref"])
-action_proc = LinearActionProcessor(output_keys=["v_d", "v_q"], bounds={"v_d": (-48, 48), "v_q": (-48, 48)})
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+    n_max=4000.0,
+)
+action_proc = RateSNNActionProcessor(incremental=False, u_max=48.0)
 
 adapter = TensorControllerAdapter(
     controller=snn,
@@ -350,30 +356,32 @@ adapter.configure(task.physics_engine.config, task)
 
 Convert state dict → tensor for neural controllers.
 
-#### `MinMaxProcessor`
+#### `RateSNNStateProcessor`
 
-Min-max normalization processor.
+Configurable state processor for rate-encoding SNNs with feature flags.
 
 ```python
-MinMaxProcessor(
-    input_keys: list[str],
-    reference_keys: list[str] | None = None,
-    feature_range: tuple[float, float] = (-1.0, 1.0),
+RateSNNStateProcessor(
+    include_currents: bool = True,
+    include_errors: bool = True,
+    include_speed: bool = True,
+    include_references: bool = False,
+    include_prev_action: bool = False,
+    include_derivatives: bool = False,
+    include_ema_slow: bool = False,
+    include_ema_fast: bool = False,
+    include_integral: bool = False,
+    i_max: float = 20.0,
+    n_max: float = 4000.0,
+    error_gain: float = 10.0,
+    clip_errors: bool = True,
 )
 ```
 
-#### `StandardScalerProcessor`
-
-Standardization (zero mean, unit variance) processor.
-
-```python
-StandardScalerProcessor(
-    input_keys: list[str],
-    reference_keys: list[str] | None = None,
-    mean: dict[str, float] | None = None,
-    std: dict[str, float] | None = None,
-)
-```
+**Methods:**
+- `reset()` - Clear stateful features (derivatives, EMA, integrals, prev_action)
+- `set_prev_action(u_d, u_q)` - Set previous action for incremental models
+- `output_dim: int` - Number of features produced
 
 #### `IdentityStateProcessor`
 
@@ -389,14 +397,21 @@ IdentityStateProcessor()
 
 Convert tensor → action dict for neural controllers.
 
-#### `LinearActionProcessor`
+#### `RateSNNActionProcessor`
 
-Linear scaling with bounds.
+Action processor for rate-encoding SNNs with absolute and incremental modes.
 
 ```python
-LinearActionProcessor(
-    output_keys: list[str],
-    bounds: dict[str, tuple[float, float]],
+RateSNNActionProcessor(
+    incremental: bool = False,
+    u_max: float = 48.0,
+    delta_max: float = 0.2,
+)
+```
+
+**Methods:**
+- `reset()` - Clear accumulated voltage (for incremental mode)
+- `last_accumulated_voltage: tuple[float, float]` - Get (u_d, u_q) state
     scale: float = 1.0,
 )
 ```

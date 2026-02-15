@@ -63,7 +63,7 @@ from embark.benchmark import (
     TrackingMAE,
 )
 from embark.benchmark.agents import SNNControllerAgent
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 # Create task
 task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0, max_steps=1000)
@@ -76,10 +76,14 @@ state_proc = MinMaxProcessor(
     input_keys=["i_d", "i_q"],
     reference_keys=["i_d_ref", "i_q_ref"],
 )
-action_proc = LinearActionProcessor(
-    output_keys=["v_d", "v_q"],
-    bounds={"v_d": (-48, 48), "v_q": (-48, 48)},
+state_proc = RateSNNStateProcessor(
+    include_currents=True,
+    include_errors=True,
+    include_speed=True,
+    i_max=20.0,
+    n_max=4000.0,
 )
+action_proc = RateSNNActionProcessor(incremental=False, u_max=48.0)
 
 # Wrap with adapter
 controller = TensorControllerAdapter(
@@ -216,7 +220,7 @@ snn = SNNControllerAgent(
 
 **Step 2: Create processors**
 ```python
-from embark.benchmark.processors import MinMaxProcessor, LinearActionProcessor
+from embark.benchmark.processors import RateSNNStateProcessor, RateSNNActionProcessor
 
 # State processor: normalize inputs
 state_proc = MinMaxProcessor(
@@ -247,26 +251,30 @@ controller = TensorControllerAdapter(
 controller.configure(task.physics_engine.config, task)
 ```
 
-### ANN Controller
+### Hardware-in-the-Loop (Akida)
 
-Same as SNN, but use `ANNControllerWrapper`:
+For neuromorphic hardware deployment, `RemoteAkidaPolicy` implements the `Controller` interface directly:
 
 ```python
-from embark.benchmark.controllers import ANNControllerWrapper
+from embark.benchmark.controllers.remote import RemoteAkidaPolicy
 
-ann = ANNControllerWrapper(model_path="path/to/ann.pt")
-# ... same processor setup as SNN
+controller = RemoteAkidaPolicy(
+    host="192.168.1.100",  # Akida hardware IP
+    port=5000,
+    output_shape=(2,),     # (v_d, v_q)
+    timeout_s=10.0,
+)
+
+# Use directly with harness - no TensorControllerAdapter needed
+harness = ClosedLoopHarness(task=task, controller=controller)
+results = harness.run()
+
+# Access latency measurements
+print(f"Avg inference latency: {sum(controller.latencies) / len(controller.latencies) * 1000:.2f} ms")
+print(f"Avg chip time: {sum(controller.chip_latencies) / len(controller.chip_latencies) * 1000:.2f} ms")
 ```
 
-### Remote Controllers (Akida)
-
-For hardware-accelerated inference:
-
-```python
-from embark.benchmark.controllers.remote import AkidaPolicy
-
-controller = AkidaPolicy(
-    server_url="http://raspberry-pi:8000",
+**Note:** `RemoteAkidaPolicy` bypasses the PyTorch stack entirely - it uses numpy arrays and TCP communication.
     model_path="path/to/model.fbz",
 )
 # No adapter needed - implements Controller directly
