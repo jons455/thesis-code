@@ -434,7 +434,32 @@ For rate-encoding SNNs, the **Controller** is a `TensorControllerAdapter` that w
 - **[BENCHMARK_API.md](docs/BENCHMARK_API.md)** - Complete API reference
 - **[BENCHMARK_SCENARIOS.md](docs/BENCHMARK_SCENARIOS.md)** - Scenario design, coverage, and interpretation guide
 - **[RATE_SNN_BENCHMARK_INTERFACE.md](docs/RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-SNN specific guide
-- **[Examples](examples/)** - Full working examples (coming soon)
+- **[Examples](examples/benchmark_example.py)** - Full working examples (PI, SNN, custom scenarios, manual loop)
+
+---
+
+## Current Limitations
+
+EMBARK is purpose-built for a specific slice of the neuromorphic motor control
+space. The following constraints apply to the current release:
+
+| Constraint | What's supported | What's not |
+|------------|-----------------|------------|
+| **Encoding** | Rate-based SNNs only | Spike-timing, event-driven, population coding |
+| **ML framework** | PyTorch (`nn.Module`) | TensorFlow, JAX, Lava, ONNX import |
+| **Motor type** | PMSM (permanent magnet synchronous) | BLDC, induction, stepper, SynRM |
+| **Control loop** | Inner current loop (FOC dq-frame) | Speed loop, position loop, cascaded control |
+| **Physics** | `gym_electric_motor` (GEM), fixed-step | Variable-step solvers, alternative backends |
+| **Speed profile** | Constant speed per scenario | Dynamic speed ramps within an episode |
+| **Noise** | Deterministic simulation | Measurement noise, load disturbances, parameter drift |
+| **Parallelism** | Sequential scenario execution | GPU batching, vectorised environments, multi-process |
+| **Hardware** | Akida HIL (experimental, TCP) | FPGA export, embedded C generation, on-device training |
+| **NeuroBench** | Optional adapters (`contrib/`) | Full upstream compliance (closed-loop not yet standardised) |
+| **Power metrics** | Not included | THD, copper losses, switching losses, energy consumption |
+
+These are deliberate scope choices, not bugs. See
+**[FUTURE_WORK.md](docs/FUTURE_WORK.md)** for the roadmap to relax these
+constraints.
 
 ---
 

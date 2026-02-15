@@ -205,12 +205,6 @@ class BenchmarkSummary:
     scenario_results: list[ScenarioResult] = field(default_factory=list)
 
     @property
-    def mean_mae_iq(self) -> float:
-        """Average MAE i_q across all scenarios."""
-        values = [r.metrics.get("mae_i_q", 0.0) for r in self.scenario_results]
-        return sum(values) / max(len(values), 1)
-
-    @property
     def worst_max_error_iq(self) -> float:
         """Worst-case max error across all scenarios."""
         values = [r.metrics.get("max_error_i_q", 0.0) for r in self.scenario_results]
@@ -226,7 +220,6 @@ class BenchmarkSummary:
         return {
             "controller_name": self.controller_name,
             "aggregate": {
-                "mean_mae_iq": self.mean_mae_iq,
                 "worst_max_error_iq": self.worst_max_error_iq,
                 "num_safety_violations": self.num_safety_violations,
                 "num_scenarios": len(self.scenario_results),
@@ -340,11 +333,11 @@ class BenchmarkSuite:
             summary.scenario_results.append(scenario_result)
 
             if self.verbose:
-                mae_iq = results.get("mae_i_q", 0.0)
+                rms_iq = results.get("rms_i_q", 0.0)
                 max_err = results.get("max_error_i_q", 0.0)
                 status = "SAFETY VIOLATION" if task.terminated_by_safety else "OK"
                 print(
-                    f"           MAE={mae_iq:.4f}A  MaxErr={max_err:.4f}A  [{status}]"
+                    f"           RMS={rms_iq:.4f}A  MaxErr={max_err:.4f}A  [{status}]"
                 )
 
         return summary
@@ -364,7 +357,7 @@ class BenchmarkSuite:
 
         # Per-scenario table
         header = (
-            f"{'Scenario':<22} {'MAE_iq':>9} {'MaxErr_iq':>10} "
+            f"{'Scenario':<22} {'RMS_iq':>9} {'MaxErr_iq':>10} "
             f"{'Settle[s]':>10} {'Status':>8}"
         )
         print(header)
@@ -373,11 +366,11 @@ class BenchmarkSuite:
         for r in summary.scenario_results:
             m = r.metrics
             status = "FAIL" if r.safety_terminated else "OK"
-            settle = m.get("settling_time", float("inf"))
+            settle = m.get("settling_time_i_q", float("inf"))
             settle_str = f"{settle:.4f}" if settle < float("inf") else "N/A"
             print(
                 f"{r.scenario_name:<22} "
-                f"{m.get('mae_i_q', 0.0):>9.4f} "
+                f"{m.get('rms_i_q', 0.0):>9.4f} "
                 f"{m.get('max_error_i_q', 0.0):>10.4f} "
                 f"{settle_str:>10} "
                 f"{status:>8}"
@@ -387,7 +380,7 @@ class BenchmarkSuite:
         print("-" * 80)
         print(
             f"{'AGGREGATE':<22} "
-            f"{summary.mean_mae_iq:>9.4f} "
+            f"{'':>9} "
             f"{summary.worst_max_error_iq:>10.4f} "
             f"{'':>10} {'':>8}"
         )

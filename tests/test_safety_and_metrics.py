@@ -190,11 +190,13 @@ class TestMetricCorrectness:
         assert result["mae_val"] == pytest.approx(3.5, abs=1e-6)
 
     def test_tracking_itae_calculation(self):
-        """Verify ITAE calculation with simple time steps."""
-        metric = TrackingITAE(tracked_keys=["val"])
+        """Verify ITAE calculation with simple time steps within the 50 ms window."""
+        metric = TrackingITAE(tracked_keys=["val"], window_s=0.05)
         metric.reset()
 
-        # Two steps at t=0.0 and t=1.0 with constant error 2.0
+        # Two steps within the transient window: t=0.0 and t=0.01 with error 2.0
+        # First step: dt=0   → contribution = 0
+        # Second step: dt=0.01, t=0.01 → contribution = 2.0 * 0.01 * 0.01 = 0.0002
         metric.update(
             state={"val": 8.0, "time": 0.0},
             reference={"val_ref": 10.0},
@@ -202,6 +204,31 @@ class TestMetricCorrectness:
             next_state={},
             controller_info={},
         )
+        metric.update(
+            state={"val": 8.0, "time": 0.01},
+            reference={"val_ref": 10.0},
+            action={},
+            next_state={},
+            controller_info={},
+        )
+
+        result = metric.compute()
+        # dt=0.01, t=0.01, error=2.0 → 2.0 * 0.01 * 0.01 = 0.0002
+        assert result["itae_val"] == pytest.approx(0.0002, abs=1e-9)
+
+    def test_tracking_itae_ignores_steps_outside_window(self):
+        """ITAE should not accumulate contributions after the window ends."""
+        metric = TrackingITAE(tracked_keys=["val"], window_s=0.05)
+        metric.reset()
+
+        metric.update(
+            state={"val": 8.0, "time": 0.0},
+            reference={"val_ref": 10.0},
+            action={},
+            next_state={},
+            controller_info={},
+        )
+        # This step is past the 50ms window — should NOT contribute
         metric.update(
             state={"val": 8.0, "time": 1.0},
             reference={"val_ref": 10.0},
@@ -211,8 +238,7 @@ class TestMetricCorrectness:
         )
 
         result = metric.compute()
-        # First step contributes 0 (dt = 0), second contributes 2 * 1 * 1 = 2
-        assert result["itae_val"] == pytest.approx(2.0, abs=1e-6)
+        assert result["itae_val"] == pytest.approx(0.0, abs=1e-9)
 
     def test_maximum_error_across_steps(self):
         """MaximumError tracks worst-case absolute error."""
@@ -241,59 +267,73 @@ class TestMetricCorrectness:
 class TestDynamicMetrics:
     """Tests for dynamic response metrics (settling time, overshoot)."""
 
-    def test_settling_time_basic(self):
-        """SettlingTime returns first time within band when no violation."""
-        metric = SettlingTime(tracked_key="val", threshold=0.5, time_key="time")
+    def test_settling_time_settles_with_dwell(self):
+        """SettlingTime reports entry time once dwell is satisfied."""
+        # ref=2.0 → 2% band = 0.04 A, dwell=0.001 s
+        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time")
         metric.reset()
 
-        # Always within threshold: error <= 0.5 from the beginning
+        # t=0.0: reference not yet fired (0) → no band computed yet
         metric.update(
-            state={"val": 1.6, "time": 0.0},
+            state={"val": 0.0, "time": 0.0},
+            reference={"val_ref": 0.0},
+            action={},
+            next_state={},
+            controller_info={},
+        )
+        # t=0.005: step fires (ref=2.0), meas=1.97 → error=0.03 > band(0.04)? NO → within band
+        metric.update(
+            state={"val": 1.97, "time": 0.005},
             reference={"val_ref": 2.0},
             action={},
             next_state={},
             controller_info={},
         )
+        # t=0.007: still within band, dwell = 0.007-0.005 = 0.002 >= 0.001 → settled!
         metric.update(
-            state={"val": 1.6, "time": 1.0},
+            state={"val": 1.98, "time": 0.007},
             reference={"val_ref": 2.0},
             action={},
             next_state={},
             controller_info={},
         )
 
-        assert metric.compute() == pytest.approx(0.0)
+        result = metric.compute()
+        # Should have settled at t=0.005 (entry of the band run)
+        assert result["settling_time_val"] == pytest.approx(0.005, abs=1e-9)
 
-    def test_settling_time_with_late_violation(self):
-        """If error leaves band again, last outside time is reported."""
-        metric = SettlingTime(tracked_key="val", threshold=0.5, time_key="time")
+    def test_settling_time_dwell_not_met_returns_inf(self):
+        """If dwell is never satisfied, returns inf."""
+        # ref=2.0 → band=0.04, dwell=0.01
+        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.01, time_key="time")
         metric.reset()
 
-        # Within band at t=0.0
+        # Enter band at t=0.005, but leave immediately at t=0.006 (dwell=0.001 < 0.01)
         metric.update(
-            state={"val": 1.6, "time": 0.0},
+            state={"val": 1.97, "time": 0.005},
             reference={"val_ref": 2.0},
             action={},
             next_state={},
             controller_info={},
         )
-        # Outside band at t=1.0
         metric.update(
-            state={"val": 0.0, "time": 1.0},
+            state={"val": 0.0, "time": 0.006},
             reference={"val_ref": 2.0},
             action={},
             next_state={},
             controller_info={},
         )
 
-        assert metric.compute() == pytest.approx(1.0)
+        result = metric.compute()
+        assert result["settling_time_val"] == float("inf")
 
     def test_settling_time_returns_inf_when_never_within(self):
-        metric = SettlingTime(tracked_key="val", threshold=0.1, time_key="time")
+        """Returns inf when signal never enters the band."""
+        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time")
         metric.reset()
 
-        # Always outside threshold
-        for t in [0.0, 1.0, 2.0]:
+        # Error is always large (well outside 2% band of ref=2.0 → band=0.04)
+        for t in [0.0, 0.01, 0.02]:
             metric.update(
                 state={"val": 0.0, "time": t},
                 reference={"val_ref": 2.0},
@@ -302,7 +342,8 @@ class TestDynamicMetrics:
                 controller_info={},
             )
 
-        assert metric.compute() == pytest.approx(float("inf"))
+        result = metric.compute()
+        assert result["settling_time_val"] == float("inf")
 
     def test_overshoot_computation(self):
         """Overshoot returns positive percentage when max exceeds final ref."""

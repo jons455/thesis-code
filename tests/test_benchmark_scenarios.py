@@ -195,13 +195,13 @@ class TestBenchmarkSuite:
         
         # Verify results
         assert len(summary.scenario_results) == 2
-        assert summary.mean_mae_iq > 0
+        assert summary.worst_max_error_iq >= 0
         assert summary.num_safety_violations == 0
         
         # Check that metrics are computed
         for result in summary.scenario_results:
-            assert "mae_i_q" in result.metrics
-            assert result.metrics["mae_i_q"] >= 0
+            assert "rms_i_q" in result.metrics
+            assert result.metrics["rms_i_q"] >= 0
 
 
 class TestScenarioReferences:

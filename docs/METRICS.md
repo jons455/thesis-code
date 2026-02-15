@@ -4,178 +4,249 @@ Single source of truth for what the benchmark currently measures.
 
 ---
 
-## Core Metrics (Implemented)
+## Default Metric Set (`create_metrics()`)
 
 All accumulators follow the `MetricAccumulator` protocol: O(1) `update()` per step, `compute()` once at episode end.
 
-### Tracking Accuracy
+The factory (`embark/benchmark/metrics/neurobench_factory.py`) always returns:
 
-| Metric | Output Key | Unit | Location |
-|--------|-----------|------|----------|
-| **MAE** | `mae_i_q`, `mae_i_d` | A | `tracking.py` |
-| **ITAE** | `itae_i_q`, `itae_i_d` | A·s² | `tracking.py` |
-| **Max Error** | `max_error_i_q`, `max_error_i_d` | A | `tracking.py` |
+| Metric | Class | Output Key(s) | Unit |
+|--------|-------|--------------|------|
+| **MAE** | `TrackingMAE` | `mae_i_q`, `mae_i_d` | A |
+| **ITAE** | `TrackingITAE` | `itae_i_q`, `itae_i_d` | A·s² |
+| **Max Error** | `MaximumError` | `max_error_i_q`, `max_error_i_d` | A |
+| **Settling Time** | `SettlingTime` | `settling_time_i_q` | s |
+| **Overshoot** | `Overshoot` | `overshoot` | % |
+| **Steady-State RMS** | `SteadyStateRMS` | `rms_i_q`, `rms_i_d` | A |
+| **Inference Latency** | `InferenceLatency` | see below | ms / µs |
 
-- **MAE** (Mean Absolute Error): `sum(|ref - meas|) / count` — intuitive, robust tracking quality measure.
-- **ITAE** (Integral Time Absolute Error): `sum(t * |error| * dt)` — penalizes sustained errors, standard in control benchmarks.
-- **Max Error**: `max(|ref - meas|)` — worst-case safety metric; a controller with low average error but high max-error may have dangerous spikes.
+When the controller exposes `.model` (a `torch.nn.Module`), NeuroBench adapters are added automatically.
 
-### Dynamics
+---
 
-| Metric | Output Key | Unit | Location |
-|--------|-----------|------|----------|
-| **Settling Time** | `settling_time` | s | `dynamics.py` |
-| **Overshoot** | `overshoot` | % | `dynamics.py` |
+## Tracking Accuracy
 
-- **Settling Time**: Time until error stays within threshold (default 0.05 A). Returns `inf` if never settles. Tracked on `i_q`.
-- **Overshoot**: `max(0, (max_value - final_ref) / |final_ref| * 100)`. Tracked on `i_q`.
+### `TrackingMAE` — Mean Absolute Error (full episode)
 
-### Inference Latency
+**Formula:**
 
-| Metric | Output Key | Unit | Location |
-|--------|-----------|------|----------|
-| **Mean Latency** | `mean_latency_ms` | ms | `latency.py` |
-| **P95 Latency** | `p95_latency_ms` | ms | `latency.py` |
-| **P99 Latency** | `p99_latency_ms` | ms | `latency.py` |
-| **Max Latency** | `max_latency_ms` | ms | `latency.py` |
-| **Jitter** | `jitter_ms` | ms | `latency.py` |
-| **Total Inference Time** | `total_inference_time_s` | s | `latency.py` |
-| **Chip Mean** | `chip_mean_us` | µs | `latency.py` |
-| **Chip Median** | `chip_median_us` | µs | `latency.py` |
-| **Chip P95** | `chip_p95_us` | µs | `latency.py` |
-| **Chip P99** | `chip_p99_us` | µs | `latency.py` |
-| **Chip Max** | `chip_max_us` | µs | `latency.py` |
-| **Chip Min** | `chip_min_us` | µs | `latency.py` |
+$$\text{MAE}_q = \frac{1}{N} \sum_{k=0}^{N} |i_{q,\text{ref}}[k] - i_q[k]|$$
 
-- **Round-trip latency** (ms): Read from `controller_info["inference_latency_s"]`. Measures full observation-to-action round trip.
-- **On-chip latency** (µs): Read from `controller_info["chip_inference_time_s"]`. Measures hardware accelerator inference only. Present when controller reports chip timing (e.g. Akida).
-- **Purpose**: Validate real-time feasibility. For typical PMSM current control at 10 kHz (100 µs period), mean latency should be < 50 µs and max latency < 100 µs.
+- Computed over the **full episode** (transient + steady-state)
+- Industry-standard metric for motor control validation; intuitive and robust
+- Complements ITAE (transient focus) and RMS (steady-state focus)
 
-### Neuromorphic / NeuroBench
+**Output keys:** `mae_i_q`, `mae_i_d`
+**Units:** A
+**Location:** `metrics/accumulators/tracking.py`
 
-When the controller exposes a `torch.nn.Module` as `.model`, the metric factory (`create_metrics()`) automatically adds NeuroBench adapters from `embark/benchmark/contrib/neurobench/metric_adapters.py`.
+---
 
-#### Static Metrics (model-only, computed once at episode end)
+### `TrackingITAE` — Integral Time Absolute Error (transient window)
+
+**Formula:**
+
+$$\text{ITAE}_q = \int_0^{50\text{ ms}} t \cdot |i_{q,\text{ref}}(t) - i_q(t)| \, dt$$
+
+and likewise for $i_d$.
+
+- Integration window: **first 50 ms** of each episode only (`window_s=0.05`)
+- Time-weighting penalizes *sustained* transient errors more than brief spikes
+- Standard in control benchmarking; closely tracks thermal stress buildup
+
+**Output keys:** `itae_i_q`, `itae_i_d`
+**Units:** A·s²
+**Location:** `metrics/accumulators/tracking.py`
+
+---
+
+### `SteadyStateRMS` — RMS of steady-state error
+
+**Formula:**
+
+$$\text{RMS}(i_q) = \sqrt{\frac{1}{N} \sum_{k=T_{ss}}^{T} \left(i_{q,\text{ref}}[k] - i_q[k]\right)^2}$$
+
+where $T_{ss}$ is the first step after `transient_s` (default 50 ms).
+
+- Excludes the transient (first 50 ms) — captures only the steady-state region
+- Measures torque ripple and residual bias after settling
+
+**Output keys:** `rms_i_q`, `rms_i_d`
+**Units:** A
+**Location:** `metrics/accumulators/tracking.py`
+
+---
+
+### `MaximumError` — Worst-case absolute error
+
+**Formula:** $e_{\max} = \max_k |i_{q,\text{ref}}[k] - i_q[k]|$ over the full episode.
+
+- Safety metric: a controller with low average error but a large spike may still be dangerous
+
+**Output keys:** `max_error_i_q`, `max_error_i_d`
+**Units:** A
+**Location:** `metrics/accumulators/tracking.py`
+
+---
+
+## Dynamics
+
+### `SettlingTime` — Time to enter and remain within 2% band
+
+**Threshold:** 2% of step size (`band_fraction=0.02`). For a 2 A step: ±0.04 A.
+
+**Dwell requirement:** The signal must stay inside the band continuously for at least **1 ms** (`dwell_s=0.001`). This prevents a zero-crossing from being falsely counted as settling.
+
+**Algorithm:**
+1. Detect first non-zero reference as step target; compute `band = 0.02 × |step_target|`
+2. Track the start of each in-band run (`_candidate_entry`)
+3. If the signal leaves the band, reset the dwell clock
+4. Once the signal has been in-band for ≥ 1 ms, record `settling_time = _candidate_entry`
+5. Returns `inf` if never settled
+
+**Output key:** `settling_time_i_q`
+**Units:** seconds (s), or `inf`
+**Location:** `metrics/accumulators/dynamics.py`
+
+---
+
+### `Overshoot` — Peak overshoot relative to step
+
+**Formula:**
+
+$$\text{overshoot} (\%) = \max\!\left(0,\ \frac{\text{peak} - i_{q,\text{ref}}}{|i_{q,\text{ref}}|} \times 100\right)$$
+
+- `step_ref` is latched at the first non-zero reference value
+- Returns 0.0 if no step fires or no overshoot occurs
+
+**Output key:** `overshoot`
+**Units:** %
+**Location:** `metrics/accumulators/dynamics.py`
+
+---
+
+## Inference Latency
+
+### `InferenceLatency`
+
+Reads timing data from `controller_info` dict (populated by hardware-in-the-loop or profiling wrappers). Safe to use with any controller — defaults to 0.0 when no timing data is present.
+
+#### Round-trip latency (milliseconds)
+
+| Output Key | Description |
+|-----------|-------------|
+| `mean_latency_ms` | Mean round-trip time |
+| `p95_latency_ms` | 95th percentile |
+| `p99_latency_ms` | 99th percentile |
+| `max_latency_ms` | Maximum |
+| `jitter_ms` | Standard deviation |
+| `total_inference_time_s` | Sum of all latencies |
+
+#### On-chip latency (microseconds, when chip timing is available)
+
+| Output Key | Description |
+|-----------|-------------|
+| `chip_mean_us` | Mean on-chip time |
+| `chip_median_us` | Median |
+| `chip_p95_us` | 95th percentile |
+| `chip_p99_us` | 99th percentile |
+| `chip_max_us` | Maximum |
+| `chip_min_us` | Minimum |
+
+**Real-time constraint:** At 10 kHz (100 µs period), mean latency should be < 50 µs, max < 100 µs.
+
+**Location:** `metrics/accumulators/latency.py`
+
+---
+
+## NeuroBench Workload & Static Metrics
+
+Added automatically when `controller.model` is a `torch.nn.Module`.
+
+### Static (computed once at episode end)
 
 | Metric | Output Keys | Description |
 |--------|------------|-------------|
 | **Footprint** | `footprint`, `nb_footprint` | Model memory footprint |
-| **Connection Sparsity** | `connection_sparsity`, `nb_connection_sparsity` | Fraction of zero-weight connections [0-1] |
+| **Connection Sparsity** | `connection_sparsity`, `nb_connection_sparsity` | Fraction of zero-weight connections [0–1] |
 
-#### Workload Metrics (updated per step)
+### Workload (updated per step)
 
 | Metric | Output Keys | Description |
 |--------|------------|-------------|
-| **Synaptic Operations** | `total_syops`, `syops_per_step`, `effective_macs`, `effective_acs`, `dense`, `nb_synaptic_operations_total` | Computational cost proxy (energy indicator) |
-| **Activation Sparsity** | `activation_sparsity`, `nb_activation_sparsity` | Fraction of non-spiking neurons [0-1] |
+| **Synaptic Operations** | `total_syops`, `syops_per_step`, `effective_macs`, `effective_acs`, `dense` | Computational cost proxy (energy indicator) |
+| **Activation Sparsity** | `activation_sparsity`, `nb_activation_sparsity` | Fraction of inactive neurons [0–1]; higher = better |
 
-- **SyOps**: `effective_macs + effective_acs`; falls back to `dense` when both are zero. `syops_per_step = total_syops / steps`.
-- **Activation Sparsity**: Higher is better — indicates more efficient spike-based computation.
-- Additional NeuroBench metrics are discovered dynamically via `discover_neurobench_metric_classes()` and emitted with `nb_*` prefixed keys.
+- **SyOps:** `effective_macs + effective_acs`; falls back to `dense` when both are zero. `syops_per_step = total_syops / steps`.
+- Any additional NeuroBench metrics discovered via `discover_neurobench_metric_classes()` are emitted with `nb_*` prefixed keys.
 
-Controllers without a `.model` (e.g. PI) get only control + latency metrics; no neuromorphic metrics.
+**Location:** `embark/benchmark/contrib/neurobench/metric_adapters.py`
 
 ---
 
 ## Metric Factory
 
-Location: `embark/benchmark/metrics/neurobench_factory.py`
+**Location:** `embark/benchmark/metrics/neurobench_factory.py`
 
-`create_metrics(controller)` returns:
+```python
+from embark.benchmark.metrics import create_metrics
 
-**Always included (control metrics):**
-- `TrackingMAE(tracked_keys=["i_q", "i_d"])`
-- `TrackingITAE(tracked_keys=["i_q", "i_d"])`
-- `MaximumError(tracked_keys=["i_q", "i_d"])`
-- `SettlingTime(tracked_key="i_q", threshold=0.05)`
-- `Overshoot(tracked_key="i_q")`
+metrics = create_metrics(controller)  # controller=None → control metrics only
+```
 
-**Conditionally included** (when `controller.model` is a `torch.nn.Module`):
-- All NeuroBench static metric adapters (Footprint, ConnectionSparsity, ...)
-- All NeuroBench workload metric adapters (SynapticOperations, ActivationSparsity, ...)
+**Always included:**
+```python
+TrackingMAE(tracked_keys=["i_q", "i_d"])
+TrackingITAE(tracked_keys=["i_q", "i_d"], window_s=0.05)
+MaximumError(tracked_keys=["i_q", "i_d"])
+SettlingTime(tracked_key="i_q", band_fraction=0.02, dwell_s=0.001)
+Overshoot(tracked_key="i_q")
+SteadyStateRMS(tracked_keys=["i_q", "i_d"], transient_s=0.05)
+InferenceLatency()
+```
 
-Note: `InferenceLatency` is always safe to add — it defaults to zero when the controller does not report timing.
-
----
-
-## Benchmark Scenarios
-
-Location: `embark/benchmark/harness/benchmark_suite.py`
-
-### Standard Scenarios (6)
-
-| Scenario | Speed | Reference | Purpose |
-|----------|-------|-----------|---------|
-| `step_low_load` | 1000 RPM | Step i_q=1A | Low torque response |
-| `step_mid_load` | 1000 RPM | Step i_q=5A | Medium torque response |
-| `step_high_load` | 1000 RPM | Step i_q=9A | Near-limit torque |
-| `step_high_speed` | 2500 RPM | Step i_q=5A | High back-EMF operation |
-| `sinusoidal_tracking` | 1000 RPM | sin(10Hz, 2A, offset 3A) | Dynamic tracking |
-| `flux_weakening` | 2500 RPM | i_d=-3A, i_q=3A | Field-weakening region |
-
-### Quick Scenarios (3)
-
-Fast validation subset: `step_low_load`, `step_mid_load`, `sinusoidal_tracking`.
+**Conditionally added** (when `controller.model` is a `torch.nn.Module`):
+- NeuroBench static metric adapters (Footprint, ConnectionSparsity)
+- NeuroBench workload metric adapters (SynapticOperations, ActivationSparsity)
 
 ---
 
 ## Output Format
 
-Three output levels: single-run (harness), multi-scenario (suite), and NeuroBench-style export.
-
 ### 1. Single run: `ClosedLoopHarness.run()`
 
-Returns a **flat dict** with `steps` plus every key produced by each metric's `compute()`.
+Returns a flat dict.
 
 **Always present:**
-- `steps`: `int` — number of control steps executed.
-
-**Keys from default metrics** (only present if that metric is in the harness):
 
 | Key | Type | Source |
 |-----|------|--------|
+| `steps` | int | Harness |
 | `mae_i_q`, `mae_i_d` | float | TrackingMAE |
 | `itae_i_q`, `itae_i_d` | float | TrackingITAE |
 | `max_error_i_q`, `max_error_i_d` | float | MaximumError |
-| `settling_time` | float | SettlingTime (s or `inf`) |
+| `settling_time_i_q` | float | SettlingTime (s or `inf`) |
 | `overshoot` | float | Overshoot (%) |
-| `total_syops`, `syops_per_step` | float | NeuroBench SynapticOperations adapter |
-| `effective_macs`, `effective_acs`, `dense` | float | NeuroBench SynapticOperations adapter |
-| `activation_sparsity`, `footprint`, `connection_sparsity` | float | NeuroBench adapters |
-| `nb_*` | float | NeuroBench adapters (all raw keys) |
+| `rms_i_q`, `rms_i_d` | float | SteadyStateRMS |
 | `mean_latency_ms`, `p95_latency_ms`, `p99_latency_ms`, `max_latency_ms`, `jitter_ms`, `total_inference_time_s` | float | InferenceLatency |
-| `chip_mean_us`, `chip_median_us`, `chip_p95_us`, `chip_p99_us`, `chip_max_us`, `chip_min_us` | float | InferenceLatency (when chip timing present) |
+| `chip_mean_us`, `chip_median_us`, `chip_p95_us`, `chip_p99_us`, `chip_max_us`, `chip_min_us` | float | InferenceLatency |
 
-**Example (excerpt):**
+**Conditionally present** (when `controller.model` is a `torch.nn.Module`):
 
-```python
-{
-  "steps": 2000,
-  "mae_i_q": 0.012,
-  "mae_i_d": 0.001,
-  "max_error_i_q": 0.95,
-  "settling_time": 0.05,
-  "overshoot": 4.2,
-  "total_syops": 12000.0,
-  "syops_per_step": 6.0,
-  "activation_sparsity": 0.85,
-  "mean_latency_ms": 0.032,
-  "max_latency_ms": 0.048,
-}
-```
+| Key | Source |
+|-----|--------|
+| `total_syops`, `syops_per_step`, `effective_macs`, `effective_acs` | NeuroBench SynapticOperations |
+| `activation_sparsity` | NeuroBench ActivationSparsity |
+| `footprint`, `connection_sparsity` | NeuroBench static adapters |
+| `nb_*` | All raw NeuroBench keys |
 
 ### 2. Multi-scenario: `BenchmarkSummary.to_dict()`
-
-Returned by `BenchmarkSuite.run(controller, name)` and serialized via `BenchmarkSuite.save_results(summary, path)` (JSON).
-
-**Shape:**
 
 ```python
 {
   "controller_name": str,
   "aggregate": {
-    "mean_mae_iq": float,       # average MAE i_q across all scenarios
-    "worst_max_error_iq": float, # worst-case max error across scenarios
+    "worst_max_error_iq": float,    # worst-case max error across scenarios
     "num_safety_violations": int,
     "num_scenarios": int,
   },
@@ -183,7 +254,7 @@ Returned by `BenchmarkSuite.run(controller, name)` and serialized via `Benchmark
     {
       "name": str,
       "description": str,
-      "metrics": { ... },        # same flat dict as harness.run()
+      "metrics": { ... },           # flat dict from harness.run()
       "safety_terminated": bool,
       "violation_reason": str | None,
     },
@@ -192,59 +263,23 @@ Returned by `BenchmarkSuite.run(controller, name)` and serialized via `Benchmark
 }
 ```
 
-### 3. NeuroBench-style export: `ClosedLoopMetricExporter.to_neurobench_format()`
-
-Takes the flat dict from one `harness.run()` and splits it into control vs workload for comparison tables.
-
-**Shape:**
-
-```python
-{
-  "benchmark": str,
-  "model": str,
-  "steps": int,
-  "control_metrics": {
-    # mae_i_q, mae_i_d, itae_i_q, itae_i_d,
-    # max_error_i_q, max_error_i_d, settling_time, overshoot
-  },
-  "workload_metrics": {
-    # total_syops, syops_per_step, and any key starting with "nb_"
-  },
-}
-```
-
 ---
 
 ## NeuroBench Alignment
 
-NeuroBench is built for **single-shot inference** (dataset -> model -> metrics via hooks). Our benchmark is **closed-loop** (controller <-> physics loop). We use **adapters** in `embark/benchmark/contrib/neurobench/metric_adapters.py` to bridge the gap:
-
-| NeuroBench metric (concept) | Our usage |
-|-----------------------------|-----------|
-| **Footprint, ConnectionSparsity** | Static adapters; called in `compute()` with `controller.model`. |
-| **ActivationSparsity, SynapticOperations** | Workload adapters; updated each step with `last_observation` / `last_action_tensor`, final result in `compute()`. |
-| **Latency** | We use our own `InferenceLatency` accumulator (closed-loop round-trip and chip timing); not replaced by NeuroBench. |
-| **MAE, ITAE, Max Error, Settling Time, Overshoot** | Control-only; implemented in `tracking.py` and `dynamics.py`. Not provided by NeuroBench. |
-
-The controller-aware metric factory (`create_metrics(controller)`) adds NeuroBench adapters only when the controller has a `torch.nn.Module` as `.model`.
-
----
-
-## CLI Usage
-
-```bash
-# Full 6-scenario suite
-poetry run python -m evaluation.core.run_evaluation
-
-# Quick 3-scenario check
-poetry run python -m evaluation.core.run_evaluation --quick
-```
+| NeuroBench concept | Our usage |
+|--------------------|-----------|
+| **Footprint, ConnectionSparsity** | Static adapters; evaluated in `compute()` on `controller.model` |
+| **ActivationSparsity, SynapticOperations** | Workload adapters; updated each step via `last_observation` / `last_action_tensor` |
+| **Latency** | Custom `InferenceLatency` accumulator; reads from `controller_info` (round-trip + chip timing) |
+| **ITAE, MaxError, SettlingTime, Overshoot, RMS** | Control-only; implemented in `tracking.py` and `dynamics.py` |
 
 ---
 
 ## Removed / Deprecated
 
-- **RMSE**: Removed; use MAE and ITAE for tracking.
-- **Efficiency metrics**: ControlEffort, TotalVariation, EnergyConsumption removed.
+- **Mean MAE across scenarios** (`BenchmarkSummary.mean_mae_iq`): Removed — aggregating MAE over scenarios with different episode lengths and step sizes produces a meaningless number. Per-scenario `mae_i_q` values in `scenario_results` are used for comparison instead.
+- **RMSE** (old): Replaced by `SteadyStateRMS`.
+- **ControlEffort, TotalVariation, EnergyConsumption**: Removed.
 - **LAC (Logarithmic Accuracy-Cost)**: Removed; no composite score in the pipeline.
-- **`step_low_speed` scenario**: Removed (200 RPM too slow for practical PMSM benchmarking).
+- **`BenchmarkSummary.mean_mae_iq`**: Removed. Per-scenario `rms_i_q` values in `scenario_results` are used instead.

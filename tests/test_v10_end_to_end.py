@@ -290,15 +290,20 @@ class TestV10ModelEndToEnd:
     def test_model_forward_pass(self, model_path, device):
         """Test that model can perform forward pass."""
         model = load_v10_model(model_path, device=device)
-        
-        # Create dummy input (batch_size=2, 12 features)
-        x = torch.randn(2, 12, device=device)
-        
+
+        # Read input_size from checkpoint so the test works for any model version
+        checkpoint = torch.load(model_path, map_location=device)
+        input_size = checkpoint.get("input_size", 12)
+        output_size = checkpoint.get("output_size", 2)
+
+        # Create dummy input matching the model's expected input dimensions
+        x = torch.randn(2, input_size, device=device)
+
         # Forward pass
         with torch.no_grad():
             y = model(x)
-        
-        assert y.shape == (2, 2), f"Expected shape (2, 2), got {y.shape}"
+
+        assert y.shape == (2, output_size), f"Expected shape (2, {output_size}), got {y.shape}"
         assert not torch.isnan(y).any(), "Output contains NaN"
         assert not torch.isinf(y).any(), "Output contains Inf"
 
@@ -310,26 +315,43 @@ class TestV10ModelEndToEnd:
     def test_controller_single_step(self, model_path, device):
         """Test controller can perform single control step."""
         controller = create_v10_controller(model_path, device=device)
-        
-        # Create dummy observation
-        obs = {
+
+        # Configure controller with physics parameters (required before use)
+        class _ConfigStub:
+            i_max = 10.8
+            u_max = 12.0
+            tau = 1e-4
+
+        class _TaskStub:
+            pass
+
+        controller.configure(_ConfigStub(), _TaskStub())
+
+        # Create state dict matching PMSMPhysicsEngine output
+        state = {
             "i_d": 0.0,
             "i_q": 1.0,
+            "omega": 157.0,
+            "epsilon": 0.0,
+            "time": 0.0,
+        }
+
+        # Create reference dict matching ReferenceGenerator output
+        reference = {
             "i_d_ref": 0.0,
             "i_q_ref": 2.0,
-            "n": 1000.0,
         }
-        
+
         # Reset controller
         controller.reset()
-        
-        # Compute action
-        action = controller.compute_action(obs, step=0, time_s=0.0)
-        
-        assert "u_d" in action
-        assert "u_q" in action
-        assert not isinstance(action["u_d"], (list, tuple))
-        assert not isinstance(action["u_q"], (list, tuple))
+
+        # Call controller using the unified interface: controller(state, reference)
+        action = controller(state, reference)
+
+        assert "v_d" in action, f"Expected 'v_d' in action, got keys: {list(action.keys())}"
+        assert "v_q" in action, f"Expected 'v_q' in action, got keys: {list(action.keys())}"
+        assert isinstance(action["v_d"], float), f"v_d should be float, got {type(action['v_d'])}"
+        assert isinstance(action["v_q"], float), f"v_q should be float, got {type(action['v_q'])}"
 
     @pytest.mark.slow
     def test_single_scenario_benchmark(self, model_path, device):
@@ -383,7 +405,6 @@ class TestV10ModelEndToEnd:
             print(f"    Max error: {result.metrics.get('max_error_i_q', 0):.4f} A")
         
         print(f"\nAggregate metrics:")
-        print(f"  Mean MAE i_q: {summary.mean_mae_iq:.4f} A")
         print(f"  Worst max error: {summary.worst_max_error_iq:.4f} A")
 
     @pytest.mark.slow
@@ -418,14 +439,13 @@ class TestV10ModelEndToEnd:
         
         print(f"\n{'='*80}")
         print(f"Aggregate Metrics:")
-        print(f"  Mean MAE i_q: {summary.mean_mae_iq:.4f} A")
         print(f"  Worst max error: {summary.worst_max_error_iq:.4f} A")
         print(f"  Safety violations: {summary.num_safety_violations}")
         print(f"{'='*80}")
-        
+
         # Assert reasonable performance
         assert summary.num_safety_violations == 0, "Safety violations detected"
-        assert summary.mean_mae_iq < 10.0, f"Mean MAE too high: {summary.mean_mae_iq}"
+        assert summary.worst_max_error_iq < 20.0, f"Max error too high: {summary.worst_max_error_iq}"
 
 
 def main():

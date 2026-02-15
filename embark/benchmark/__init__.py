@@ -40,7 +40,7 @@ Single-Scenario Usage (Classical)::
         PMSMCurrentControlTask,
         PIControllerAgent,
         ClosedLoopHarness,
-        TrackingMAE,
+        TrackingITAE,
     )
 
     task = PMSMCurrentControlTask.from_config(n_rpm=1000, i_q_ref=2.0)
@@ -70,11 +70,13 @@ from .harness import (
     ScenarioDefinition,
 )
 from .metrics import (
+    InferenceLatency,
     MaximumError,
     Overshoot,
     SettlingTime,
+    SteadyStateRMS,
     TrackingITAE,
-    TrackingMAE,
+    TrackingMAE,  # kept for backward compatibility
 )
 from .physics import PMSMConfig, PMSMPhysicsEngine
 from .processors import RateSNNActionProcessor, RateSNNStateProcessor
@@ -106,9 +108,11 @@ __all__ = [
     "RateSNNActionProcessor",
     "RateSNNStateProcessor",
     # Metrics
+    "InferenceLatency",
     "MaximumError",
     "Overshoot",
     "SettlingTime",
-    "TrackingMAE",
+    "SteadyStateRMS",
     "TrackingITAE",
+    "TrackingMAE",  # kept for backward compatibility
 ]
