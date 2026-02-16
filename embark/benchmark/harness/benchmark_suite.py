@@ -270,6 +270,7 @@ class BenchmarkSummary:
     controller_name: str
     scenario_results: list[ScenarioResult] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
+    baseline_summary: BenchmarkSummary | None = None
 
     @property
     def worst_max_error_iq(self) -> float:
@@ -284,7 +285,7 @@ class BenchmarkSummary:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dictionary for JSON export."""
-        return {
+        payload = {
             "controller_name": self.controller_name,
             "config": self.config,
             "aggregate": {
@@ -303,6 +304,9 @@ class BenchmarkSummary:
                 for r in self.scenario_results
             ],
         }
+        if self.baseline_summary is not None:
+            payload["baseline"] = self.baseline_summary.to_dict()
+        return payload
 
 
 class BenchmarkSuite:
@@ -359,6 +363,8 @@ class BenchmarkSuite:
         controller: Controller,
         name: str = "Controller",
         quiet: bool = False,
+        include_baseline: bool = False,
+        baseline_name: str = "PI-baseline",
     ) -> BenchmarkSummary:
         """
         Run the controller through all scenarios.
@@ -368,6 +374,9 @@ class BenchmarkSuite:
                 TensorControllerAdapter).
             name: Display name for this controller in results.
             quiet: If True, suppress progress output (tqdm). Same as NeuroBench.
+            include_baseline: If True, also run and attach a PI baseline
+                summary under ``summary.baseline_summary``.
+            baseline_name: Display name used for the PI baseline summary.
 
         Returns:
             BenchmarkSummary with per-scenario and aggregate results.
@@ -419,7 +428,40 @@ class BenchmarkSuite:
             )
             summary.scenario_results.append(scenario_result)
 
+        if include_baseline:
+            summary.baseline_summary = self.run_baseline(
+                name=baseline_name,
+                quiet=quiet,
+            )
+
         return summary
+
+    def run_baseline(
+        self,
+        name: str = "PI-baseline",
+        quiet: bool = False,
+    ) -> BenchmarkSummary:
+        """
+        Run the built-in PI controller baseline post-hoc.
+
+        This is a convenience helper that creates a ``PIControllerAgent``
+        from this suite's physics configuration and runs it through the same
+        scenarios as any other controller. The returned object is a regular
+        :class:`BenchmarkSummary`; callers can store, inspect, or compare it
+        however they prefer.
+
+        Args:
+            name: Display name for the baseline in results.
+            quiet: If True, suppress progress output (tqdm).
+
+        Returns:
+            BenchmarkSummary for the PI baseline run.
+
+        """
+        from embark.benchmark.agents import PIControllerAgent
+
+        controller = PIControllerAgent.from_system_config(self.config.to_pmsm_config())
+        return self.run(controller=controller, name=name, quiet=quiet)
 
     @staticmethod
     def format_summary(summary: BenchmarkSummary) -> str:

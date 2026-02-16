@@ -178,6 +178,42 @@ class TestBenchmarkSuite:
         assert len(summary.scenario_results) == 1
         assert summary.scenario_results[0].scenario_name == "step_mid_speed_1500rpm_2A"
 
+    def test_suite_run_baseline_posthoc(self):
+        """Test post-hoc PI baseline helper returns regular suite results."""
+        suite = BenchmarkSuite(scenarios=[STANDARD_SCENARIOS[1]], verbose=False)
+
+        summary = suite.run_baseline(name="PI-posthoc", quiet=True)
+
+        assert summary.controller_name == "PI-posthoc"
+        assert len(summary.scenario_results) == 1
+        assert summary.scenario_results[0].scenario_name == "step_mid_speed_1500rpm_2A"
+        assert "rms_i_q" in summary.scenario_results[0].metrics
+
+    def test_suite_run_includes_pi_baseline_when_requested(self):
+        """Test suite.run can attach PI baseline results in one call."""
+        from embark.benchmark.agents import PIControllerAgent
+
+        suite = BenchmarkSuite(scenarios=[STANDARD_SCENARIOS[1]], verbose=False)
+        task = STANDARD_SCENARIOS[1].create_task()
+        controller = PIControllerAgent.from_system_config(task.physics_engine.config)
+        task.physics_engine.close()
+
+        summary = suite.run(
+            controller=controller,
+            name="TestPI",
+            quiet=True,
+            include_baseline=True,
+        )
+
+        assert summary.controller_name == "TestPI"
+        assert summary.baseline_summary is not None
+        assert summary.baseline_summary.controller_name == "PI-baseline"
+        assert len(summary.baseline_summary.scenario_results) == 1
+        assert (
+            summary.baseline_summary.scenario_results[0].scenario_name
+            == "step_mid_speed_1500rpm_2A"
+        )
+
     @pytest.mark.slow
     def test_suite_quick_scenarios_pi_controller(self):
         """Test running quick scenarios with PI controller (integration test)."""

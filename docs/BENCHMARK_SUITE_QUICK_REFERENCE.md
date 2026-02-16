@@ -23,7 +23,11 @@ This is a quick reference guide for the EMBARK benchmark suite. For comprehensiv
 from embark.benchmark.harness import BenchmarkSuite
 
 suite = BenchmarkSuite()  # Uses STANDARD_SCENARIOS by default
-summary = suite.run(controller=my_controller, name="MySNN-v1")
+summary = suite.run(
+    controller=my_controller,
+    name="MySNN-v1",
+    include_baseline=True,  # Attach PI baseline in same run
+)
 suite.print_summary(summary)
 suite.save_results(summary, "results/benchmark.json")
 ```
@@ -45,6 +49,16 @@ from embark.benchmark.harness import BenchmarkSuite, STANDARD_SCENARIOS
 # Run only speed-range characterization (scenarios 1-3)
 suite = BenchmarkSuite(scenarios=STANDARD_SCENARIOS[:3])
 summary = suite.run(controller=my_controller)
+```
+
+### Run PI Baseline Post-Hoc
+
+```python
+from embark.benchmark.harness import BenchmarkSuite
+
+suite = BenchmarkSuite()
+baseline = suite.run_baseline(name="PI-baseline")
+suite.save_results(baseline, "results/pi_baseline.json")
 ```
 
 ## Key Metrics Per Scenario
