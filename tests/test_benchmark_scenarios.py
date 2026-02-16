@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from embark.benchmark.harness import (
-    QUICK_SCENARIOS,
-    STANDARD_SCENARIOS,
-    BenchmarkSuite,
-)
+from embark.benchmark.harness import QUICK_SCENARIOS, STANDARD_SCENARIOS, BenchmarkSuite
 from embark.benchmark.tasks.reference_generators import MultiStepReference
 
 

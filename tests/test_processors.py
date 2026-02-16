@@ -16,7 +16,6 @@ from embark.benchmark.processors import (
 )
 from embark.benchmark.processors.pwm import PWMConverter
 
-
 # ---------------------------------------------------------------------------
 # PWMConverter
 # ---------------------------------------------------------------------------

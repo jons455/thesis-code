@@ -10,14 +10,14 @@ import pytest
 import torch
 
 from embark.benchmark.harness.benchmark_suite import (
+    STANDARD_SCENARIOS,
     BenchmarkSuite,
     BenchmarkSummary,
-    STANDARD_SCENARIOS,
     ScenarioDefinition,
     ScenarioResult,
 )
-from embark.benchmark.metrics.accumulators import TrackingMAE
 from embark.benchmark.metrics import neurobench_factory as nf
+from embark.benchmark.metrics.accumulators import TrackingMAE
 from embark.benchmark.metrics.neurobench_factory import create_metrics
 from embark.benchmark.metrics.registry import MetricRegistry
 from embark.benchmark.tasks.reference_generators import ConstantReference
@@ -290,7 +290,7 @@ def test_suite_run_calls_configure_when_present(dummy_task):
     assert len(summary.scenario_results) == 1
 
 
-def test_print_summary_and_save_results(tmp_path: Path, capsys):
+def test_print_summary_and_save_results(tmp_path: Path):
     summary = BenchmarkSummary(
         controller_name="Ctrl",
         scenario_results=[
@@ -313,11 +313,10 @@ def test_print_summary_and_save_results(tmp_path: Path, capsys):
         ],
     )
 
-    BenchmarkSuite.print_summary(summary)
-    output = capsys.readouterr().out
-    assert "Benchmark Summary: Ctrl" in output
-    assert "AGGREGATE" in output
-    assert "N/A" in output
+    formatted = BenchmarkSuite.format_summary(summary)
+    assert "Benchmark Summary: Ctrl" in formatted
+    assert "AGGREGATE" in formatted
+    assert "N/A" in formatted
 
     out_path = tmp_path / "results" / "summary.json"
     BenchmarkSuite.save_results(summary, out_path)
@@ -355,7 +354,7 @@ def test_scenario_definition_create_task_uses_physics_engine(monkeypatch):
     assert task.max_steps == 5
 
 
-def test_suite_run_verbose_prints_progress_and_status(dummy_task, capsys):
+def test_suite_run_returns_summary_with_verbose_or_quiet(dummy_task):
     class _Controller:
         def reset(self):
             pass
@@ -384,9 +383,10 @@ def test_suite_run_verbose_prints_progress_and_status(dummy_task, capsys):
     suite = BenchmarkSuite(
         scenarios=[_Scenario()], metric_factory=_metrics, verbose=True
     )
-    summary = suite.run(_Controller(), name="VerboseCtrl")
+    summary = suite.run(_Controller(), name="VerboseCtrl", quiet=True)
     assert len(summary.scenario_results) == 1
+    assert summary.scenario_results[0].scenario_name == "verbose_case"
 
-    out = capsys.readouterr().out
-    assert "[1/1] verbose_case: demo" in out
-    assert "MaxErr=" in out and ("RMS=" in out or "MAE=" in out)
+    formatted = BenchmarkSuite.format_summary(summary)
+    assert "VerboseCtrl" in formatted
+    assert "verbose_case" in formatted

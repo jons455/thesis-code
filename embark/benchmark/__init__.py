@@ -32,7 +32,7 @@ Multi-Scenario Usage::
 
     suite = BenchmarkSuite()
     summary = suite.run(controller=my_controller, name="My SNN")
-    suite.print_summary(summary)
+    print(suite.format_summary(summary))
 
 Single-Scenario Usage (Classical)::
 
@@ -54,19 +54,18 @@ NeuroBench Integration (experimental):
 """
 
 from .adapters import TensorControllerAdapter
-from .agents import (
-    PIControllerAgent,
-)
+from .agents import PIControllerAgent
 from .controllers import SNNControllerWrapper
 from .harness import (
+    QUICK_SCENARIOS,
+    STANDARD_SCENARIOS,
     BenchmarkConfig,
     BenchmarkSuite,
     BenchmarkSummary,
     ClosedLoopHarness,
-    QUICK_SCENARIOS,
-    STANDARD_SCENARIOS,
     ScenarioDefinition,
 )
+from .metrics import TrackingMAE  # kept for backward compatibility
 from .metrics import (
     ActivationSparsity,
     InferenceLatency,
@@ -77,7 +76,6 @@ from .metrics import (
     SteadyStateRMS,
     SynapticOps,
     TrackingITAE,
-    TrackingMAE,  # kept for backward compatibility
 )
 from .physics import PMSMConfig, PMSMPhysicsEngine
 from .processors import RateSNNActionProcessor, RateSNNStateProcessor

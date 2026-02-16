@@ -139,7 +139,7 @@ def section_2_pi_full_suite():
     summary = suite.run(controller=controller, name="PI-baseline")
 
     # Print formatted comparison table
-    suite.print_summary(summary)
+    print(suite.format_summary(summary))
 
     # Programmatic access to per-scenario results:
     print(f"\nSafety violations: {summary.num_safety_violations}")
@@ -279,7 +279,7 @@ def section_3_snn_quick_benchmark():
     suite = BenchmarkSuite(scenarios=QUICK_SCENARIOS, verbose=True)
     summary = suite.run(controller=controller, name="SNN-v12")
 
-    suite.print_summary(summary)
+    print(suite.format_summary(summary))
 
     # Access the underlying model for diagnostics:
     print(f"\n  Underlying model type: {type(controller.model).__name__}")
@@ -360,7 +360,7 @@ def section_4_custom_scenario():
     summary = suite.run(controller=controller, name="PI-custom")
 
     print("=== Section 4: Custom scenarios ===")
-    suite.print_summary(summary)
+    print(suite.format_summary(summary))
     print()
 
 
@@ -546,9 +546,9 @@ def section_7_benchmark_config():
     for k, v in summary_noisy.config.items():
         print(f"    {k}: {v}")
 
-    # print_summary() shows active options in the header:
+    # format_summary() shows active options in the header:
     print()
-    suite_noisy.print_summary(summary_noisy)
+    print(suite_noisy.format_summary(summary_noisy))
 
 
 # ---------------------------------------------------------------------------

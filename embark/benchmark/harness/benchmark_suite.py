@@ -10,6 +10,10 @@ The suite includes 6 optimal scenarios based on motor control benchmarking
 best practices, providing minimum necessary coverage to comprehensively
 evaluate controller performance across the full operating envelope.
 
+Output follows the NeuroBench style: ``run()`` returns a ``BenchmarkSummary``
+(data only); progress is shown via tqdm when not quiet.  No library code
+prints to stdout.  Callers format and print the summary or save to file.
+
 For detailed information about scenario design, coverage, and interpretation,
 see ``docs/BENCHMARK_SCENARIOS.md``.
 
@@ -19,7 +23,8 @@ Usage::
 
     suite = BenchmarkSuite(scenarios=STANDARD_SCENARIOS)
     summary = suite.run(controller=my_controller)
-    suite.print_summary(summary)
+    print(suite.format_summary(summary))
+    suite.save_results(summary, "results/benchmark.json")
 
 """
 
@@ -30,14 +35,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from tqdm import tqdm
+
 from embark.benchmark.harness.closed_loop import ClosedLoopHarness
 from embark.benchmark.interfaces import Controller, MetricAccumulator
 from embark.benchmark.metrics.neurobench_factory import create_metrics
+from embark.benchmark.physics.config import PMSMConfig
 from embark.benchmark.tasks.pmsm_current_control import (
     PMSMCurrentControlTask,
     SafetyLimits,
 )
-from embark.benchmark.physics.config import PMSMConfig
 from embark.benchmark.tasks.reference_generators import (
     ConstantReference,
     MultiStepReference,
@@ -45,7 +52,6 @@ from embark.benchmark.tasks.reference_generators import (
     SinusoidalReference,
     StepReference,
 )
-
 
 # ============================================================================
 # Benchmark Config
@@ -331,7 +337,7 @@ class BenchmarkSuite:
             use_dead_time=True,
         ))
         summary = suite.run(controller=my_snn_controller, name="MySNN")
-        suite.print_summary(summary)
+        print(suite.format_summary(summary))
         suite.save_results(summary, "results/benchmark.json")
 
     """
@@ -352,6 +358,7 @@ class BenchmarkSuite:
         self,
         controller: Controller,
         name: str = "Controller",
+        quiet: bool = False,
     ) -> BenchmarkSummary:
         """
         Run the controller through all scenarios.
@@ -360,6 +367,7 @@ class BenchmarkSuite:
             controller: A configured controller (DictController or
                 TensorControllerAdapter).
             name: Display name for this controller in results.
+            quiet: If True, suppress progress output (tqdm). Same as NeuroBench.
 
         Returns:
             BenchmarkSummary with per-scenario and aggregate results.
@@ -371,12 +379,18 @@ class BenchmarkSuite:
         )
         pmsm_config = self.config.to_pmsm_config()
 
-        for i, scenario in enumerate(self.scenarios, 1):
-            if self.verbose:
-                print(
-                    f"  [{i}/{len(self.scenarios)}] {scenario.name}: "
-                    f"{scenario.description}"
-                )
+        show_progress = self.verbose and not quiet
+        scenarios_iter = self.scenarios
+        if show_progress:
+            scenarios_iter = tqdm(
+                self.scenarios,
+                desc="Scenarios",
+                unit="scenario",
+            )
+
+        for scenario in scenarios_iter:
+            if show_progress and hasattr(scenarios_iter, "set_postfix_str"):
+                scenarios_iter.set_postfix_str(scenario.name)
 
             # Create fresh task and metrics for each scenario
             task = scenario.create_task(physics_config=pmsm_config)
@@ -405,27 +419,20 @@ class BenchmarkSuite:
             )
             summary.scenario_results.append(scenario_result)
 
-            if self.verbose:
-                rms_iq = results.get("rms_i_q", 0.0)
-                max_err = results.get("max_error_i_q", 0.0)
-                status = "SAFETY VIOLATION" if task.terminated_by_safety else "OK"
-                print(
-                    f"           RMS={rms_iq:.4f}A  MaxErr={max_err:.4f}A  [{status}]"
-                )
-
         return summary
 
     @staticmethod
-    def print_summary(summary: BenchmarkSummary) -> None:
-        """Print a formatted comparison table."""
-        print()
-        print("=" * 80)
-        print(f"  Benchmark Summary: {summary.controller_name}")
-        print(
+    def format_summary(summary: BenchmarkSummary) -> str:
+        """Return a formatted comparison table as a string (no printing)."""
+        lines: list[str] = []
+        lines.append("")
+        lines.append("=" * 80)
+        lines.append(f"  Benchmark Summary: {summary.controller_name}")
+        lines.append(
             f"  {len(summary.scenario_results)} scenarios completed, "
             f"{summary.num_safety_violations} safety violations"
         )
-        print("=" * 80)
+        lines.append("=" * 80)
 
         # Show active physics options (only non-default)
         cfg = summary.config
@@ -440,23 +447,23 @@ class BenchmarkSuite:
             tau_us = cfg["tau"] * 1e6
             opts.append(f"tau={tau_us:.0f}us")
         if opts:
-            print(f"  Options: {', '.join(opts)}")
-        print()
+            lines.append(f"  Options: {', '.join(opts)}")
+        lines.append("")
 
         # Per-scenario table
         header = (
             f"{'Scenario':<22} {'RMS_iq':>9} {'MaxErr_iq':>10} "
             f"{'Settle[s]':>10} {'Status':>8}"
         )
-        print(header)
-        print("-" * 80)
+        lines.append(header)
+        lines.append("-" * 80)
 
         for r in summary.scenario_results:
             m = r.metrics
             status = "FAIL" if r.safety_terminated else "OK"
             settle = m.get("settling_time_i_q", float("inf"))
             settle_str = f"{settle:.4f}" if settle < float("inf") else "N/A"
-            print(
+            lines.append(
                 f"{r.scenario_name:<22} "
                 f"{m.get('rms_i_q', 0.0):>9.4f} "
                 f"{m.get('max_error_i_q', 0.0):>10.4f} "
@@ -465,42 +472,44 @@ class BenchmarkSuite:
             )
 
         # Aggregate
-        print("-" * 80)
-        print(
+        lines.append("-" * 80)
+        lines.append(
             f"{'AGGREGATE':<22} "
             f"{'':>9} "
             f"{summary.worst_max_error_iq:>10.4f} "
             f"{'':>10} {'':>8}"
         )
-        print()
+        lines.append("")
 
         # ── Neuromorphic metrics (only when SNN data is present) ─────────
         has_neuro = any(
             r.metrics.get("total_spikes", 0.0) > 0.0 for r in summary.scenario_results
         )
         if has_neuro:
-            print("  Neuromorphic Metrics")
-            print("  " + "-" * 76)
+            lines.append("  Neuromorphic Metrics")
+            lines.append("  " + "-" * 76)
             neuro_header = (
                 f"  {'Scenario':<22} {'Spikes':>10} {'Spk/step':>10} "
                 f"{'SyOps':>12} {'Sparsity':>10}"
             )
-            print(neuro_header)
-            print("  " + "-" * 76)
+            lines.append(neuro_header)
+            lines.append("  " + "-" * 76)
             for r in summary.scenario_results:
                 m = r.metrics
                 spikes = m.get("total_spikes", 0.0)
                 spk_step = m.get("spikes_per_step", 0.0)
                 syops = m.get("total_syops", 0.0)
                 sparsity = m.get("mean_sparsity", 0.0)
-                print(
+                lines.append(
                     f"  {r.scenario_name:<22} "
                     f"{spikes:>10.0f} "
                     f"{spk_step:>10.1f} "
                     f"{syops:>12.0f} "
                     f"{sparsity:>10.4f}"
                 )
-            print()
+            lines.append("")
+
+        return "\n".join(lines)
 
     @staticmethod
     def save_results(summary: BenchmarkSummary, path: str | Path) -> None:

@@ -40,12 +40,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from embark.benchmark.interfaces import (
-    ActionDict,
-    Controller,
-    ReferenceDict,
-    StateDict,
-)
+from embark.benchmark.interfaces import ActionDict, Controller, ReferenceDict, StateDict
 
 
 class NeuroBenchClosedLoopModel:

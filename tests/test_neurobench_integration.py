@@ -12,15 +12,14 @@ from __future__ import annotations
 import torch
 
 from embark.benchmark.adapters import TensorControllerAdapter
-from embark.benchmark.controllers.neural.snn_wrapper import SNNControllerWrapper
 from embark.benchmark.contrib.neurobench import (
     ClosedLoopMetricExporter,
     NeuroBenchClosedLoopModel,
 )
+from embark.benchmark.controllers.neural.snn_wrapper import SNNControllerWrapper
 from embark.benchmark.harness import ClosedLoopHarness
 from embark.benchmark.metrics.accumulators import TrackingMAE
 from embark.benchmark.processors import IdentityActionProcessor, IdentityStateProcessor
-
 
 # ---------------------------------------------------------------------------
 # NeuroBenchClosedLoopModel tests

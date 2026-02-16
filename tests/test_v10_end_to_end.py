@@ -26,7 +26,6 @@ from embark.benchmark.processors import (  # noqa: E402
     RateSNNStateProcessor,
 )
 
-
 # SNN architecture from v10 notebook
 try:
     import snntorch as snn
@@ -566,7 +565,7 @@ def main():
         summary = suite.run(controller=controller, name="v10")
 
         # Print summary
-        suite.print_summary(summary)
+        print(suite.format_summary(summary))
 
         # Save results
         output_dir = Path("results")

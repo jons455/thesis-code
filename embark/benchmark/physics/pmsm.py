@@ -7,10 +7,10 @@ from typing import Any
 
 import gym_electric_motor as gem
 import numpy as np
+from gym_electric_motor.physical_systems.converters import ContB6BridgeConverter
 from gym_electric_motor.physical_systems.electric_motors import (
     PermanentMagnetSynchronousMotor,
 )
-from gym_electric_motor.physical_systems.converters import ContB6BridgeConverter
 from gym_electric_motor.physical_systems.mechanical_loads import ConstantSpeedLoad
 
 from embark.benchmark.interfaces import ActionDict, StateDict

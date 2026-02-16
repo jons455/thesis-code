@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import inspect
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from neurobench.metrics import static as _nb_static

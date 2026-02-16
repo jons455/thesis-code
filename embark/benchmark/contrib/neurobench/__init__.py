@@ -16,12 +16,12 @@ full integration plan.
 
 """
 
-from .model_wrapper import NeuroBenchClosedLoopModel
 from .metric_adapters import (
     NeuroBenchStaticMetricAdapter,
     NeuroBenchWorkloadMetricAdapter,
     discover_neurobench_metric_classes,
 )
+from .model_wrapper import NeuroBenchClosedLoopModel
 from .result_exporter import ClosedLoopMetricExporter
 
 __all__ = [

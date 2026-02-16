@@ -1,5 +1,6 @@
 """Metric accumulators and registry."""
 
+from .accumulators import TrackingMAE  # kept for backward compatibility
 from .accumulators import (
     ActivationSparsity,
     InferenceLatency,
@@ -10,7 +11,6 @@ from .accumulators import (
     SteadyStateRMS,
     SynapticOps,
     TrackingITAE,
-    TrackingMAE,  # kept for backward compatibility
 )
 from .neurobench_factory import create_metrics
 from .registry import MetricRegistry

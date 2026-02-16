@@ -28,7 +28,6 @@ from embark.benchmark.metrics.neurobench_factory import _control_metrics, create
 from embark.benchmark.physics.config import PMSMConfig
 from embark.benchmark.physics.pmsm import PMSMPhysicsEngine
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
