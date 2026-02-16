@@ -13,27 +13,8 @@ from embark.benchmark.tasks.reference_generators import (
     ReferenceGenerator,
     StepReference,
 )
+from embark.benchmark.utils.validation import validate_numeric_dict
 from embark.utils.config import DEFAULT_MAX_STEPS
-
-
-def _ensure_numeric_dict(
-    mapping: dict[str, float], mapping_name: str, required_keys: tuple[str, ...] = ()
-) -> None:
-    """Validate that an input is a dict with finite numeric values."""
-    if not isinstance(mapping, dict):
-        raise TypeError(f"{mapping_name} must be a dict, got {type(mapping).__name__}.")
-
-    missing = [key for key in required_keys if key not in mapping]
-    if missing:
-        raise KeyError(f"{mapping_name} is missing required keys: {missing}.")
-
-    for key, value in mapping.items():
-        if not isinstance(value, (int, float, np.integer, np.floating)):
-            raise TypeError(
-                f"{mapping_name}['{key}'] must be numeric, got {type(value).__name__}."
-            )
-        if not np.isfinite(float(value)):
-            raise ValueError(f"{mapping_name}['{key}'] must be finite, got {value!r}.")
 
 
 @dataclass
@@ -241,9 +222,9 @@ class PMSMCurrentControlTask:
         self._last_violation_reason = None
         self.reference_generator.reset()
         state = self.physics_engine.reset(seed=seed)
-        _ensure_numeric_dict(state, "state", required_keys=("time",))
+        validate_numeric_dict(state, "state", required_keys=("time",))
         reference = self.reference_generator(self._step, state["time"])
-        _ensure_numeric_dict(
+        validate_numeric_dict(
             reference, "reference", required_keys=("i_d_ref", "i_q_ref")
         )
         return state, reference
@@ -264,7 +245,7 @@ class PMSMCurrentControlTask:
             done=True if max_steps reached OR safety limit violated.
 
         """
-        _ensure_numeric_dict(action, "action")
+        validate_numeric_dict(action, "action")
         has_dq = "v_d" in action and "v_q" in action
         has_ab = "v_alpha" in action and "v_beta" in action
         if not (has_dq or has_ab):
@@ -280,10 +261,10 @@ class PMSMCurrentControlTask:
 
         # Run physics (even if action violated - physics may clamp internally)
         next_state, _debug = self.physics_engine.step(action)
-        _ensure_numeric_dict(next_state, "next_state", required_keys=("time",))
+        validate_numeric_dict(next_state, "next_state", required_keys=("time",))
         self._step += 1
         reference = self.reference_generator(self._step, next_state["time"])
-        _ensure_numeric_dict(
+        validate_numeric_dict(
             reference, "reference", required_keys=("i_d_ref", "i_q_ref")
         )
 

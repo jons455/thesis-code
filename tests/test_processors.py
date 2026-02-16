@@ -1,5 +1,7 @@
 """Unit tests for processors (PWM and identity processors)."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 

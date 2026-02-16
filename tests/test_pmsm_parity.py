@@ -1,5 +1,7 @@
 """Parity smoke tests between old and new PMSM implementations."""
 
+from __future__ import annotations
+
 import numpy as np
 import pytest
 

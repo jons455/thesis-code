@@ -6,6 +6,8 @@ encoding SNNs, matching the expected behavior from training datasets.
 
 """
 
+from __future__ import annotations
+
 import math
 
 import numpy as np

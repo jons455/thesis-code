@@ -1,5 +1,7 @@
 """Shared configuration constants for PMSM benchmark components."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 

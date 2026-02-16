@@ -1,5 +1,7 @@
 """Test protocol compliance for controllers."""
 
+from __future__ import annotations
+
 from embark.benchmark.agents import PIControllerAgent
 from embark.benchmark.interfaces import DictController
 from embark.benchmark.physics import PMSMConfig

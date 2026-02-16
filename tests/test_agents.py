@@ -6,6 +6,8 @@ protocols.
 
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -376,6 +378,33 @@ def test_pi_controller_saturation_and_anti_windup():
     assert abs(agent.integral_q) < 1000
 
 
+def test_pi_controller_anti_windup_decay_is_configurable():
+    agent = PIControllerAgent(
+        anti_windup=True,
+        anti_windup_decay=0.5,
+        kp_d=100.0,
+        ki_d=0.0,
+        kp_q=100.0,
+        ki_q=0.0,
+    )
+    state = {"i_d": 0.0, "i_q": 0.0, "omega": 0.0}
+    reference = {"i_d_ref": 10.0, "i_q_ref": 10.0}
+
+    _ = agent(state, reference)
+
+    expected_integral = (reference["i_d_ref"] - state["i_d"]) * agent.params.Ts * 0.5
+    assert agent.integral_d == pytest.approx(expected_integral)
+    assert agent.integral_q == pytest.approx(expected_integral)
+
+
+def test_pi_controller_rejects_invalid_anti_windup_decay():
+    with pytest.raises(ValueError, match="anti_windup_decay"):
+        PIControllerAgent(anti_windup_decay=0.0)
+
+    with pytest.raises(ValueError, match="anti_windup_decay"):
+        PIControllerAgent(anti_windup_decay=1.1)
+
+
 def test_snn_controller_agent_forward_and_statistics(monkeypatch):
     fake_model = _FakeSNNModel()
     _install_fake_load_snn_model(monkeypatch, fake_model)
@@ -435,7 +464,7 @@ def test_snn_controller_inserts_project_root_into_sys_path(monkeypatch):
     fake_model = _FakeSNNModel()
     _install_fake_load_snn_model(monkeypatch, fake_model)
 
-    expected_root = str(Path(agents_mod.__file__).resolve().parents[2])
+    expected_root = str(Path(agents_mod.__file__).resolve().parents[3])
     while expected_root in sys.path:
         sys.path.remove(expected_root)
 

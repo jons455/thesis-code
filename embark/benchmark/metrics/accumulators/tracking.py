@@ -11,6 +11,7 @@ from embark.benchmark.interfaces import (
     ReferenceDict,
     StateDict,
 )
+from embark.benchmark.utils.validation import validate_state_reference
 
 
 def _validate_tracked_keys(tracked_keys: list[str], metric_name: str) -> None:
@@ -25,61 +26,6 @@ def _validate_tracked_keys(tracked_keys: list[str], metric_name: str) -> None:
             f"{metric_name}: tracked_keys must contain non-empty strings; "
             f"invalid entries: {invalid!r}."
         )
-
-
-def _validate_state_reference(
-    state: StateDict,
-    reference: ReferenceDict,
-    tracked_keys: list[str],
-    metric_name: str,
-    time_key: str | None = None,
-) -> float | None:
-    """Validate metric update inputs and return parsed time when requested."""
-    if not isinstance(state, dict):
-        raise TypeError(
-            f"{metric_name}: state must be a dict, got {type(state).__name__}."
-        )
-    if not isinstance(reference, dict):
-        raise TypeError(
-            f"{metric_name}: reference must be a dict, got {type(reference).__name__}."
-        )
-
-    parsed_time: float | None = None
-    if time_key is not None:
-        if time_key not in state:
-            raise KeyError(
-                f"{metric_name}: state missing required time key '{time_key}'."
-            )
-        try:
-            parsed_time = float(state[time_key])
-        except (TypeError, ValueError) as exc:
-            raise TypeError(
-                f"{metric_name}: state['{time_key}'] must be numeric."
-            ) from exc
-        if not math.isfinite(parsed_time):
-            raise ValueError(
-                f"{metric_name}: state['{time_key}'] must be finite, got {parsed_time!r}."
-            )
-
-    for key in tracked_keys:
-        ref_key = f"{key}_ref"
-        if key not in state:
-            raise KeyError(f"{metric_name}: state missing tracked key '{key}'.")
-        if ref_key not in reference:
-            raise KeyError(f"{metric_name}: reference missing key '{ref_key}'.")
-        try:
-            state_val = float(state[key])
-            ref_val = float(reference[ref_key])
-        except (TypeError, ValueError) as exc:
-            raise TypeError(
-                f"{metric_name}: values for '{key}' and '{ref_key}' must be numeric."
-            ) from exc
-        if not (math.isfinite(state_val) and math.isfinite(ref_val)):
-            raise ValueError(
-                f"{metric_name}: non-finite value for '{key}' or '{ref_key}'."
-            )
-
-    return parsed_time
 
 
 @dataclass
@@ -127,7 +73,7 @@ class TrackingITAE(MetricAccumulator):
         _controller_info: dict | None = None,
     ) -> None:
         _validate_tracked_keys(self.tracked_keys, self.name)
-        parsed_time = _validate_state_reference(
+        parsed_time = validate_state_reference(
             state,
             reference,
             self.tracked_keys,
@@ -188,7 +134,7 @@ class MaximumError(MetricAccumulator):
         _controller_info: dict | None = None,
     ) -> None:
         _validate_tracked_keys(self.tracked_keys, self.name)
-        _validate_state_reference(state, reference, self.tracked_keys, self.name)
+        validate_state_reference(state, reference, self.tracked_keys, self.name)
         for key in self.tracked_keys:
             ref_key = f"{key}_ref"
             error = abs(float(reference[ref_key]) - float(state[key]))
@@ -251,7 +197,7 @@ class SteadyStateRMS(MetricAccumulator):
         _controller_info: dict | None = None,
     ) -> None:
         _validate_tracked_keys(self.tracked_keys, self.name)
-        parsed_time = _validate_state_reference(
+        parsed_time = validate_state_reference(
             state,
             reference,
             self.tracked_keys,
@@ -323,7 +269,7 @@ class TrackingMAE(MetricAccumulator):
         _controller_info: dict | None = None,
     ) -> None:
         _validate_tracked_keys(self.tracked_keys, self.name)
-        _validate_state_reference(state, reference, self.tracked_keys, self.name)
+        validate_state_reference(state, reference, self.tracked_keys, self.name)
         for key in self.tracked_keys:
             ref_key = f"{key}_ref"
             error = abs(float(reference[ref_key]) - float(state[key]))

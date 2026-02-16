@@ -239,6 +239,7 @@ PIControllerAgent(
     params: PIParameters | None = None,
     decoupling: bool = True,
     anti_windup: bool = True,
+    anti_windup_decay: float = 0.99,
     kp_d: float | None = None,
     ki_d: float | None = None,
     kp_q: float | None = None,

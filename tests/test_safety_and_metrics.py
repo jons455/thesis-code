@@ -1,5 +1,7 @@
 """Unit tests for safety limits and metric correctness."""
 
+from __future__ import annotations
+
 from unittest.mock import MagicMock
 
 import pytest

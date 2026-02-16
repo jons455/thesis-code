@@ -1,5 +1,7 @@
 """Unit tests for InferenceLatency accumulator."""
 
+from __future__ import annotations
+
 import pytest
 
 from embark.benchmark.metrics.accumulators.latency import InferenceLatency

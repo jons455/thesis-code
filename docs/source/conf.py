@@ -1,6 +1,8 @@
 """Sphinx configuration for PMSM Neuromorphic Benchmark documentation (embark package-
 local)."""
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

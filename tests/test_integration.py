@@ -9,6 +9,8 @@ Rewritten 2026-02-07 to use the current architecture:
 
 """
 
+from __future__ import annotations
+
 import numpy as np
 import pytest
 

@@ -1,5 +1,7 @@
 """Integration tests for the benchmark API."""
 
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("gym_electric_motor")

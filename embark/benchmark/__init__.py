@@ -56,7 +56,6 @@ NeuroBench Integration (experimental):
 from .adapters import TensorControllerAdapter
 from .agents import (
     PIControllerAgent,
-    PIParameters,
     SNNControllerAgent,
     SNNControllerTorchAgent,
 )
@@ -105,7 +104,6 @@ __all__ = [
     "TensorControllerAdapter",
     # Controllers
     "PIControllerAgent",
-    "PIParameters",
     "SNNControllerAgent",
     "SNNControllerTorchAgent",
     "SNNControllerWrapper",

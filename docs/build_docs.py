@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Helper script to build Sphinx documentation."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
 from pathlib import Path

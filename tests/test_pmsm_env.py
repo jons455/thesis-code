@@ -5,6 +5,8 @@ Tests the PMSMPhysicsEngine which wraps GEM for PMSM simulation.
 
 """
 
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("gym_electric_motor")
