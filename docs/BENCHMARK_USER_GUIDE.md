@@ -251,34 +251,38 @@ controller = TensorControllerAdapter(
 controller.configure(task.physics_engine.config, task)
 ```
 
-### Hardware-in-the-Loop (Akida)
+### Hardware-in-the-Loop (Akida / TD-HIL)
 
-For neuromorphic hardware deployment, `RemoteAkidaPolicy` implements the `Controller` interface directly:
+For neuromorphic hardware (Akida) you use `RemoteAkidaPolicy` as a `TensorController`, wrap it with `TensorControllerAdapter` and state/action processors (same as for SNN), then run the benchmark suite:
 
 ```python
+from embark.benchmark import BenchmarkSuite, QUICK_SCENARIOS, TensorControllerAdapter
 from embark.benchmark.controllers.remote import RemoteAkidaPolicy
+from embark.benchmark.processors import RateSNNActionProcessor, RateSNNStateProcessor
 
-controller = RemoteAkidaPolicy(
-    host="192.168.1.100",  # Akida hardware IP
+policy = RemoteAkidaPolicy(
+    host="192.168.1.100",  # Akida server IP
     port=5000,
-    output_shape=(2,),     # (v_d, v_q)
+    output_shape=(2,),
     timeout_s=10.0,
 )
-
-# Use directly with harness - no TensorControllerAdapter needed
-harness = ClosedLoopHarness(task=task, controller=controller)
-results = harness.run()
-
-# Access latency measurements
-print(f"Avg inference latency: {sum(controller.latencies) / len(controller.latencies) * 1000:.2f} ms")
-print(f"Avg chip time: {sum(controller.chip_latencies) / len(controller.chip_latencies) * 1000:.2f} ms")
-```
-
-**Note:** `RemoteAkidaPolicy` bypasses the PyTorch stack entirely - it uses numpy arrays and TCP communication.
-    model_path="path/to/model.fbz",
+state_proc = RateSNNStateProcessor(
+    include_currents=True, include_errors=True, include_speed=True,
 )
-# No adapter needed - implements Controller directly
+action_proc = RateSNNActionProcessor(incremental=False)
+controller = TensorControllerAdapter(
+    controller=policy,
+    state_processor=state_proc,
+    action_processor=action_proc,
+)
+
+suite = BenchmarkSuite(scenarios=QUICK_SCENARIOS, verbose=True)
+summary = suite.run(controller=controller, name="Akida-HIL")
+print(suite.format_summary(summary))
+# Latency: controller.controller.latencies, controller.controller.chip_latencies
 ```
+
+**Full TD-HIL example:** See `examples/benchmark_akida_hil.py` for a runnable script that supports real Akida (host/port) or a local echo server (`--use-echo`) for testing without hardware.
 
 ---
 
