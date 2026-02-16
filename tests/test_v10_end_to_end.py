@@ -14,16 +14,24 @@ embark_root = Path(__file__).parent.parent
 if str(embark_root) not in sys.path:
     sys.path.insert(0, str(embark_root))
 
-from embark.benchmark.adapters import TensorControllerAdapter
-from embark.benchmark.controllers.neural import SNNControllerWrapper
-from embark.benchmark.harness import QUICK_SCENARIOS, STANDARD_SCENARIOS, BenchmarkSuite
-from embark.benchmark.processors import RateSNNActionProcessor, RateSNNStateProcessor
+from embark.benchmark.adapters import TensorControllerAdapter  # noqa: E402
+from embark.benchmark.controllers.neural import SNNControllerWrapper  # noqa: E402
+from embark.benchmark.harness import (
+    QUICK_SCENARIOS,
+    STANDARD_SCENARIOS,
+    BenchmarkSuite,
+)  # noqa: E402
+from embark.benchmark.processors import (
+    RateSNNActionProcessor,
+    RateSNNStateProcessor,
+)  # noqa: E402
 
 
 # SNN architecture from v10 notebook
 try:
     import snntorch as snn
     from snntorch import surrogate
+
     SNNTORCH_AVAILABLE = True
 except ImportError:
     SNNTORCH_AVAILABLE = False
@@ -34,7 +42,9 @@ except ImportError:
 class FeedForwardRateSNNv10(nn.Module):
     """
     SNN architecture from v10 notebook.
+
     Must match the architecture used during training.
+
     """
 
     def __init__(
@@ -67,7 +77,9 @@ class FeedForwardRateSNNv10(nn.Module):
 
         self.readout = nn.Linear(prev, output_size)
 
-    def _encode_dual_population(self, x: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
+    def _encode_dual_population(
+        self, x: torch.Tensor, deterministic: bool = False
+    ) -> torch.Tensor:
         x_clip = x.clamp(-1.0, 1.0)
         x_pos = torch.relu(x_clip)
         x_neg = torch.relu(-x_clip)
@@ -83,7 +95,9 @@ class FeedForwardRateSNNv10(nn.Module):
         device = x.device
 
         mems = [lif.init_leaky() for lif in self.lifs]
-        spike_sum_last = torch.zeros(batch_size, self.fcs[-1].out_features, device=device)
+        spike_sum_last = torch.zeros(
+            batch_size, self.fcs[-1].out_features, device=device
+        )
 
         for _ in range(self.rate_steps):
             x_spk = self._encode_dual_population(x, deterministic=deterministic)
@@ -107,20 +121,21 @@ class FeedForwardRateSNNv10(nn.Module):
 def load_v10_model(model_path: Path, device: str = "cpu"):
     """
     Load trained v10 model from checkpoint.
-    
+
     Args:
         model_path: Path to .pt checkpoint file
         device: Device to load model on
-        
+
     Returns:
         Loaded model in eval mode
+
     """
     if not model_path.exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
-    
+
     # Load checkpoint
     checkpoint = torch.load(model_path, map_location=device)
-    
+
     # Extract architecture params
     input_size = checkpoint.get("input_size", 12)
     output_size = checkpoint.get("output_size", 2)
@@ -129,12 +144,12 @@ def load_v10_model(model_path: Path, device: str = "cpu"):
     rate_steps = checkpoint.get("rate_steps", 48)
     slope = checkpoint.get("slope", 25.0)
     use_tanh = checkpoint.get("use_tanh", False)
-    
-    print(f"Loading v10 model:")
+
+    print("Loading v10 model:")
     print(f"  Architecture: {input_size} -> {hidden_sizes} -> {output_size}")
     print(f"  Rate steps: {rate_steps}")
     print(f"  Betas: {betas}")
-    
+
     # Create model
     model = FeedForwardRateSNNv10(
         input_size=input_size,
@@ -145,77 +160,78 @@ def load_v10_model(model_path: Path, device: str = "cpu"):
         slope=slope,
         use_tanh=use_tanh,
     ).to(device)
-    
+
     # Load weights
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
-    
+
     # Enable inference optimizations
     if device == "cuda":
         # Use TF32 for faster matmuls on Ampere+ GPUs
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-        
+
         # Try to compile model for faster inference (PyTorch 2.0+)
-        if hasattr(torch, 'compile'):
+        if hasattr(torch, "compile"):
             try:
-                model = torch.compile(model, mode='reduce-overhead')
+                model = torch.compile(model, mode="reduce-overhead")
                 print("[OK] Model compiled with torch.compile for faster inference")
             except Exception:
                 print("[INFO] torch.compile not available, using eager mode")
-    
+
     print("[OK] Model loaded successfully")
-    
+
     return model
 
 
 def create_v10_controller(model_path: Path, device: str = "cpu"):
     """
     Create a complete controller from trained model for benchmarking.
-    
+
     Automatically detects model configuration from checkpoint and creates
     appropriate processors.
-    
+
     Args:
         model_path: Path to trained model checkpoint
         device: Device to run on
-        
+
     Returns:
         TensorControllerAdapter ready for benchmarking
+
     """
     # Load checkpoint to get configuration
     checkpoint = torch.load(model_path, map_location=device)
-    
+
     input_size = checkpoint.get("input_size", 12)
     incremental_output = checkpoint.get("incremental_output", False)
     error_gain = checkpoint.get("error_gain", 4.0)
     n_max = checkpoint.get("n_max", 3000.0)
     delta_u_max = checkpoint.get("delta_u_max", 0.2)
     version = checkpoint.get("version", "unknown")
-    
+
     print(f"Model version: {version}")
     print(f"Input features: {input_size}")
     print(f"Output mode: {'incremental' if incremental_output else 'absolute'}")
     print(f"Error gain: {error_gain}, n_max: {n_max:.1f}")
-    
+
     # Load model
     model = load_v10_model(model_path, device=device)
-    
+
     # Wrap model
     wrapped_model = SNNControllerWrapper(model=model)
-    
+
     # Create state processor based on input size
     if input_size == 12:
         # v10 configuration: 12 features
         state_processor = RateSNNStateProcessor(
-            include_currents=True,       # i_d, i_q (2)
-            include_errors=True,          # e_d, e_q (2)
-            include_speed=True,           # n (1)
-            include_derivatives=True,     # de_d, de_q, dn (3)
-            include_ema_slow=True,        # EMA slow (2)
-            include_ema_fast=True,        # EMA fast (2)
-            include_references=False,     
-            include_prev_action=False,    
+            include_currents=True,  # i_d, i_q (2)
+            include_errors=True,  # e_d, e_q (2)
+            include_speed=True,  # n (1)
+            include_derivatives=True,  # de_d, de_q, dn (3)
+            include_ema_slow=True,  # EMA slow (2)
+            include_ema_fast=True,  # EMA fast (2)
+            include_references=False,
+            include_prev_action=False,
             error_gain=error_gain,
             n_max=n_max,
             ema_alpha_slow=0.98,
@@ -226,14 +242,14 @@ def create_v10_controller(model_path: Path, device: str = "cpu"):
         # Features: i_d, i_q, i_d_ref, i_q_ref, e_d, e_q, n, u_d_prev, u_q_prev,
         #           e_d_ema_slow, e_q_ema_slow, e_d_ema_fast, e_q_ema_fast
         state_processor = RateSNNStateProcessor(
-            include_currents=True,       # i_d, i_q (2)
-            include_errors=True,          # e_d, e_q (2)
-            include_speed=True,           # n (1)
-            include_references=True,      # i_d_ref, i_q_ref (2)
-            include_prev_action=True,     # u_d_prev, u_q_prev (2)
-            include_derivatives=False,    # NOT included in v12
-            include_ema_slow=True,        # EMA slow (2)
-            include_ema_fast=True,        # EMA fast (2)
+            include_currents=True,  # i_d, i_q (2)
+            include_errors=True,  # e_d, e_q (2)
+            include_speed=True,  # n (1)
+            include_references=True,  # i_d_ref, i_q_ref (2)
+            include_prev_action=True,  # u_d_prev, u_q_prev (2)
+            include_derivatives=False,  # NOT included in v12
+            include_ema_slow=True,  # EMA slow (2)
+            include_ema_fast=True,  # EMA fast (2)
             error_gain=error_gain,
             n_max=n_max,
             ema_alpha_slow=0.98,
@@ -241,25 +257,27 @@ def create_v10_controller(model_path: Path, device: str = "cpu"):
         )
     else:
         raise ValueError(f"Unsupported input size: {input_size}")
-    
+
     print(f"State processor: {state_processor.output_dim} features")
-    assert state_processor.output_dim == input_size, f"Mismatch: processor={state_processor.output_dim}, model={input_size}"
-    
+    assert (
+        state_processor.output_dim == input_size
+    ), f"Mismatch: processor={state_processor.output_dim}, model={input_size}"
+
     # Create action processor
     action_processor = RateSNNActionProcessor(
         incremental=incremental_output,
         delta_max=delta_u_max if incremental_output else 1.0,
     )
-    
+
     # Create controller adapter
     controller = TensorControllerAdapter(
         controller=wrapped_model,
         state_processor=state_processor,
         action_processor=action_processor,
     )
-    
+
     print("[OK] Controller created successfully")
-    
+
     return controller
 
 
@@ -303,7 +321,10 @@ class TestV10ModelEndToEnd:
         with torch.no_grad():
             y = model(x)
 
-        assert y.shape == (2, output_size), f"Expected shape (2, {output_size}), got {y.shape}"
+        assert y.shape == (
+            2,
+            output_size,
+        ), f"Expected shape (2, {output_size}), got {y.shape}"
         assert not torch.isnan(y).any(), "Output contains NaN"
         assert not torch.isinf(y).any(), "Output contains Inf"
 
@@ -348,38 +369,45 @@ class TestV10ModelEndToEnd:
         # Call controller using the unified interface: controller(state, reference)
         action = controller(state, reference)
 
-        assert "v_d" in action, f"Expected 'v_d' in action, got keys: {list(action.keys())}"
-        assert "v_q" in action, f"Expected 'v_q' in action, got keys: {list(action.keys())}"
-        assert isinstance(action["v_d"], float), f"v_d should be float, got {type(action['v_d'])}"
-        assert isinstance(action["v_q"], float), f"v_q should be float, got {type(action['v_q'])}"
+        assert (
+            "v_d" in action
+        ), f"Expected 'v_d' in action, got keys: {list(action.keys())}"
+        assert (
+            "v_q" in action
+        ), f"Expected 'v_q' in action, got keys: {list(action.keys())}"
+        assert isinstance(
+            action["v_d"], float
+        ), f"v_d should be float, got {type(action['v_d'])}"
+        assert isinstance(
+            action["v_q"], float
+        ), f"v_q should be float, got {type(action['v_q'])}"
 
     @pytest.mark.slow
     def test_single_scenario_benchmark(self, model_path, device):
         """Test running a single scenario with v10 model."""
         controller = create_v10_controller(model_path, device=device)
-        
+
         # Use primary reference scenario (mid speed)
-        suite = BenchmarkSuite(
-            scenarios=[STANDARD_SCENARIOS[1]],
-            verbose=True
-        )
-        
+        suite = BenchmarkSuite(scenarios=[STANDARD_SCENARIOS[1]], verbose=True)
+
         # Run benchmark
         summary = suite.run(controller=controller, name="v10-test")
-        
+
         # Verify results
         assert len(summary.scenario_results) == 1
         result = summary.scenario_results[0]
-        
+
         assert result.scenario_name == "step_mid_speed_1500rpm_2A"
         assert "mae_i_q" in result.metrics
         assert "mae_i_d" in result.metrics
-        
+
         # Check that controller produces reasonable results
-        assert result.metrics["mae_i_q"] < 5.0, f"MAE too high: {result.metrics['mae_i_q']}"
+        assert (
+            result.metrics["mae_i_q"] < 5.0
+        ), f"MAE too high: {result.metrics['mae_i_q']}"
         assert not result.safety_terminated, "Controller violated safety limits"
-        
-        print(f"\nSingle scenario results:")
+
+        print("\nSingle scenario results:")
         print(f"  MAE i_q: {result.metrics['mae_i_q']:.4f} A")
         print(f"  MAE i_d: {result.metrics['mae_i_d']:.4f} A")
         if "settling_time" in result.metrics:
@@ -389,22 +417,22 @@ class TestV10ModelEndToEnd:
     def test_quick_scenarios_benchmark(self, model_path, device):
         """Test running quick scenarios with v10 model."""
         controller = create_v10_controller(model_path, device=device)
-        
+
         # Run quick scenarios (2 scenarios)
         suite = BenchmarkSuite(scenarios=QUICK_SCENARIOS, verbose=True)
         summary = suite.run(controller=controller, name="v10-quick")
-        
+
         # Verify results
         assert len(summary.scenario_results) == 2
         assert summary.num_safety_violations == 0, "Safety violations detected"
-        
-        print(f"\nQuick scenarios results:")
+
+        print("\nQuick scenarios results:")
         for result in summary.scenario_results:
             print(f"  {result.scenario_name}:")
             print(f"    MAE i_q: {result.metrics['mae_i_q']:.4f} A")
             print(f"    Max error: {result.metrics.get('max_error_i_q', 0):.4f} A")
-        
-        print(f"\nAggregate metrics:")
+
+        print("\nAggregate metrics:")
         print(f"  Worst max error: {summary.worst_max_error_iq:.4f} A")
 
     @pytest.mark.slow
@@ -412,18 +440,18 @@ class TestV10ModelEndToEnd:
     def test_full_benchmark_suite(self, model_path, device):
         """Test running full 6-scenario benchmark with v10 model."""
         controller = create_v10_controller(model_path, device=device)
-        
+
         # Run full suite
         suite = BenchmarkSuite(verbose=True)
         summary = suite.run(controller=controller, name="v10-full")
-        
+
         # Verify results
         assert len(summary.scenario_results) == 6
-        
+
         print(f"\n{'='*80}")
-        print(f"Full Benchmark Results: v10")
+        print("Full Benchmark Results: v10")
         print(f"{'='*80}")
-        
+
         for result in summary.scenario_results:
             status = "FAIL" if result.safety_terminated else "OK"
             print(f"\n{result.scenario_name}:")
@@ -431,64 +459,81 @@ class TestV10ModelEndToEnd:
             print(f"  MAE i_q: {result.metrics.get('mae_i_q', 0):.4f} A")
             print(f"  MAE i_d: {result.metrics.get('mae_i_d', 0):.4f} A")
             if "settling_time" in result.metrics:
-                st = result.metrics['settling_time']
-                st_str = f"{st:.4f}" if st < float('inf') else "N/A"
+                st = result.metrics["settling_time"]
+                st_str = f"{st:.4f}" if st < float("inf") else "N/A"
                 print(f"  Settling time: {st_str} s")
             if "overshoot" in result.metrics:
                 print(f"  Overshoot: {result.metrics['overshoot']:.2f} %")
-        
+
         print(f"\n{'='*80}")
-        print(f"Aggregate Metrics:")
+        print("Aggregate Metrics:")
         print(f"  Worst max error: {summary.worst_max_error_iq:.4f} A")
         print(f"  Safety violations: {summary.num_safety_violations}")
         print(f"{'='*80}")
 
         # Assert reasonable performance
         assert summary.num_safety_violations == 0, "Safety violations detected"
-        assert summary.worst_max_error_iq < 20.0, f"Max error too high: {summary.worst_max_error_iq}"
+        assert (
+            summary.worst_max_error_iq < 20.0
+        ), f"Max error too high: {summary.worst_max_error_iq}"
 
 
 def main():
     """Run end-to-end test standalone."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Test v10 model with benchmark suite")
-    parser.add_argument("--model", type=str, default="tests/model/best_model.pt",
-                        help="Path to trained model")
-    parser.add_argument("--mode", type=str, default="single",
-                        choices=["single", "quick", "full"],
-                        help="Test mode: single scenario, quick (2), or full (6)")
-    parser.add_argument("--device", type=str, default=None,
-                        help="Device (cuda/cpu, auto-detect if not specified)")
-    parser.add_argument("--fast", action="store_true",
-                        help="Fast mode: reduce max_steps by 10x for quick testing")
-    
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="tests/model/best_model.pt",
+        help="Path to trained model",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="single",
+        choices=["single", "quick", "full"],
+        help="Test mode: single scenario, quick (2), or full (6)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Device (cuda/cpu, auto-detect if not specified)",
+    )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Fast mode: reduce max_steps by 10x for quick testing",
+    )
+
     args = parser.parse_args()
-    
+
     # Setup
     model_path = Path(args.model)
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     print(f"Testing v10 model: {model_path}")
     print(f"Device: {device}")
     print(f"Mode: {args.mode}")
     if args.fast:
         print("Fast mode: ENABLED (10x fewer steps)")
     print()
-    
+
     if not SNNTORCH_AVAILABLE:
         print("ERROR: snntorch not installed")
         print("Install with: pip install snntorch")
         return 1
-    
+
     if not model_path.exists():
         print(f"ERROR: Model not found: {model_path}")
         return 1
-    
+
     try:
         # Create controller
         controller = create_v10_controller(model_path, device=device)
-        
+
         # Select scenarios
         if args.mode == "single":
             scenarios = [STANDARD_SCENARIOS[1]]  # Primary reference
@@ -496,10 +541,11 @@ def main():
             scenarios = QUICK_SCENARIOS
         else:  # full
             scenarios = STANDARD_SCENARIOS
-        
+
         # Apply fast mode if requested
         if args.fast:
             from embark.benchmark.harness import ScenarioDefinition
+
             scenarios = [
                 ScenarioDefinition(
                     name=s.name,
@@ -511,15 +557,17 @@ def main():
                 )
                 for s in scenarios
             ]
-            print(f"Fast mode: Reduced steps to ~{sum(s.max_steps for s in scenarios)} total\n")
-        
+            print(
+                f"Fast mode: Reduced steps to ~{sum(s.max_steps for s in scenarios)} total\n"
+            )
+
         # Run benchmark
         suite = BenchmarkSuite(scenarios=scenarios, verbose=True)
         summary = suite.run(controller=controller, name="v10")
-        
+
         # Print summary
         suite.print_summary(summary)
-        
+
         # Save results
         output_dir = Path("results")
         output_dir.mkdir(exist_ok=True)
@@ -527,12 +575,13 @@ def main():
         output_file = output_dir / f"v10_benchmark_{mode_suffix}.json"
         suite.save_results(summary, output_file)
         print(f"\nResults saved to: {output_file}")
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

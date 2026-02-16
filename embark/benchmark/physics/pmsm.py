@@ -28,6 +28,10 @@ class PMSMPhysicsEngine:
         self._create_gem_env()
         self._time = 0.0
         self._last_gem_state: np.ndarray | None = None
+        self._rng: np.random.Generator = np.random.default_rng()
+        self._noise_enabled: bool = (
+            self.config.noise_current_std > 0.0 or self.config.noise_speed_std > 0.0
+        )
 
     @property
     def state_keys(self) -> set[str]:
@@ -75,6 +79,7 @@ class PMSMPhysicsEngine:
     def reset(self, seed: int | None = None) -> StateDict:
         if seed is not None:
             self._gem_env.reset(seed=seed)
+            self._rng = np.random.default_rng(seed)
         reset_result = self._gem_env.reset()
         gem_state = self._extract_gem_state_from_reset(reset_result)
         self._last_gem_state = gem_state
@@ -126,6 +131,15 @@ class PMSMPhysicsEngine:
             "omega", self.config.omega_max
         )
         epsilon = float(gem_state[self._idx_epsilon]) * np.pi
+
+        # Optional Gaussian measurement noise (additive, in physical units)
+        if self._noise_enabled:
+            if self.config.noise_current_std > 0.0:
+                i_d += float(self._rng.normal(0.0, self.config.noise_current_std))
+                i_q += float(self._rng.normal(0.0, self.config.noise_current_std))
+            if self.config.noise_speed_std > 0.0:
+                omega += float(self._rng.normal(0.0, self.config.noise_speed_std))
+
         return {
             "i_d": i_d,
             "i_q": i_q,

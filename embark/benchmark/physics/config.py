@@ -27,6 +27,10 @@ class PMSMConfig:
     dead_time: float = DEFAULT_PMSM.dead_time
     use_dead_time: bool = DEFAULT_PMSM.use_dead_time
 
+    # Measurement noise
+    noise_current_std: float = DEFAULT_PMSM.noise_current_std
+    noise_speed_std: float = DEFAULT_PMSM.noise_speed_std
+
     tau: float = DEFAULT_PMSM.tau
 
     @property

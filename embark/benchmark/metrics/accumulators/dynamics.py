@@ -37,11 +37,12 @@ class SettlingTime(MetricAccumulator):
 
     Output key: ``settling_time_i_q`` (or whichever ``tracked_key`` is used)
     Units: seconds (s), or ``inf`` if the signal never settles.
+
     """
 
     tracked_key: str
-    band_fraction: float = 0.02   # 2% of step size
-    dwell_s: float = 0.001        # must stay in band for 1 ms
+    band_fraction: float = 0.02  # 2% of step size
+    dwell_s: float = 0.001  # must stay in band for 1 ms
     time_key: str = "time"
 
     _step_ref: float | None = field(default=None, init=False, repr=False)
@@ -124,6 +125,7 @@ class Overshoot(MetricAccumulator):
 
     Output key: ``overshoot``
     Units: %
+
     """
 
     tracked_key: str

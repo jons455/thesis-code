@@ -270,7 +270,9 @@ class TestDynamicMetrics:
     def test_settling_time_settles_with_dwell(self):
         """SettlingTime reports entry time once dwell is satisfied."""
         # ref=2.0 → 2% band = 0.04 A, dwell=0.001 s
-        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time")
+        metric = SettlingTime(
+            tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time"
+        )
         metric.reset()
 
         # t=0.0: reference not yet fired (0) → no band computed yet
@@ -305,7 +307,9 @@ class TestDynamicMetrics:
     def test_settling_time_dwell_not_met_returns_inf(self):
         """If dwell is never satisfied, returns inf."""
         # ref=2.0 → band=0.04, dwell=0.01
-        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.01, time_key="time")
+        metric = SettlingTime(
+            tracked_key="val", band_fraction=0.02, dwell_s=0.01, time_key="time"
+        )
         metric.reset()
 
         # Enter band at t=0.005, but leave immediately at t=0.006 (dwell=0.001 < 0.01)
@@ -329,7 +333,9 @@ class TestDynamicMetrics:
 
     def test_settling_time_returns_inf_when_never_within(self):
         """Returns inf when signal never enters the band."""
-        metric = SettlingTime(tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time")
+        metric = SettlingTime(
+            tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time"
+        )
         metric.reset()
 
         # Error is always large (well outside 2% band of ref=2.0 → band=0.04)

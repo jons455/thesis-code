@@ -37,6 +37,7 @@ from embark.benchmark.tasks.pmsm_current_control import (
     PMSMCurrentControlTask,
     SafetyLimits,
 )
+from embark.benchmark.physics.config import PMSMConfig
 from embark.benchmark.tasks.reference_generators import (
     ConstantReference,
     MultiStepReference,
@@ -44,6 +45,52 @@ from embark.benchmark.tasks.reference_generators import (
     SinusoidalReference,
     StepReference,
 )
+
+
+# ============================================================================
+# Benchmark Config
+# ============================================================================
+
+
+@dataclass
+class BenchmarkConfig:
+    """
+    Physics-level options for the benchmark suite.
+
+    All fields default to the canonical benchmark settings (clean, ideal
+    physics).  Opt-in fields enable realistic perturbations for robustness
+    evaluation.  The config is serialised with results for reproducibility.
+
+    Example::
+
+        config = BenchmarkConfig(noise_current_std=0.1, use_dead_time=True)
+        suite = BenchmarkSuite(config=config)
+        summary = suite.run(controller=my_controller, name="Noisy+DT")
+
+    """
+
+    tau: float = 1e-4  # Control timestep [s]
+    use_dead_time: bool = False  # Inverter dead-time compensation
+    noise_current_std: float = 0.0  # Gaussian noise σ on i_d, i_q [A]
+    noise_speed_std: float = 0.0  # Gaussian noise σ on omega [rad/s]
+
+    def to_pmsm_config(self) -> PMSMConfig:
+        """Create a :class:`PMSMConfig` with these overrides applied."""
+        return PMSMConfig(
+            tau=self.tau,
+            use_dead_time=self.use_dead_time,
+            noise_current_std=self.noise_current_std,
+            noise_speed_std=self.noise_speed_std,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise for JSON results."""
+        return {
+            "tau": self.tau,
+            "use_dead_time": self.use_dead_time,
+            "noise_current_std": self.noise_current_std,
+            "noise_speed_std": self.noise_speed_std,
+        }
 
 
 # ============================================================================
@@ -73,11 +120,24 @@ class ScenarioDefinition:
     max_steps: int = 2000
     safety_limits: SafetyLimits | None = None
 
-    def create_task(self) -> PMSMCurrentControlTask:
-        """Create a PMSMCurrentControlTask from this scenario definition."""
+    def create_task(
+        self,
+        physics_config: PMSMConfig | None = None,
+    ) -> PMSMCurrentControlTask:
+        """
+        Create a PMSMCurrentControlTask from this scenario definition.
+
+        Args:
+            physics_config: Optional physics configuration override.
+                When *None*, the default :class:`PMSMConfig` is used.
+
+        """
         from embark.benchmark.physics import PMSMPhysicsEngine
 
-        physics = PMSMPhysicsEngine(n_rpm=self.n_rpm)
+        physics = PMSMPhysicsEngine(
+            n_rpm=self.n_rpm,
+            config=physics_config or PMSMConfig(),
+        )
         return PMSMCurrentControlTask(
             physics_engine=physics,
             reference_generator=self.reference_generator,
@@ -122,11 +182,11 @@ STANDARD_SCENARIOS: list[ScenarioDefinition] = [
         n_rpm=1500.0,
         reference_generator=MultiStepReference(
             steps=[
-                (0.0, 0.0, 0.0),     # Initial: 0A
-                (0.1, 0.0, 2.0),     # Step 1: +2A (motoring)
-                (0.35, 0.0, -2.0),   # Step 2: -2A (generating)
-                (0.6, 0.0, 2.0),     # Step 3: +2A (motoring)
-                (0.85, 0.0, -2.0),   # Step 4: -2A (generating)
+                (0.0, 0.0, 0.0),  # Initial: 0A
+                (0.1, 0.0, 2.0),  # Step 1: +2A (motoring)
+                (0.35, 0.0, -2.0),  # Step 2: -2A (generating)
+                (0.6, 0.0, 2.0),  # Step 3: +2A (motoring)
+                (0.85, 0.0, -2.0),  # Step 4: -2A (generating)
             ]
         ),
         max_steps=10000,  # 1.0s at 100µs sampling
@@ -138,10 +198,10 @@ STANDARD_SCENARIOS: list[ScenarioDefinition] = [
         n_rpm=1500.0,
         reference_generator=MultiStepReference(
             steps=[
-                (0.0, 0.0, 0.0),     # Initial: 0A
-                (0.1, 0.0, 2.0),     # Motoring: +2A
-                (0.4, 0.0, -2.0),    # Regenerative braking: -2A
-                (0.7, 0.0, 0.0),     # Zero crossing
+                (0.0, 0.0, 0.0),  # Initial: 0A
+                (0.1, 0.0, 2.0),  # Motoring: +2A
+                (0.4, 0.0, -2.0),  # Regenerative braking: -2A
+                (0.7, 0.0, 0.0),  # Zero crossing
             ]
         ),
         max_steps=9000,  # 0.9s at 100µs sampling
@@ -153,9 +213,9 @@ STANDARD_SCENARIOS: list[ScenarioDefinition] = [
         n_rpm=2500.0,
         reference_generator=MultiStepReference(
             steps=[
-                (0.0, 0.0, 0.0),     # Initial: no current
-                (0.1, -2.0, 0.0),    # Step i_d to -2A (field weakening)
-                (0.35, -2.0, 2.0),   # Step i_q to 2A (with active i_d)
+                (0.0, 0.0, 0.0),  # Initial: no current
+                (0.1, -2.0, 0.0),  # Step i_d to -2A (field weakening)
+                (0.35, -2.0, 2.0),  # Step i_q to 2A (with active i_d)
             ]
         ),
         max_steps=6000,  # 0.6s at 100µs sampling
@@ -203,6 +263,7 @@ class BenchmarkSummary:
 
     controller_name: str
     scenario_results: list[ScenarioResult] = field(default_factory=list)
+    config: dict[str, Any] = field(default_factory=dict)
 
     @property
     def worst_max_error_iq(self) -> float:
@@ -219,6 +280,7 @@ class BenchmarkSummary:
         """Serialize to a dictionary for JSON export."""
         return {
             "controller_name": self.controller_name,
+            "config": self.config,
             "aggregate": {
                 "worst_max_error_iq": self.worst_max_error_iq,
                 "num_safety_violations": self.num_safety_violations,
@@ -253,12 +315,21 @@ class BenchmarkSuite:
         metric_factory: Callable returning a fresh list of
             ``MetricAccumulator`` instances.  Called once per scenario.
         verbose: Print progress during execution.
+        config: Physics-level options (noise, dead-time, tau).  Defaults
+            to the canonical benchmark settings.
 
     Example::
 
-        from embark.benchmark.harness import BenchmarkSuite
+        from embark.benchmark.harness import BenchmarkSuite, BenchmarkConfig
 
+        # Canonical benchmark (default)
         suite = BenchmarkSuite()
+
+        # With measurement noise and dead-time
+        suite = BenchmarkSuite(config=BenchmarkConfig(
+            noise_current_std=0.1,
+            use_dead_time=True,
+        ))
         summary = suite.run(controller=my_snn_controller, name="MySNN")
         suite.print_summary(summary)
         suite.save_results(summary, "results/benchmark.json")
@@ -270,10 +341,12 @@ class BenchmarkSuite:
         scenarios: list[ScenarioDefinition] | None = None,
         metric_factory: Any = None,
         verbose: bool = True,
+        config: BenchmarkConfig | None = None,
     ) -> None:
         self.scenarios = scenarios or STANDARD_SCENARIOS
         self.metric_factory = metric_factory or default_metric_factory
         self.verbose = verbose
+        self.config = config or BenchmarkConfig()
 
     def run(
         self,
@@ -292,7 +365,11 @@ class BenchmarkSuite:
             BenchmarkSummary with per-scenario and aggregate results.
 
         """
-        summary = BenchmarkSummary(controller_name=name)
+        summary = BenchmarkSummary(
+            controller_name=name,
+            config=self.config.to_dict(),
+        )
+        pmsm_config = self.config.to_pmsm_config()
 
         for i, scenario in enumerate(self.scenarios, 1):
             if self.verbose:
@@ -302,7 +379,7 @@ class BenchmarkSuite:
                 )
 
             # Create fresh task and metrics for each scenario
-            task = scenario.create_task()
+            task = scenario.create_task(physics_config=pmsm_config)
             try:
                 metrics = self.metric_factory(controller)
             except TypeError:
@@ -353,6 +430,21 @@ class BenchmarkSuite:
             f"{summary.num_safety_violations} safety violations"
         )
         print("=" * 80)
+
+        # Show active physics options (only non-default)
+        cfg = summary.config
+        opts: list[str] = []
+        if cfg.get("use_dead_time"):
+            opts.append("dead-time")
+        if cfg.get("noise_current_std", 0) > 0:
+            opts.append(f"noise_i={cfg['noise_current_std']}A")
+        if cfg.get("noise_speed_std", 0) > 0:
+            opts.append(f"noise_w={cfg['noise_speed_std']}rad/s")
+        if cfg.get("tau", 1e-4) != 1e-4:
+            tau_us = cfg["tau"] * 1e6
+            opts.append(f"tau={tau_us:.0f}us")
+        if opts:
+            print(f"  Options: {', '.join(opts)}")
         print()
 
         # Per-scenario table
@@ -385,6 +477,34 @@ class BenchmarkSuite:
             f"{'':>10} {'':>8}"
         )
         print()
+
+        # ── Neuromorphic metrics (only when SNN data is present) ─────────
+        has_neuro = any(
+            r.metrics.get("total_spikes", 0.0) > 0.0 for r in summary.scenario_results
+        )
+        if has_neuro:
+            print("  Neuromorphic Metrics")
+            print("  " + "-" * 76)
+            neuro_header = (
+                f"  {'Scenario':<22} {'Spikes':>10} {'Spk/step':>10} "
+                f"{'SyOps':>12} {'Sparsity':>10}"
+            )
+            print(neuro_header)
+            print("  " + "-" * 76)
+            for r in summary.scenario_results:
+                m = r.metrics
+                spikes = m.get("total_spikes", 0.0)
+                spk_step = m.get("spikes_per_step", 0.0)
+                syops = m.get("total_syops", 0.0)
+                sparsity = m.get("mean_sparsity", 0.0)
+                print(
+                    f"  {r.scenario_name:<22} "
+                    f"{spikes:>10.0f} "
+                    f"{spk_step:>10.1f} "
+                    f"{syops:>12.0f} "
+                    f"{sparsity:>10.4f}"
+                )
+            print()
 
     @staticmethod
     def save_results(summary: BenchmarkSummary, path: str | Path) -> None:

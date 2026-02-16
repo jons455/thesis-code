@@ -62,6 +62,7 @@ from .agents import (
 )
 from .controllers import SNNControllerWrapper
 from .harness import (
+    BenchmarkConfig,
     BenchmarkSuite,
     BenchmarkSummary,
     ClosedLoopHarness,
@@ -70,11 +71,14 @@ from .harness import (
     ScenarioDefinition,
 )
 from .metrics import (
+    ActivationSparsity,
     InferenceLatency,
     MaximumError,
     Overshoot,
     SettlingTime,
+    SpikeCount,
     SteadyStateRMS,
+    SynapticOps,
     TrackingITAE,
     TrackingMAE,  # kept for backward compatibility
 )
@@ -84,6 +88,7 @@ from .tasks import PMSMCurrentControlTask, SafetyLimits
 
 __all__ = [
     # Harness & Suite
+    "BenchmarkConfig",
     "BenchmarkSuite",
     "BenchmarkSummary",
     "ClosedLoopHarness",
@@ -108,11 +113,14 @@ __all__ = [
     "RateSNNActionProcessor",
     "RateSNNStateProcessor",
     # Metrics
+    "ActivationSparsity",
     "InferenceLatency",
     "MaximumError",
     "Overshoot",
     "SettlingTime",
+    "SpikeCount",
     "SteadyStateRMS",
+    "SynapticOps",
     "TrackingITAE",
     "TrackingMAE",  # kept for backward compatibility
 ]

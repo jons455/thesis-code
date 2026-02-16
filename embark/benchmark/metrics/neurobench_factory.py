@@ -9,8 +9,11 @@ import torch
 
 from embark.benchmark.interfaces import MetricAccumulator
 from embark.benchmark.metrics.accumulators import (
+    ActivationSparsity,
     InferenceLatency,
     MaximumError,
+    SpikeCount,
+    SynapticOps,
     TrackingITAE,
     TrackingMAE,
 )
@@ -48,6 +51,10 @@ def _control_metrics() -> list[MetricAccumulator]:
     - ``Overshoot``: peak overshoot relative to step size (i_q)
     - ``SteadyStateRMS``: RMS of steady-state error after 50 ms (i_q, i_d)
     - ``InferenceLatency``: round-trip and chip-level timing (all controllers)
+    - ``SpikeCount``: total spikes emitted by SNN layers (silent for non-SNN)
+    - ``SynapticOps``: synaptic operations (silent for non-SNN)
+    - ``ActivationSparsity``: fraction of silent neurons (silent for non-SNN)
+
     """
     return [
         TrackingMAE(tracked_keys=["i_q", "i_d"]),
@@ -57,6 +64,10 @@ def _control_metrics() -> list[MetricAccumulator]:
         Overshoot(tracked_key="i_q"),
         SteadyStateRMS(tracked_keys=["i_q", "i_d"], transient_s=0.05),
         InferenceLatency(),
+        # Neuromorphic metrics — safe for non-SNN controllers (return zeros)
+        SpikeCount(),
+        SynapticOps(),
+        ActivationSparsity(),
     ]
 
 
@@ -71,8 +82,11 @@ def _controller_has_model(controller: Any | None) -> bool:
 
 
 def _create_neurobench_adapters(controller: Any) -> list[MetricAccumulator]:
-    """Instantiate all applicable NeuroBench static/workload metric adapters.
+    """
+    Instantiate all applicable NeuroBench static/workload metric adapters.
+
     Returns empty list if neurobench is not installed.
+
     """
     try:
         from embark.benchmark.contrib.neurobench.metric_adapters import (

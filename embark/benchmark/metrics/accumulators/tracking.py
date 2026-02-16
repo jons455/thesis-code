@@ -31,6 +31,7 @@ class TrackingITAE(MetricAccumulator):
 
     Output keys: ``itae_i_q``, ``itae_i_d``
     Units: A·s²
+
     """
 
     tracked_keys: list[str]
@@ -108,7 +109,10 @@ class MaximumError(MetricAccumulator):
                 self._max_errors[key] = error
 
     def compute(self) -> dict[str, float]:
-        return {f"max_error_{key}": self._max_errors.get(key, 0.0) for key in self.tracked_keys}
+        return {
+            f"max_error_{key}": self._max_errors.get(key, 0.0)
+            for key in self.tracked_keys
+        }
 
 
 @dataclass
@@ -133,6 +137,7 @@ class SteadyStateRMS(MetricAccumulator):
 
     Output keys: ``rms_i_q``, ``rms_i_d``
     Units: A
+
     """
 
     tracked_keys: list[str]
@@ -196,6 +201,7 @@ class TrackingMAE(MetricAccumulator):
 
     Output keys: ``mae_i_q``, ``mae_i_d``
     Units: A
+
     """
 
     tracked_keys: list[str]

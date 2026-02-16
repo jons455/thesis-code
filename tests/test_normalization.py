@@ -1,8 +1,8 @@
 """
 Test normalization consistency for rate-SNN processors.
 
-This test verifies that RateSNNStateProcessor produces correct normalization
-for rate-encoding SNNs, matching the expected behavior from training datasets.
+This test verifies that RateSNNStateProcessor produces correct normalization for rate-
+encoding SNNs, matching the expected behavior from training datasets.
 
 """
 
@@ -31,6 +31,7 @@ class TestNormalizationConsistency:
         )
         # Configure with i_max
         from unittest.mock import MagicMock
+
         config = MagicMock()
         config.i_max = DEFAULT_PMSM.i_max
         task = MagicMock()
@@ -240,6 +241,7 @@ class TestTrainingDatasetCompatibility:
             n_max=n_max,
         )
         from unittest.mock import MagicMock
+
         config = MagicMock()
         config.i_max = i_max
         proc.configure(config, MagicMock())
@@ -293,6 +295,7 @@ class TestTrainingDatasetCompatibility:
             n_max=n_max,
         )
         from unittest.mock import MagicMock
+
         config = MagicMock()
         config.i_max = i_max
         proc.configure(config, MagicMock())

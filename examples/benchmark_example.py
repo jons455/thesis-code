@@ -11,6 +11,7 @@ Run it top-to-bottom, or jump to the section you need:
     4. Custom scenario — build your own reference & safety limits
     5. Low-level harness — manual control loop for debugging / logging
     6. Comparing controllers side-by-side
+    7. BenchmarkConfig — opt-in noise, dead-time, and custom tau
 
 Requirements:
     pip install embark            # core package
@@ -473,6 +474,84 @@ def section_6_comparison():
 
 
 # ---------------------------------------------------------------------------
+# 7.  BenchmarkConfig — opt-in noise, dead-time, custom tau
+# ---------------------------------------------------------------------------
+
+
+def section_7_benchmark_config():
+    """Show how to enable measurement noise, dead-time, or change tau."""
+
+    from embark.benchmark import (
+        BenchmarkConfig,
+        BenchmarkSuite,
+        PIControllerAgent,
+        PMSMConfig,
+        QUICK_SCENARIOS,
+    )
+
+    config = PMSMConfig()
+    controller = PIControllerAgent.from_system_config(config)
+
+    # --- Default (canonical) benchmark ---------------------------------
+    # BenchmarkSuite() without config= uses BenchmarkConfig() internally,
+    # which is: tau=1e-4, no noise, no dead-time.  This is identical to
+    # the behaviour before BenchmarkConfig was added.
+    suite_default = BenchmarkSuite(scenarios=QUICK_SCENARIOS, verbose=False)
+    summary_default = suite_default.run(controller=controller, name="PI-clean")
+
+    # --- With Gaussian measurement noise -------------------------------
+    # noise_current_std adds Gaussian noise to i_d and i_q (in Amperes)
+    # noise_speed_std  adds Gaussian noise to omega     (in rad/s)
+    # Noise is additive, applied after GEM denormalisation, and
+    # seeded per-engine for reproducibility.
+    noisy_config = BenchmarkConfig(
+        noise_current_std=0.1,   # σ = 0.1 A on both i_d and i_q
+        noise_speed_std=1.0,     # σ = 1 rad/s on omega
+    )
+    suite_noisy = BenchmarkSuite(
+        scenarios=QUICK_SCENARIOS,
+        config=noisy_config,
+        verbose=False,
+    )
+    summary_noisy = suite_noisy.run(controller=controller, name="PI-noisy")
+
+    # --- With inverter dead-time ---------------------------------------
+    # Dead-time adds a realistic voltage distortion from the power stage.
+    dt_config = BenchmarkConfig(use_dead_time=True)
+    suite_dt = BenchmarkSuite(
+        scenarios=QUICK_SCENARIOS,
+        config=dt_config,
+        verbose=False,
+    )
+    summary_dt = suite_dt.run(controller=controller, name="PI-deadtime")
+
+    # --- Compare results -----------------------------------------------
+    print("=== Section 7: BenchmarkConfig variants ===")
+    print()
+    print(f"{'Variant':<20} {'MAE_iq':>10} {'MaxErr_iq':>12} {'Settle':>10}")
+    print("-" * 55)
+
+    for summary in [summary_default, summary_noisy, summary_dt]:
+        m = summary.scenario_results[0].metrics
+        mae = m.get("mae_i_q", 0.0)
+        max_err = m.get("max_error_i_q", 0.0)
+        settle = m.get("settling_time_i_q", float("inf"))
+        settle_s = f"{settle:.4f}" if settle < float("inf") else "N/A"
+        print(f"{summary.controller_name:<20} {mae:>10.4f} {max_err:>12.4f} {settle_s:>10}")
+
+    print()
+
+    # The config is serialised into the summary for reproducibility:
+    print("  Config stored in summary (noisy):")
+    for k, v in summary_noisy.config.items():
+        print(f"    {k}: {v}")
+
+    # print_summary() shows active options in the header:
+    print()
+    suite_noisy.print_summary(summary_noisy)
+
+
+# ---------------------------------------------------------------------------
 # CLI entry-point
 # ---------------------------------------------------------------------------
 
@@ -483,6 +562,7 @@ SECTIONS = {
     4: ("Custom scenarios",          section_4_custom_scenario),
     5: ("Manual control loop",       section_5_manual_loop),
     6: ("Controller comparison",     section_6_comparison),
+    7: ("BenchmarkConfig variants",  section_7_benchmark_config),
 }
 
 
@@ -494,7 +574,7 @@ def main():
     )
     parser.add_argument(
         "--section", type=int, default=None,
-        help="Run a specific section (1-6). Default: run all.",
+        help="Run a specific section (1-7). Default: run all.",
     )
     args = parser.parse_args()
 

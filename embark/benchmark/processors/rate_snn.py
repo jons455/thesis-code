@@ -1,4 +1,5 @@
-"""Unified processors for all rate-encoding SNN controllers.
+"""
+Unified processors for all rate-encoding SNN controllers.
 
 This module provides configurable state and action processors that handle
 any rate-encoding SNN architecture through feature flags rather than
@@ -11,6 +12,7 @@ RateSNNStateProcessor
     speed, derivatives, EMA filters, previous actions, and integrals.
 RateSNNActionProcessor
     Action processor supporting both absolute and incremental output modes.
+
 """
 
 from __future__ import annotations
@@ -33,7 +35,8 @@ from embark.benchmark.interfaces import (
 
 @dataclass
 class RateSNNStateProcessor:
-    """Configurable state processor for all rate-encoding SNN controllers.
+    """
+    Configurable state processor for all rate-encoding SNN controllers.
 
     Produces a flat observation tensor by concatenating selected feature
     groups in a fixed order.  Each group can be toggled on or off via
@@ -82,6 +85,7 @@ class RateSNNStateProcessor:
         Include fast EMA-filtered errors.
     include_integral : bool
         Include accumulated error integrals.
+
     """
 
     # Normalization parameters
@@ -190,10 +194,12 @@ class RateSNNStateProcessor:
             features.append(n)
 
         if self.include_prev_action:
-            features.extend([
-                self._prev_u_d / self._u_max,
-                self._prev_u_q / self._u_max,
-            ])
+            features.extend(
+                [
+                    self._prev_u_d / self._u_max,
+                    self._prev_u_q / self._u_max,
+                ]
+            )
 
         if self.include_derivatives:
             if self._first_step:
@@ -234,8 +240,12 @@ class RateSNNStateProcessor:
             self._int_e_d += e_d_raw * self._tau
             self._int_e_q += e_q_raw * self._tau
             # Anti-windup clamp
-            self._int_e_d = max(-self.integral_limit, min(self.integral_limit, self._int_e_d))
-            self._int_e_q = max(-self.integral_limit, min(self.integral_limit, self._int_e_q))
+            self._int_e_d = max(
+                -self.integral_limit, min(self.integral_limit, self._int_e_d)
+            )
+            self._int_e_q = max(
+                -self.integral_limit, min(self.integral_limit, self._int_e_q)
+            )
             features.extend([self._int_e_d, self._int_e_q])
 
         # --- Update state for next step ---
@@ -273,7 +283,8 @@ class RateSNNStateProcessor:
 
 @dataclass
 class RateSNNActionProcessor:
-    """Action processor for rate-encoding SNN controllers.
+    """
+    Action processor for rate-encoding SNN controllers.
 
     Supports two output modes:
 
@@ -291,6 +302,7 @@ class RateSNNActionProcessor:
         If True, output is accumulated as deltas.
     delta_max : float
         Maximum per-step voltage change in incremental mode (volts).
+
     """
 
     output_keys: tuple[str, ...] = ("v_d", "v_q")

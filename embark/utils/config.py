@@ -27,6 +27,10 @@ class PMSMDefaults:
         False  # If False, simulation runs without dead time (simplified PMSM); set True to enable
     )
 
+    # Measurement noise (Gaussian, additive, applied after denormalisation)
+    noise_current_std: float = 0.0  # Std dev on i_d, i_q [A] (0 = disabled)
+    noise_speed_std: float = 0.0  # Std dev on omega [rad/s] (0 = disabled)
+
     control_frequency: float = 10000.0  # Hz
 
     @property

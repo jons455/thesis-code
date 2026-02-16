@@ -3,6 +3,7 @@
 from .benchmark_suite import (
     QUICK_SCENARIOS,
     STANDARD_SCENARIOS,
+    BenchmarkConfig,
     BenchmarkSuite,
     BenchmarkSummary,
     ScenarioDefinition,
@@ -12,6 +13,7 @@ from .benchmark_suite import (
 from .closed_loop import ClosedLoopHarness
 
 __all__ = [
+    "BenchmarkConfig",
     "BenchmarkSuite",
     "BenchmarkSummary",
     "ClosedLoopHarness",

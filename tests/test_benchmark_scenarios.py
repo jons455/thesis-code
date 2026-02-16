@@ -25,18 +25,20 @@ class TestMultiStepReference:
         """Test that t=0 returns first step values."""
         gen = MultiStepReference(steps=[(0.0, 0.0, 0.0), (0.1, 0.0, 2.0)])
         gen.reset()
-        
+
         ref = gen(step=0, time_s=0.0)
         assert ref["i_d_ref"] == 0.0
         assert ref["i_q_ref"] == 0.0
 
     def test_transitions_to_next_step(self):
         """Test that reference transitions at specified time."""
-        gen = MultiStepReference(steps=[
-            (0.0, 0.0, 0.0),
-            (0.1, 0.0, 2.0),
-            (0.3, -1.0, 3.0),
-        ])
+        gen = MultiStepReference(
+            steps=[
+                (0.0, 0.0, 0.0),
+                (0.1, 0.0, 2.0),
+                (0.3, -1.0, 3.0),
+            ]
+        )
         gen.reset()
 
         # Before first transition
@@ -66,10 +68,12 @@ class TestMultiStepReference:
 
     def test_negative_currents(self):
         """Test that negative currents work (for generating quadrant)."""
-        gen = MultiStepReference(steps=[
-            (0.0, 0.0, 2.0),
-            (0.1, 0.0, -2.0),  # Negative i_q
-        ])
+        gen = MultiStepReference(
+            steps=[
+                (0.0, 0.0, 2.0),
+                (0.1, 0.0, -2.0),  # Negative i_q
+            ]
+        )
         gen.reset()
 
         ref = gen(step=10, time_s=0.15)
@@ -128,11 +132,11 @@ class TestStandardScenarios:
         """Test that field-weakening scenario activates i_d."""
         fw_scenario = STANDARD_SCENARIOS[5]
         assert isinstance(fw_scenario.reference_generator, MultiStepReference)
-        
+
         # Check that it includes negative i_d step
         fw_gen = fw_scenario.reference_generator
         fw_gen.reset()
-        
+
         # At t=0.2s, should have i_d=-2A
         ref = fw_gen(step=0, time_s=0.2)
         assert ref["i_d_ref"] == -2.0
@@ -163,17 +167,17 @@ class TestBenchmarkSuite:
     def test_suite_single_scenario(self):
         """Test running suite with just one scenario."""
         from embark.benchmark.agents import PIControllerAgent
-        
+
         suite = BenchmarkSuite(scenarios=[STANDARD_SCENARIOS[1]], verbose=False)
-        
+
         # Create a simple PI controller
         task = STANDARD_SCENARIOS[1].create_task()
         controller = PIControllerAgent.from_system_config(task.physics_engine.config)
         task.physics_engine.close()
-        
+
         # Run suite
         summary = suite.run(controller=controller, name="TestPI")
-        
+
         assert summary.controller_name == "TestPI"
         assert len(summary.scenario_results) == 1
         assert summary.scenario_results[0].scenario_name == "step_mid_speed_1500rpm_2A"
@@ -182,22 +186,22 @@ class TestBenchmarkSuite:
     def test_suite_quick_scenarios_pi_controller(self):
         """Test running quick scenarios with PI controller (integration test)."""
         from embark.benchmark.agents import PIControllerAgent
-        
+
         suite = BenchmarkSuite(scenarios=QUICK_SCENARIOS, verbose=False)
-        
+
         # Create PI controller
         task = QUICK_SCENARIOS[0].create_task()
         controller = PIControllerAgent.from_system_config(task.physics_engine.config)
         task.physics_engine.close()
-        
+
         # Run suite
         summary = suite.run(controller=controller, name="PI-Quick")
-        
+
         # Verify results
         assert len(summary.scenario_results) == 2
         assert summary.worst_max_error_iq >= 0
         assert summary.num_safety_violations == 0
-        
+
         # Check that metrics are computed
         for result in summary.scenario_results:
             assert "rms_i_q" in result.metrics
@@ -212,7 +216,7 @@ class TestScenarioReferences:
         scenario = STANDARD_SCENARIOS[0]
         gen = scenario.reference_generator
         gen.reset()
-        
+
         # Should step from 0 to 2A at t=0
         ref_before = gen(step=0, time_s=0.0)
         assert ref_before["i_q_ref"] == 2.0
@@ -223,17 +227,17 @@ class TestScenarioReferences:
         scenario = STANDARD_SCENARIOS[3]
         gen = scenario.reference_generator
         gen.reset()
-        
+
         # Check key time points
         ref_t0 = gen(step=0, time_s=0.0)
         assert ref_t0["i_q_ref"] == 0.0
-        
+
         ref_t1 = gen(step=0, time_s=0.15)  # After first step
         assert ref_t1["i_q_ref"] == 2.0
-        
+
         ref_t2 = gen(step=0, time_s=0.4)  # After second step
         assert ref_t2["i_q_ref"] == -2.0  # Should be negative
-        
+
         ref_t3 = gen(step=0, time_s=0.7)  # After third step
         assert ref_t3["i_q_ref"] == 2.0  # Back to positive
 
@@ -242,7 +246,7 @@ class TestScenarioReferences:
         scenario = STANDARD_SCENARIOS[4]
         gen = scenario.reference_generator
         gen.reset()
-        
+
         # Check that it ends at zero
         ref_end = gen(step=0, time_s=0.8)
         assert ref_end["i_q_ref"] == 0.0
@@ -252,11 +256,11 @@ class TestScenarioReferences:
         scenario = STANDARD_SCENARIOS[5]
         gen = scenario.reference_generator
         gen.reset()
-        
+
         # At t=0.4s, should have both i_d and i_q active
         ref = gen(step=0, time_s=0.4)
         assert ref["i_d_ref"] == -2.0  # Field weakening
-        assert ref["i_q_ref"] == 2.0   # Torque production
+        assert ref["i_q_ref"] == 2.0  # Torque production
 
 
 if __name__ == "__main__":
