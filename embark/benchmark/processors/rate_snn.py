@@ -129,8 +129,8 @@ class RateSNNStateProcessor:
     def configure(self, physics_config: SystemConfig, _task: ClosedLoopTask) -> None:
         """One-time setup with system parameters."""
         self._i_max = physics_config.i_max
-        self._u_max = getattr(physics_config, "u_max", 1.0)
-        self._tau = getattr(physics_config, "tau", 1e-4)
+        self._u_max = physics_config.u_max
+        self._tau = physics_config.tau
 
     def reset(self) -> None:
         """Reset all stateful features to initial values."""
@@ -313,7 +313,7 @@ class RateSNNActionProcessor:
 
     def configure(self, physics_config: SystemConfig) -> None:
         """One-time setup with system parameters."""
-        self._u_max = getattr(physics_config, "u_max", 1.0)
+        self._u_max = physics_config.u_max
         self._accum = [0.0] * len(self.output_keys)
 
     def reset(self) -> None:

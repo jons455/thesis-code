@@ -380,11 +380,7 @@ class BenchmarkSuite:
 
             # Create fresh task and metrics for each scenario
             task = scenario.create_task(physics_config=pmsm_config)
-            try:
-                metrics = self.metric_factory(controller)
-            except TypeError:
-                # Backward-compatibility for older metric_factory signatures.
-                metrics = self.metric_factory()
+            metrics = self.metric_factory(controller)
 
             # Re-configure controller with this scenario's task/physics
             # (needed for processors that depend on physics config)

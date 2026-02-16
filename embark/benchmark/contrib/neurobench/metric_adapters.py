@@ -101,6 +101,110 @@ def discover_neurobench_metric_classes() -> tuple[list[type], list[type]]:
     return static_filtered, workload_filtered
 
 
+def _try_call_with_signatures(
+    func: Any, arg_combinations: tuple[tuple[Any, ...], ...]
+) -> Any | None:
+    """
+    Try calling a function with multiple argument combinations.
+
+    NeuroBench metrics have inconsistent APIs, so we try common signatures
+    until one succeeds. Returns the result if successful, None otherwise.
+
+    Args:
+        func: Callable to invoke.
+        arg_combinations: Tuple of argument tuples to try in order.
+
+    Returns:
+        Function result if any signature succeeds, None if all fail.
+
+    """
+    for args in arg_combinations:
+        try:
+            return func(*args)
+        except (TypeError, AttributeError):
+            continue
+    return None
+
+
+def _try_compute_static_metric(metric: Any, model: Any) -> Any | None:
+    """
+    Try computing a static metric with various method signatures.
+
+    NeuroBench static metrics may be:
+    - Callable with model: `metric(model)`
+    - Have compute() method: `metric.compute(model)` or `metric.compute()`
+
+    Args:
+        metric: The metric instance to compute.
+        model: The model to pass (may be None).
+
+    Returns:
+        Result if computation succeeds, None otherwise.
+
+    """
+    # Try as callable first
+    if callable(metric):
+        result = _try_call_with_signatures(metric, ((model,),))
+        if result is not None:
+            return result
+
+    # Try compute() method with different signatures
+    if hasattr(metric, "compute"):
+        compute_fn = metric.compute
+        return _try_call_with_signatures(compute_fn, ((model,), ()))
+
+    return None
+
+
+def _try_update_workload_metric(
+    metric: Any, model: Any | None, preds_batch: Any, data: tuple[Any, Any | None]
+) -> bool:
+    """
+    Try updating a workload metric with various method signatures.
+
+    NeuroBench workload metrics may be:
+    - Callable: `metric(model, preds, data)` or `metric(preds, data)`
+    - Have update() method: `metric.update(model, preds, data)` or `metric.update(preds, data)`
+
+    Args:
+        metric: The metric instance to update.
+        model: The model (may be None).
+        preds_batch: Predictions tensor.
+        data: Tuple of (obs_batch, ref_batch).
+
+    Returns:
+        True if update succeeded, False otherwise.
+
+    """
+    obs_batch, ref_batch = data
+
+    # Try as callable with multiple signatures
+    if callable(metric):
+        arg_combinations = (
+            (model, preds_batch, data) if model is not None else (),
+            (model, preds_batch, (obs_batch, ref_batch)) if model is not None else (),
+            (preds_batch, data),
+            (preds_batch, (obs_batch, ref_batch)),
+        )
+        # Filter out empty tuples
+        arg_combinations = tuple(args for args in arg_combinations if args)
+        result = _try_call_with_signatures(metric, arg_combinations)
+        if result is not None:
+            return True
+
+    # Try update() method
+    if hasattr(metric, "update"):
+        update_fn = metric.update
+        arg_combinations = (
+            (model, preds_batch, data) if model is not None else (preds_batch, data),
+        )
+        result = _try_call_with_signatures(update_fn, arg_combinations)
+        if result is not None:
+            return True
+
+    return False
+
+
 @dataclass
 class _BaseNeuroBenchAdapter(MetricAccumulator):
     """Shared helper behavior for NeuroBench adapters."""
@@ -191,23 +295,10 @@ class NeuroBenchStaticMetricAdapter(_BaseNeuroBenchAdapter):
         if model is None:
             return {}
 
-        raw_result: Any | None = None
-        if callable(self._metric):
-            try:
-                raw_result = self._metric(model)
-            except (TypeError, AttributeError):
-                raw_result = None
-        if raw_result is None and hasattr(self._metric, "compute"):
-            compute_fn = self._metric.compute
-            try:
-                raw_result = compute_fn(model)
-            except (TypeError, AttributeError):
-                try:
-                    raw_result = compute_fn()
-                except (TypeError, AttributeError):
-                    raw_result = None
+        raw_result = _try_compute_static_metric(self._metric, model)
         if raw_result is None:
             return {}
+
         mapped = self._map_result(raw_result)
         metric_name = self.metric_cls.__name__
 
@@ -303,28 +394,8 @@ class NeuroBenchWorkloadMetricAdapter(_BaseNeuroBenchAdapter):
         ref_batch = self._build_reference_tensor(reference, obs_batch)
         data = (obs_batch, ref_batch) if ref_batch is not None else (obs_batch, None)
 
-        if callable(self._metric):
-            for args in (
-                (model, preds_batch, data),
-                (model, preds_batch, (obs_batch, ref_batch)),
-                (preds_batch, data),
-                (preds_batch, (obs_batch, ref_batch)),
-            ):
-                try:
-                    self._metric(*args)
-                    return
-                except (TypeError, AttributeError):
-                    continue
-        if hasattr(self._metric, "update"):
-            for args in (
-                (model, preds_batch, data),
-                (preds_batch, data),
-            ):
-                try:
-                    self._metric.update(*args)
-                    return
-                except (TypeError, AttributeError):
-                    continue
+        if _try_update_workload_metric(self._metric, model, preds_batch, data):
+            return
 
     def compute(self) -> dict[str, float]:
         metric_name = self.metric_cls.__name__

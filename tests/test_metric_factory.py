@@ -227,13 +227,13 @@ def test_benchmark_summary_aggregate_properties_and_to_dict():
         ],
     )
 
-    assert summary.mean_mae_iq == 2.0
     assert summary.worst_max_error_iq == 5.0
     assert summary.num_safety_violations == 1
 
     payload = summary.to_dict()
     assert payload["aggregate"]["num_scenarios"] == 2
-    assert payload["aggregate"]["mean_mae_iq"] == 2.0
+    # Note: mean_mae_iq was intentionally removed - aggregating MAE over scenarios
+    # with different episode lengths produces meaningless numbers
 
 
 def test_default_metric_factory_has_control_metrics(dummy_dict_controller):

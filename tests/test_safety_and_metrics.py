@@ -176,16 +176,16 @@ class TestMetricCorrectness:
         metric.update(
             state={"val": 7.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         metric.update(
             state={"val": 6.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         result = metric.compute()
@@ -202,16 +202,16 @@ class TestMetricCorrectness:
         metric.update(
             state={"val": 8.0, "time": 0.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         metric.update(
             state={"val": 8.0, "time": 0.01},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         result = metric.compute()
@@ -226,17 +226,17 @@ class TestMetricCorrectness:
         metric.update(
             state={"val": 8.0, "time": 0.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         # This step is past the 50ms window — should NOT contribute
         metric.update(
             state={"val": 8.0, "time": 1.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         result = metric.compute()
@@ -250,16 +250,16 @@ class TestMetricCorrectness:
         metric.update(
             state={"val": 9.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )  # error = 1
         metric.update(
             state={"val": 4.0},
             reference={"val_ref": 10.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )  # error = 6
 
         result = metric.compute()
@@ -281,25 +281,25 @@ class TestDynamicMetrics:
         metric.update(
             state={"val": 0.0, "time": 0.0},
             reference={"val_ref": 0.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         # t=0.005: step fires (ref=2.0), meas=1.97 → error=0.03 > band(0.04)? NO → within band
         metric.update(
             state={"val": 1.97, "time": 0.005},
             reference={"val_ref": 2.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         # t=0.007: still within band, dwell = 0.007-0.005 = 0.002 >= 0.001 → settled!
         metric.update(
             state={"val": 1.98, "time": 0.007},
             reference={"val_ref": 2.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         result = metric.compute()
@@ -318,16 +318,16 @@ class TestDynamicMetrics:
         metric.update(
             state={"val": 1.97, "time": 0.005},
             reference={"val_ref": 2.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         metric.update(
             state={"val": 0.0, "time": 0.006},
             reference={"val_ref": 2.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         result = metric.compute()
@@ -345,9 +345,9 @@ class TestDynamicMetrics:
             metric.update(
                 state={"val": 0.0, "time": t},
                 reference={"val_ref": 2.0},
-                action={},
-                next_state={},
-                controller_info={},
+                _action={},
+                _next_state={},
+                _controller_info={},
             )
 
         result = metric.compute()
@@ -362,16 +362,16 @@ class TestDynamicMetrics:
         metric.update(
             state={"val": 0.5},
             reference={"val_ref": 1.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
         metric.update(
             state={"val": 1.5},
             reference={"val_ref": 1.0},
-            action={},
-            next_state={},
-            controller_info={},
+            _action={},
+            _next_state={},
+            _controller_info={},
         )
 
         overshoot = metric.compute()

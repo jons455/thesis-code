@@ -260,7 +260,7 @@ class PMSMCurrentControlTask:
             violation_reason = self.safety_limits.check_action(action)
 
         # Run physics (even if action violated - physics may clamp internally)
-        next_state, _debug = self.physics_engine.step(action)
+        next_state, _ = self.physics_engine.step(action)
         validate_numeric_dict(next_state, "next_state", required_keys=("time",))
         self._step += 1
         reference = self.reference_generator(self._step, next_state["time"])

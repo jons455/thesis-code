@@ -195,7 +195,7 @@ class PWMActionProcessor(ActionProcessor):
 
     def configure(self, physics_config: SystemConfig) -> None:
         """Auto-configure bounds and build the PWM converter from config."""
-        u_max = getattr(physics_config, "u_max", 1.0)
+        u_max = physics_config.u_max
         if self.bounds is None:
             self.bounds = {key: (-u_max, u_max) for key in self.output_keys}
 

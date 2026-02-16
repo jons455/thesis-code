@@ -35,18 +35,18 @@ class PMSMConfig:
 
     @property
     def motor_parameter(self) -> dict:
-        return dict(  # noqa: C408
-            p=self.p,
-            r_s=self.r_s,
-            l_d=self.l_d,
-            l_q=self.l_q,
-            psi_p=self.psi_p,
-        )
+        return {
+            "p": self.p,
+            "r_s": self.r_s,
+            "l_d": self.l_d,
+            "l_q": self.l_q,
+            "psi_p": self.psi_p,
+        }
 
     @property
     def limit_values(self) -> dict:
-        return dict(  # noqa: C408
-            i=self.i_max,
-            u=self.u_max,
-            omega=self.omega_max,
-        )
+        return {
+            "i": self.i_max,
+            "u": self.u_max,
+            "omega": self.omega_max,
+        }
