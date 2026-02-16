@@ -25,9 +25,7 @@ class PMSMDefaults:
     dead_time: float = (
         2.0e-6  # Inverter dead time [s] (typ. 1-4 µs), used only if use_dead_time=True
     )
-    use_dead_time: bool = (
-        False  # If False, simulation runs without dead time (simplified PMSM); set True to enable
-    )
+    use_dead_time: bool = False  # If False, simulation runs without dead time (simplified PMSM); set True to enable
 
     # Measurement noise (Gaussian, additive, applied after denormalisation)
     noise_current_std: float = 0.0  # Std dev on i_d, i_q [A] (0 = disabled)
@@ -75,4 +73,3 @@ DEFAULT_PMSM = PMSMDefaults()
 # Shared defaults for simulations/benchmarks
 DEFAULT_MAX_STEPS = 2000
 DEFAULT_EPISODE_DURATION = 1.0
-STANDARD_NUM_STEPS = int(DEFAULT_EPISODE_DURATION * DEFAULT_PMSM.control_frequency)
