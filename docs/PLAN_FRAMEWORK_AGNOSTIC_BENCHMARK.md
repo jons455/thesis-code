@@ -89,6 +89,25 @@ and the neural controller's `forward()` method.
 Rejected because it provides no contract.  `np.ndarray` is concrete: you
 know the shape, dtype, and can validate inputs.
 
+### Array Contract (explicit invariants)
+
+To avoid subtle cross-framework bugs, the benchmark should define a strict
+array boundary contract:
+
+1. **Dtype:** `np.float32` at controller boundaries unless explicitly
+   documented otherwise.
+2. **Layout:** C-contiguous arrays preferred for predictable interop
+   (`np.asarray(x, dtype=np.float32, order="C")`).
+3. **Shape convention:** support both:
+   - Single sample: `(features,)`
+   - Batched input (optional wrapper support): `(batch, features)`
+4. **Output convention:** model output must be convertible to an action array
+   that existing action processors can flatten deterministically.
+5. **No autograd semantics at boundary:** boundary arrays are inference-only.
+
+This keeps the core deterministic and framework-neutral while still allowing
+framework-specific internals inside wrappers.
+
 
 ---
 
@@ -402,6 +421,12 @@ class TorchModelWrapper:
 - `model` type hint is `Any` (not `torch.nn.Module`) to avoid importing
   torch at module level.  The actual type check happens implicitly when
   `model.to(device)` is called.
+- Keep model in inference mode (`model.eval()`) and always execute in
+  `torch.no_grad()` to enforce benchmark-inference semantics.
+- If torch is missing at instantiation time, raise a clear install hint:
+  `ImportError("TorchModelWrapper requires PyTorch. Install with: pip install torch")`.
+- Normalize incoming observations defensively:
+  `obs = np.asarray(observation, dtype=np.float32, order="C")`.
 
 #### 4b. `numpy_wrapper.py` — Zero-overhead passthrough
 
@@ -513,6 +538,26 @@ from .numpy_wrapper import NumpyModelWrapper
 from .controllers import TorchModelWrapper, NumpyModelWrapper
 ```
 
+#### 4e. Add a shared wrapper protocol + validator utility
+
+**Files to create:**
+- `embark/benchmark/interfaces/model_wrapper.py` (new)
+- `embark/benchmark/validation/wrapper_validation.py` (new)
+
+Add a protocol that formalizes what any wrapper must implement:
+
+```python
+class ModelWrapper(Protocol):
+    def forward(self, observation: np.ndarray) -> np.ndarray: ...
+    def reset(self) -> None: ...
+    def get_state(self) -> dict[str, Any]: ...
+    def set_state(self, state: dict[str, Any]) -> None: ...
+```
+
+Then add `validate_model_wrapper(wrapper)` to provide a friendly runtime error
+for missing methods or invalid `forward()` outputs.  Use this in docs/examples
+and optionally in adapter construction checks.
+
 
 ### Step 5: Update `RemoteAkidaPolicy`
 
@@ -563,7 +608,9 @@ def _controller_has_model(controller: Any | None) -> bool:
     if controller is None:
         return False
     model = getattr(controller, "model", None)
-    return model is not None
+    if model is None:
+        return False
+    return hasattr(model, "forward") or callable(model)
 ```
 
 If NeuroBench adapters specifically need a `torch.nn.Module`, that check
@@ -614,6 +661,17 @@ The most affected tests will be:
 - `tests/test_metric_adapters.py`
 - `tests/test_v10_end_to_end.py` (SNN integration tests)
 
+Add a dedicated conformance test file for wrapper contracts:
+- `tests/test_model_wrapper_conformance.py`
+
+Minimum conformance cases:
+- Wrapper exposes required methods (`forward/reset/get_state/set_state`)
+- `forward()` returns `np.ndarray`
+- Output dtype is `float32` (or explicitly normalized to it)
+- Single-sample input path works (`shape == (features,)`)
+- Batched input path behavior is explicit (supported or clear error)
+- Non-contiguous input is handled (`np.ascontiguousarray` or equivalent)
+
 **Verification:** All tests pass.  Run the full suite:
 ```
 python -m pytest tests/ -v
@@ -648,6 +706,12 @@ wrapped = TorchModelWrapper(model=model, device=device)
 - `docs/FUTURE_WORK.md` — mark Section 2 (Multi-Framework Support) as
   "done" for the core numpy adapter; update remaining items
 - `README.md` — mention framework-agnostic support in features list
+- `docs/MIGRATION_V2.md` (new) — migration guide for existing users
+
+**Examples to add (complete workflows, not templates only):**
+- `examples/frameworks/jax_lif_network.py`
+- `examples/frameworks/onnx_exported_model.py`
+- `examples/frameworks/brian2_coba_network.py`
 
 **New content to add** (to user guide or a new "Framework Integration" page):
 
@@ -721,6 +785,22 @@ wrapped = TorchModelWrapper(model=model, device=device)
 4. **Import paths** — all existing import paths continue to work.  New
    wrappers are additive.
 
+5. **Naming compatibility** — keep `TensorController` for now to avoid churn,
+   and optionally add a later alias/deprecation path (`ArrayController`) in a
+   future release if clearer naming is desired.
+
+
+### Optional rollout safety switch (time-boxed)
+
+If maintainers want an emergency escape hatch during rollout, add a temporary
+`EMBARK_LEGACY_TORCH=true` mode for processors.  This should be:
+- Off by default
+- Documented as temporary
+- Removed after 1-2 release cycles
+
+Do not let this become permanent API surface; the target steady state remains
+numpy at the interface boundary.
+
 
 ---
 
@@ -762,5 +842,8 @@ After implementation, verify each item:
 - [ ] `python examples/benchmark_example.py --section 2` (PI full suite, no torch needed)
 - [ ] `python examples/benchmark_example.py --section 3` (SNN, needs torch — uses TorchModelWrapper)
 - [ ] A pure-numpy "model" can run through the full benchmark via NumpyModelWrapper
+- [ ] Wrapper conformance tests pass for shipped wrappers and one user-style wrapper
+- [ ] Non-contiguous input arrays are normalized at wrapper boundary
+- [ ] Single-sample and batched-shape behavior is documented and tested
 - [ ] Old code using `SNNControllerWrapper` still works (with deprecation warning)
 - [ ] `RemoteAkidaPolicy` works without torch import at module level
