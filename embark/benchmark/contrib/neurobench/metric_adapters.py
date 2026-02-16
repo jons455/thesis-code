@@ -192,12 +192,13 @@ def _try_update_workload_metric(
         if result is not None:
             return True
 
-    # Try update() method
+    # Try update() method: NeuroBench uses both (model, preds, data) and (preds, data)
     if hasattr(metric, "update"):
         update_fn = metric.update
-        arg_combinations = (
-            (model, preds_batch, data) if model is not None else (preds_batch, data),
-        )
+        if model is not None:
+            arg_combinations = ((model, preds_batch, data), (preds_batch, data))
+        else:
+            arg_combinations = ((preds_batch, data),)
         result = _try_call_with_signatures(update_fn, arg_combinations)
         if result is not None:
             return True

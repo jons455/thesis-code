@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "embark"}]
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = "^3.10"
 numpy = ">=1.26.0,<2.2.0"
 pandas = "^2.0.0"
 matplotlib = "^3.7.0"
@@ -21,7 +21,7 @@ stable-baselines3 = "^2.0.0"
 snntorch = "^0.9.1"
 
 [tool.poetry.group.neurobench.dependencies]
-neurobench = {git = "https://github.com/NeuroBench/neurobench.git", branch = "2025_GC"}
+neurobench = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
@@ -45,12 +45,6 @@ sphinx-autodoc-typehints = "^2.0.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-
-[tool.poetry.group.akida.dependencies]
-akida = "2.18.2"
-cnn2snn = "2.18.2"
-quantizeml = "1.1.1"
 
 [tool.black]
 line-length = 88

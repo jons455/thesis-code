@@ -1,6 +1,4 @@
-"""
-PI controller agent for PMSM current control benchmark.
-"""
+"""PI controller agent for PMSM current control benchmark."""
 
 from __future__ import annotations
 
@@ -9,7 +7,12 @@ from typing import Any
 
 import numpy as np
 
-from embark.benchmark.interfaces import ActionDict, DictController, ReferenceDict, StateDict
+from embark.benchmark.interfaces import (
+    ActionDict,
+    DictController,
+    ReferenceDict,
+    StateDict,
+)
 from embark.benchmark.utils.validation import validate_numeric_dict
 from embark.utils.config import DEFAULT_PMSM
 
@@ -52,6 +55,7 @@ class PIControllerAgent(DictController):
 
     This serves as the baseline controller for benchmarking. Implements decoupled PI
     control with anti-windup and back-EMF compensation.
+
     """
 
     def __init__(

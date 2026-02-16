@@ -37,13 +37,13 @@ class TensorControllerAdapter:
 
     Usage::
 
-        snn = SNNControllerAgent(...)
-        state_proc = MinMaxProcessor(...)
-        action_proc = LinearActionProcessor(...)
+        wrapped_snn = SNNControllerWrapper(model=my_snn_model)
+        state_proc = RateSNNStateProcessor(...)
+        action_proc = RateSNNActionProcessor(...)
 
         # Wrap into unified interface
         controller = TensorControllerAdapter(
-            controller=snn,
+            controller=wrapped_snn,
             state_processor=state_proc,
             action_processor=action_proc,
         )
@@ -146,11 +146,10 @@ class TensorControllerAdapter:
         external metric tools that need model access.
 
         This property attempts to unwrap the controller to find the actual
-        torch.nn.Module. For example, if using SNNControllerAgent, it returns the
-        underlying snn_model.
+        torch.nn.Module.
 
         """
-        # Unwrap SNNControllerAgent to get the actual PyTorch model
+        # Unwrap wrapped controllers to get the actual PyTorch model
         if hasattr(self.controller, "model"):
             return self.controller.model
         return self.controller

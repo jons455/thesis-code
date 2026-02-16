@@ -30,12 +30,17 @@ class ClosedLoopHarness:
     Example (Neural)::
 
         from embark.benchmark.adapters import TensorControllerAdapter
+        from embark.benchmark.controllers import SNNControllerWrapper
+        from embark.benchmark.processors import (
+            RateSNNActionProcessor,
+            RateSNNStateProcessor,
+        )
 
-        snn = SNNControllerAgent(...)
+        wrapped_snn = SNNControllerWrapper(model=my_snn_model)
         controller = TensorControllerAdapter(
-            controller=snn,
-            state_processor=MinMaxProcessor(...),
-            action_processor=LinearActionProcessor(...),
+            controller=wrapped_snn,
+            state_processor=RateSNNStateProcessor(...),
+            action_processor=RateSNNActionProcessor(...),
         )
         controller.configure(task.physics_engine.config, task)
         harness = ClosedLoopHarness(task=task, controller=controller)

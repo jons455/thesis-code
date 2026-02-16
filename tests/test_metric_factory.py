@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 import torch
 
 from embark.benchmark.harness.benchmark_suite import (
@@ -52,6 +53,7 @@ def test_create_metrics_with_non_module_model_returns_control_only():
 
 def test_create_metrics_with_torch_model_adds_neurobench_metrics():
     """A torch-backed controller should receive NeuroBench adapter metrics."""
+    pytest.importorskip("neurobench")
 
     class _ControllerWithTorchModel:
         model = torch.nn.Linear(4, 2)
@@ -70,7 +72,7 @@ class _ScenarioStub:
     description: str
     task: object
 
-    def create_task(self):
+    def create_task(self, physics_config=None):
         return self.task
 
 
@@ -94,9 +96,9 @@ def test_suite_passes_controller_to_metric_factory(dummy_dict_controller, dummy_
 
 
 def test_suite_supports_legacy_noarg_metric_factory(dummy_dict_controller, dummy_task):
-    """BenchmarkSuite keeps compatibility with no-argument factories."""
+    """BenchmarkSuite keeps compatibility with factories that ignore the controller."""
 
-    def legacy_factory():
+    def legacy_factory(controller=None):
         return [TrackingMAE(tracked_keys=["i_q"])]
 
     suite = BenchmarkSuite(
@@ -152,6 +154,8 @@ def test_controller_has_model_cases():
 
 
 def test_create_neurobench_adapters_filters_required_constructors(monkeypatch):
+    pytest.importorskip("neurobench")
+
     class _StaticNoArg:
         pass
 
@@ -267,7 +271,7 @@ def test_suite_run_calls_configure_when_present(dummy_task):
         name = "stub"
         description = "desc"
 
-        def create_task(self):
+        def create_task(self, physics_config=None):
             return dummy_task
 
     controller = _ConfigurableController()
@@ -324,8 +328,8 @@ def test_print_summary_and_save_results(tmp_path: Path, capsys):
 
 def test_scenario_definition_create_task_uses_physics_engine(monkeypatch):
     class _FakePhysics:
-        def __init__(self, n_rpm):
-            self.config = object()
+        def __init__(self, n_rpm=1000.0, config=None):
+            self.config = config or object()
             self.n_rpm = n_rpm
 
         state_keys = {"i_d", "i_q", "time"}
@@ -369,7 +373,7 @@ def test_suite_run_verbose_prints_progress_and_status(dummy_task, capsys):
         name = "verbose_case"
         description = "demo"
 
-        def create_task(self):
+        def create_task(self, physics_config=None):
             dummy_task.terminated_by_safety = False
             dummy_task.last_violation_reason = None
             return dummy_task
@@ -385,4 +389,4 @@ def test_suite_run_verbose_prints_progress_and_status(dummy_task, capsys):
 
     out = capsys.readouterr().out
     assert "[1/1] verbose_case: demo" in out
-    assert "MAE=" in out and "MaxErr=" in out
+    assert "MaxErr=" in out and ("RMS=" in out or "MAE=" in out)

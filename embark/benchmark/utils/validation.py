@@ -17,6 +17,7 @@ This ensures:
 - Clear error messages when contracts are violated
 - No silent failures from missing keys
 - Consistent behavior across all modules
+
 """
 
 from __future__ import annotations
@@ -48,11 +49,10 @@ def validate_dict(
     Example:
         >>> validate_dict(state, "state", required_keys=("i_d", "i_q"))
         >>> # After validation, safe to use: state["i_d"]
+
     """
     if not isinstance(mapping, dict):
-        raise TypeError(
-            f"{mapping_name} must be a dict, got {type(mapping).__name__}."
-        )
+        raise TypeError(f"{mapping_name} must be a dict, got {type(mapping).__name__}.")
 
     missing = [key for key in required_keys if key not in mapping]
     if missing:
@@ -82,10 +82,13 @@ def validate_numeric_dict(
     Example:
         >>> validate_numeric_dict(state, "state", required_keys=("i_d", "i_q"))
         >>> # After validation, safe to use: state["i_d"]
+
     """
     validate_dict(mapping, mapping_name, required_keys=required_keys)
 
-    keys_to_check = list(required_keys) if not check_all_values else list(mapping.keys())
+    keys_to_check = (
+        list(required_keys) if not check_all_values else list(mapping.keys())
+    )
 
     for key in keys_to_check:
         if key not in mapping:
@@ -97,9 +100,7 @@ def validate_numeric_dict(
                 f"{mapping_name}['{key}'] must be numeric, got {type(value).__name__}."
             )
         if not np.isfinite(float(value)):
-            raise ValueError(
-                f"{mapping_name}['{key}'] must be finite, got {value!r}."
-            )
+            raise ValueError(f"{mapping_name}['{key}'] must be finite, got {value!r}.")
 
 
 def validate_state_reference(
@@ -138,6 +139,7 @@ def validate_state_reference(
         ...     state, reference, ["i_d", "i_q"], "TrackingITAE", time_key="time"
         ... )
         >>> # After validation, safe to use: state["i_d"], reference["i_d_ref"]
+
     """
     if not isinstance(state, dict):
         raise TypeError(
@@ -209,6 +211,7 @@ def safe_get_numeric(
 
     Example:
         >>> omega = safe_get_numeric(state, "omega", default=0.0, mapping_name="state")
+
     """
     if key not in mapping:
         return default

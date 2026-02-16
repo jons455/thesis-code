@@ -43,6 +43,23 @@ Results are provided per-scenario with aggregate statistics across all test case
 pip install -e .
 ```
 
+**Optional: NeuroBench** (for `nb_*` metrics and `contrib.neurobench` adapters):
+
+> **Note:** NeuroBench is **completely optional**. The benchmark works fine without it — you just won't get the `nb_*` prefixed metrics (Footprint, ConnectionSparsity, etc.). All core control metrics (MAE, ITAE, SyOps, Sparsity) work without NeuroBench.
+
+We use the **PyPI package** (no git branch), so install is a normal `pip`/Poetry install:
+
+```bash
+# With Poetry
+poetry lock
+poetry install --with neurobench
+
+# Or with pip (in your env)
+pip install neurobench
+```
+
+Verify: `poetry run python -c "import neurobench; print('OK')"`
+
 ### Step 2: Prepare Your Model
 
 ```python
