@@ -39,7 +39,7 @@ class DummyPhysics:
     def action_keys(self) -> set[str]:
         return {"v_alpha"}
 
-    def reset(self, seed: int | None = None):  # noqa: ARG002
+    def reset(self, _seed: int | None = None):
         self._time = 0.0
         return {"i_q": 0.0, "time": self._time}
 
@@ -62,7 +62,7 @@ class DummyTask:
     def reference_keys(self) -> set[str]:
         return {"i_q_ref"}
 
-    def reset(self, seed: int | None = None):  # noqa: ARG002
+    def reset(self, _seed: int | None = None):
         self._step = 0
         state = self.physics_engine.reset()
         return state, {"i_q_ref": 0.0}
@@ -84,13 +84,11 @@ class DummyDictController(DictController):
     def get_state(self) -> dict:
         return {}
 
-    def set_state(self, state: dict):  # noqa: ARG002
+    def set_state(self, _state: dict):
         pass
 
     @classmethod
-    def from_system_config(
-        cls, config, tuning: str = "technical_optimum"
-    ):  # noqa: ARG002
+    def from_system_config(cls, config, tuning: str = "technical_optimum"):
         return cls()
 
 
@@ -104,7 +102,7 @@ class DummyTensorController(TensorController):
     def get_state(self) -> dict:
         return {}
 
-    def set_state(self, state: dict):  # noqa: ARG002
+    def set_state(self, _state: dict):
         pass
 
 
@@ -149,7 +147,7 @@ class _CurrentTrackingActionProcessor(ActionProcessor):
     action_keys: list = field(default_factory=lambda: ["v_alpha"])
     received_currents: list = field(default_factory=list)
 
-    def configure(self, physics_config: SystemConfig) -> None:  # noqa: ARG002
+    def configure(self, _physics_config: SystemConfig) -> None:
         pass
 
     def set_currents(self, i_d: float, i_q: float) -> None:
@@ -157,7 +155,7 @@ class _CurrentTrackingActionProcessor(ActionProcessor):
 
     def __call__(
         self, action: torch.Tensor, physics_config: SystemConfig
-    ) -> ActionDict:  # noqa: ARG002
+    ) -> ActionDict:
         values = action.detach().cpu().flatten().tolist()
         return {k: values[i] for i, k in enumerate(self.action_keys)}
 
@@ -177,7 +175,7 @@ class DummyPhysicsWithCurrents:
     def action_keys(self) -> set[str]:
         return {"v_alpha"}
 
-    def reset(self, seed: int | None = None):  # noqa: ARG002
+    def reset(self, _seed: int | None = None):
         self._time = 0.0
         return {"i_d": 1.0, "i_q": 2.0, "time": self._time}
 
@@ -203,7 +201,7 @@ class DummyTaskWithCurrents:
     def reference_keys(self) -> set[str]:
         return {"i_q_ref"}
 
-    def reset(self, seed: int | None = None):  # noqa: ARG002
+    def reset(self, _seed: int | None = None):
         self._step = 0
         state = self.physics_engine.reset()
         return state, {"i_q_ref": 0.0}

@@ -126,9 +126,7 @@ class RateSNNStateProcessor:
     _prev_u_q: float = field(default=0.0, init=False, repr=False)
     _first_step: bool = field(default=True, init=False, repr=False)
 
-    def configure(
-        self, physics_config: SystemConfig, task: ClosedLoopTask  # noqa: ARG002
-    ) -> None:
+    def configure(self, physics_config: SystemConfig, _task: ClosedLoopTask) -> None:
         """One-time setup with system parameters."""
         self._i_max = physics_config.i_max
         self._u_max = getattr(physics_config, "u_max", 1.0)
@@ -323,7 +321,7 @@ class RateSNNActionProcessor:
         self._accum = [0.0] * len(self.output_keys)
 
     def __call__(
-        self, action: torch.Tensor, physics_config: SystemConfig  # noqa: ARG002
+        self, action: torch.Tensor, _physics_config: SystemConfig
     ) -> ActionDict:
         """Convert action tensor to physical voltage dict."""
         action_list = action.detach().cpu().flatten().tolist()

@@ -16,6 +16,26 @@ from embark.benchmark.tasks.reference_generators import (
 from embark.utils.config import DEFAULT_MAX_STEPS
 
 
+def _ensure_numeric_dict(
+    mapping: dict[str, float], mapping_name: str, required_keys: tuple[str, ...] = ()
+) -> None:
+    """Validate that an input is a dict with finite numeric values."""
+    if not isinstance(mapping, dict):
+        raise TypeError(f"{mapping_name} must be a dict, got {type(mapping).__name__}.")
+
+    missing = [key for key in required_keys if key not in mapping]
+    if missing:
+        raise KeyError(f"{mapping_name} is missing required keys: {missing}.")
+
+    for key, value in mapping.items():
+        if not isinstance(value, (int, float, np.integer, np.floating)):
+            raise TypeError(
+                f"{mapping_name}['{key}'] must be numeric, got {type(value).__name__}."
+            )
+        if not np.isfinite(float(value)):
+            raise ValueError(f"{mapping_name}['{key}'] must be finite, got {value!r}.")
+
+
 @dataclass
 class SafetyLimits:
     """
@@ -145,6 +165,24 @@ class PMSMCurrentControlTask:
     _terminated_by_safety: bool = field(default=False, init=False, repr=False)
     _last_violation_reason: str | None = field(default=None, init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        if self.max_steps is not None and (
+            not isinstance(self.max_steps, int) or self.max_steps <= 0
+        ):
+            raise ValueError("max_steps must be a positive integer or None.")
+        if not hasattr(self.physics_engine, "reset") or not hasattr(
+            self.physics_engine, "step"
+        ):
+            raise TypeError("physics_engine must provide reset() and step() methods.")
+        if not callable(self.reference_generator):
+            raise TypeError("reference_generator must be callable.")
+        if not hasattr(self.reference_generator, "reset"):
+            raise TypeError("reference_generator must provide a reset() method.")
+        if self.on_safety_violation is not None and not callable(
+            self.on_safety_violation
+        ):
+            raise TypeError("on_safety_violation must be callable or None.")
+
     @property
     def reference_keys(self) -> set[str]:
         return {"i_d_ref", "i_q_ref"}
@@ -203,7 +241,11 @@ class PMSMCurrentControlTask:
         self._last_violation_reason = None
         self.reference_generator.reset()
         state = self.physics_engine.reset(seed=seed)
+        _ensure_numeric_dict(state, "state", required_keys=("time",))
         reference = self.reference_generator(self._step, state["time"])
+        _ensure_numeric_dict(
+            reference, "reference", required_keys=("i_d_ref", "i_q_ref")
+        )
         return state, reference
 
     def step(self, action: dict[str, float]) -> tuple[StateDict, ReferenceDict, bool]:
@@ -222,6 +264,14 @@ class PMSMCurrentControlTask:
             done=True if max_steps reached OR safety limit violated.
 
         """
+        _ensure_numeric_dict(action, "action")
+        has_dq = "v_d" in action and "v_q" in action
+        has_ab = "v_alpha" in action and "v_beta" in action
+        if not (has_dq or has_ab):
+            raise KeyError(
+                "action must contain either ('v_d', 'v_q') or ('v_alpha', 'v_beta')."
+            )
+
         violation_reason: str | None = None
 
         # Phase 1: Check action limits BEFORE physics
@@ -230,8 +280,12 @@ class PMSMCurrentControlTask:
 
         # Run physics (even if action violated - physics may clamp internally)
         next_state, _debug = self.physics_engine.step(action)
+        _ensure_numeric_dict(next_state, "next_state", required_keys=("time",))
         self._step += 1
         reference = self.reference_generator(self._step, next_state["time"])
+        _ensure_numeric_dict(
+            reference, "reference", required_keys=("i_d_ref", "i_q_ref")
+        )
 
         # Phase 2: Check state limits AFTER physics
         if violation_reason is None and self.safety_limits is not None:

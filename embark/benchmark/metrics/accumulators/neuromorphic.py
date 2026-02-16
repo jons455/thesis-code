@@ -1,9 +1,11 @@
-"""Neuromorphic efficiency metric accumulators.
+"""
+Neuromorphic efficiency metric accumulators.
 
 These accumulators read spike statistics from ``controller_info`` produced by
 SNN controllers (via ``last_info``).  When no spike data is available (e.g.
 classical PI controller), all metrics silently return zeros — safe to include
 in every benchmark run.
+
 """
 
 from __future__ import annotations
@@ -21,12 +23,14 @@ from embark.benchmark.interfaces import (
 
 @dataclass
 class SpikeCount(MetricAccumulator):
-    """Accumulate total spike count across all control steps.
+    """
+    Accumulate total spike count across all control steps.
 
     Reads ``controller_info["total_spikes"]`` per step.
 
     Returns:
         ``{"total_spikes": float, "spikes_per_step": float}``
+
     """
 
     _total: int = field(default=0, init=False, repr=False)
@@ -42,10 +46,10 @@ class SpikeCount(MetricAccumulator):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
-        reference: ReferenceDict,  # noqa: ARG002
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
+        _state: StateDict,
+        _reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
         controller_info: dict[str, Any] | None = None,
     ) -> None:
         if controller_info and "total_spikes" in controller_info:
@@ -63,7 +67,8 @@ class SpikeCount(MetricAccumulator):
 
 @dataclass
 class SynapticOps(MetricAccumulator):
-    """Accumulate synaptic operations (SyOps) across all control steps.
+    """
+    Accumulate synaptic operations (SyOps) across all control steps.
 
     Reads ``controller_info["syops"]`` per step.  SyOps count the number of
     multiply-accumulate equivalents triggered by spikes propagating through
@@ -71,6 +76,7 @@ class SynapticOps(MetricAccumulator):
 
     Returns:
         ``{"total_syops": float, "syops_per_step": float}``
+
     """
 
     _total: int = field(default=0, init=False, repr=False)
@@ -86,10 +92,10 @@ class SynapticOps(MetricAccumulator):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
-        reference: ReferenceDict,  # noqa: ARG002
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
+        _state: StateDict,
+        _reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
         controller_info: dict[str, Any] | None = None,
     ) -> None:
         if controller_info and "syops" in controller_info:
@@ -107,13 +113,15 @@ class SynapticOps(MetricAccumulator):
 
 @dataclass
 class ActivationSparsity(MetricAccumulator):
-    """Track neuron activation sparsity over the episode.
+    """
+    Track neuron activation sparsity over the episode.
 
     Reads ``controller_info["sparsity"]`` per step (a float in [0, 1] where
     1.0 means all neurons are silent).
 
     Returns:
         ``{"mean_sparsity": float, "min_sparsity": float, "max_sparsity": float}``
+
     """
 
     _values: list[float] = field(default_factory=list, init=False, repr=False)
@@ -127,10 +135,10 @@ class ActivationSparsity(MetricAccumulator):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
-        reference: ReferenceDict,  # noqa: ARG002
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
+        _state: StateDict,
+        _reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
         controller_info: dict[str, Any] | None = None,
     ) -> None:
         if controller_info and "sparsity" in controller_info:

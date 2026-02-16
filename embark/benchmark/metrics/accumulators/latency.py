@@ -42,10 +42,10 @@ class InferenceLatency(MetricAccumulator):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
-        reference: ReferenceDict,  # noqa: ARG002
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
+        _state: StateDict,
+        _reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
         controller_info: dict | None = None,
     ) -> None:
         if controller_info and "inference_latency_s" in controller_info:

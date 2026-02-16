@@ -60,7 +60,7 @@ class DummyPhysicsEngine:
     def action_keys(self) -> set[str]:
         return {"v_d", "v_q"}
 
-    def reset(self, seed: int | None = None) -> dict[str, float]:  # noqa: ARG002
+    def reset(self, _seed: int | None = None) -> dict[str, float]:
         self._time = 0.0
         return {"i_d": 0.0, "i_q": 0.0, "time": 0.0}
 
@@ -131,7 +131,7 @@ class DummyDictController:
     def get_state(self) -> dict[str, Any]:
         return {}
 
-    def set_state(self, state: dict[str, Any]) -> None:  # noqa: ARG002
+    def set_state(self, _state: dict[str, Any]) -> None:
         pass
 
 
@@ -154,7 +154,7 @@ class DummyTensorController:
     def get_state(self) -> dict[str, Any]:
         return {}
 
-    def set_state(self, state: dict[str, Any]) -> None:  # noqa: ARG002
+    def set_state(self, _state: dict[str, Any]) -> None:
         pass
 
 

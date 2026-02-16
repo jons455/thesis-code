@@ -178,11 +178,11 @@ class NeuroBenchStaticMetricAdapter(_BaseNeuroBenchAdapter):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
-        reference: ReferenceDict,  # noqa: ARG002
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict[str, Any] | None = None,  # noqa: ARG002
+        _state: StateDict,
+        _reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict[str, Any] | None = None,
     ) -> None:
         self._steps += 1
 
@@ -260,10 +260,10 @@ class NeuroBenchWorkloadMetricAdapter(_BaseNeuroBenchAdapter):
 
     def update(
         self,
-        state: StateDict,  # noqa: ARG002
+        _state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
         controller_info: dict[str, Any] | None = None,
     ) -> None:
         metric_name = self.metric_cls.__name__

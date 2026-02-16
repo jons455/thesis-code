@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "embark"
 version = "0.1.0"
-description = "End-to-end motor benchmark: PI vs SNN control for PMSM"
+description = "End-to-end control benchmark for neuromorphic motor control"
 authors = ["Jonas Reif"]
 readme = "README.md"
 packages = [{include = "embark"}]

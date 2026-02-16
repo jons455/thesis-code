@@ -13,6 +13,75 @@ from embark.benchmark.interfaces import (
 )
 
 
+def _validate_tracked_keys(tracked_keys: list[str], metric_name: str) -> None:
+    """Ensure metric tracked keys are configured correctly."""
+    if not isinstance(tracked_keys, list) or not tracked_keys:
+        raise ValueError(f"{metric_name}: tracked_keys must be a non-empty list.")
+    invalid = [
+        key for key in tracked_keys if not isinstance(key, str) or not key.strip()
+    ]
+    if invalid:
+        raise ValueError(
+            f"{metric_name}: tracked_keys must contain non-empty strings; "
+            f"invalid entries: {invalid!r}."
+        )
+
+
+def _validate_state_reference(
+    state: StateDict,
+    reference: ReferenceDict,
+    tracked_keys: list[str],
+    metric_name: str,
+    time_key: str | None = None,
+) -> float | None:
+    """Validate metric update inputs and return parsed time when requested."""
+    if not isinstance(state, dict):
+        raise TypeError(
+            f"{metric_name}: state must be a dict, got {type(state).__name__}."
+        )
+    if not isinstance(reference, dict):
+        raise TypeError(
+            f"{metric_name}: reference must be a dict, got {type(reference).__name__}."
+        )
+
+    parsed_time: float | None = None
+    if time_key is not None:
+        if time_key not in state:
+            raise KeyError(
+                f"{metric_name}: state missing required time key '{time_key}'."
+            )
+        try:
+            parsed_time = float(state[time_key])
+        except (TypeError, ValueError) as exc:
+            raise TypeError(
+                f"{metric_name}: state['{time_key}'] must be numeric."
+            ) from exc
+        if not math.isfinite(parsed_time):
+            raise ValueError(
+                f"{metric_name}: state['{time_key}'] must be finite, got {parsed_time!r}."
+            )
+
+    for key in tracked_keys:
+        ref_key = f"{key}_ref"
+        if key not in state:
+            raise KeyError(f"{metric_name}: state missing tracked key '{key}'.")
+        if ref_key not in reference:
+            raise KeyError(f"{metric_name}: reference missing key '{ref_key}'.")
+        try:
+            state_val = float(state[key])
+            ref_val = float(reference[ref_key])
+        except (TypeError, ValueError) as exc:
+            raise TypeError(
+                f"{metric_name}: values for '{key}' and '{ref_key}' must be numeric."
+            ) from exc
+        if not (math.isfinite(state_val) and math.isfinite(ref_val)):
+            raise ValueError(
+                f"{metric_name}: non-finite value for '{key}' or '{ref_key}'."
+            )
+
+    return parsed_time
+
+
 @dataclass
 class TrackingITAE(MetricAccumulator):
     """
@@ -45,6 +114,7 @@ class TrackingITAE(MetricAccumulator):
         return "tracking_itae"
 
     def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
         self._sum_itae = {key: 0.0 for key in self.tracked_keys}
         self._prev_time = None
 
@@ -52,12 +122,26 @@ class TrackingITAE(MetricAccumulator):
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
-        time = float(state.get(self.time_key, 0.0))
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        parsed_time = _validate_state_reference(
+            state,
+            reference,
+            self.tracked_keys,
+            self.name,
+            time_key=self.time_key,
+        )
+        assert parsed_time is not None
+        time = parsed_time
         dt = 0.0 if self._prev_time is None else time - self._prev_time
+        if dt < 0.0:
+            raise ValueError(
+                f"{self.name}: non-monotonic time detected (dt={dt}). "
+                "State time must be non-decreasing."
+            )
         self._prev_time = time
 
         # Only integrate within the transient window
@@ -92,16 +176,19 @@ class MaximumError(MetricAccumulator):
         return "max_error"
 
     def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
         self._max_errors = {key: 0.0 for key in self.tracked_keys}
 
     def update(
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        _validate_state_reference(state, reference, self.tracked_keys, self.name)
         for key in self.tracked_keys:
             ref_key = f"{key}_ref"
             error = abs(float(reference[ref_key]) - float(state[key]))
@@ -151,6 +238,7 @@ class SteadyStateRMS(MetricAccumulator):
         return "steady_state_rms"
 
     def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
         self._sum_sq = {key: 0.0 for key in self.tracked_keys}
         self._count = 0
 
@@ -158,11 +246,20 @@ class SteadyStateRMS(MetricAccumulator):
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
-        time = float(state.get(self.time_key, 0.0))
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        parsed_time = _validate_state_reference(
+            state,
+            reference,
+            self.tracked_keys,
+            self.name,
+            time_key=self.time_key,
+        )
+        assert parsed_time is not None
+        time = parsed_time
         if time < self.transient_s:
             return
 
@@ -213,6 +310,7 @@ class TrackingMAE(MetricAccumulator):
         return "tracking_mae"
 
     def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
         self._sum_abs = {key: 0.0 for key in self.tracked_keys}
         self._count = 0
 
@@ -220,10 +318,12 @@ class TrackingMAE(MetricAccumulator):
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        _validate_state_reference(state, reference, self.tracked_keys, self.name)
         for key in self.tracked_keys:
             ref_key = f"{key}_ref"
             error = abs(float(reference[ref_key]) - float(state[key]))

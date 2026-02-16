@@ -16,15 +16,15 @@ if str(embark_root) not in sys.path:
 
 from embark.benchmark.adapters import TensorControllerAdapter  # noqa: E402
 from embark.benchmark.controllers.neural import SNNControllerWrapper  # noqa: E402
-from embark.benchmark.harness import (
+from embark.benchmark.harness import (  # noqa: E402
     QUICK_SCENARIOS,
     STANDARD_SCENARIOS,
     BenchmarkSuite,
-)  # noqa: E402
-from embark.benchmark.processors import (
+)
+from embark.benchmark.processors import (  # noqa: E402
     RateSNNActionProcessor,
     RateSNNStateProcessor,
-)  # noqa: E402
+)
 
 
 # SNN architecture from v10 notebook

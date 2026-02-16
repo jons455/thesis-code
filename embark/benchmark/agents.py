@@ -31,6 +31,30 @@ from embark.benchmark.interfaces import (
 )
 from embark.utils.config import DEFAULT_PMSM
 
+
+def _validate_required_numeric_fields(
+    mapping: dict[str, Any],
+    required_keys: tuple[str, ...],
+    mapping_name: str,
+) -> None:
+    """Validate required numeric fields in a dict-like input."""
+    if not isinstance(mapping, dict):
+        raise TypeError(f"{mapping_name} must be a dict, got {type(mapping).__name__}.")
+
+    missing = [key for key in required_keys if key not in mapping]
+    if missing:
+        raise KeyError(f"{mapping_name} is missing required keys: {missing}.")
+
+    for key in required_keys:
+        value = mapping[key]
+        if not isinstance(value, (int, float, np.integer, np.floating)):
+            raise TypeError(
+                f"{mapping_name}['{key}'] must be numeric, got {type(value).__name__}."
+            )
+        if not np.isfinite(float(value)):
+            raise ValueError(f"{mapping_name}['{key}'] must be finite, got {value!r}.")
+
+
 # =============================================================================
 # PI Controller Parameters (Technical Optimum)
 # =============================================================================
@@ -145,6 +169,13 @@ class PIControllerAgent(DictController):
 
     def __call__(self, state: StateDict, reference: ReferenceDict) -> ActionDict:
         """Compute PI control action from state and reference dicts."""
+        _validate_required_numeric_fields(state, ("i_d", "i_q"), "state")
+        _validate_required_numeric_fields(
+            reference, ("i_d_ref", "i_q_ref"), "reference"
+        )
+        if "omega" in state:
+            _validate_required_numeric_fields(state, ("omega",), "state")
+
         i_d = state["i_d"]
         i_q = state["i_q"]
         i_d_ref = reference["i_d_ref"]
@@ -360,6 +391,24 @@ class SNNControllerAgent(TensorController):
             Normalized action tensor [v_d, v_q] in [-1, 1]
 
         """
+        if not isinstance(observation, torch.Tensor):
+            raise TypeError(
+                f"observation must be a torch.Tensor, got {type(observation).__name__}."
+            )
+        if observation.dim() not in (1, 2):
+            raise ValueError(
+                "observation must be 1D ([features]) or 2D ([batch, features]); "
+                f"got shape {tuple(observation.shape)}."
+            )
+        if observation.numel() == 0:
+            raise ValueError("observation must not be empty.")
+        if not torch.is_floating_point(observation):
+            raise TypeError(
+                "observation must be a floating-point tensor for SNN inference."
+            )
+        if not torch.isfinite(observation).all().item():
+            raise ValueError("observation contains NaN or Inf values.")
+
         t_start = time.perf_counter()
 
         # Initialize accumulation variables

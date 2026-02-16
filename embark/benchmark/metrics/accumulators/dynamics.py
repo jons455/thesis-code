@@ -66,9 +66,9 @@ class SettlingTime(MetricAccumulator):
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
         # Already confirmed settled — no more work needed
         if self._settled_at is not None:
@@ -144,9 +144,9 @@ class Overshoot(MetricAccumulator):
         self,
         state: StateDict,
         reference: ReferenceDict,
-        action: ActionDict,  # noqa: ARG002
-        next_state: StateDict,  # noqa: ARG002
-        controller_info: dict | None = None,  # noqa: ARG002
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
     ) -> None:
         ref_key = f"{self.tracked_key}_ref"
         ref = float(reference[ref_key])

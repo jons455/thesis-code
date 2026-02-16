@@ -1,9 +1,11 @@
-"""Tests for Gaussian measurement noise, neuromorphic metrics, and BenchmarkConfig.
+"""
+Tests for Gaussian measurement noise, neuromorphic metrics, and BenchmarkConfig.
 
 Part A: Noise injection in PMSMPhysicsEngine
 Part B: SpikeCount, SynapticOps, ActivationSparsity accumulators
 Part C: Factory includes new metrics
 Part D: BenchmarkConfig integration
+
 """
 
 from __future__ import annotations
@@ -79,8 +81,7 @@ class TestMeasurementNoise:
     def test_noise_adds_variability(self):
         """With noise enabled, repeated resets from same seed must not be identical
         (unless the seed happens to produce zero noise — extremely unlikely over
-        multiple readings).
-        """
+        multiple readings)."""
         cfg = PMSMConfig(noise_current_std=0.5, noise_speed_std=5.0)
         engine = PMSMPhysicsEngine(n_rpm=1000.0, config=cfg)
 
@@ -106,9 +107,8 @@ class TestMeasurementNoise:
         assert state_a["omega"] == pytest.approx(state_b["omega"])
 
     def test_noise_magnitude_reasonable(self):
-        """Noise with std=0.1 A should stay well within ±1 A for the vast
-        majority of samples (99.7% within 3σ = 0.3 A).
-        """
+        """Noise with std=0.1 A should stay well within ±1 A for the vast majority of
+        samples (99.7% within 3σ = 0.3 A)."""
         cfg = PMSMConfig(noise_current_std=0.1)
         engine = PMSMPhysicsEngine(n_rpm=1000.0, config=cfg)
 
@@ -184,7 +184,10 @@ class TestSpikeCount:
         m = SpikeCount()
         m.reset()
         m.update(
-            _DUMMY_STATE, _DUMMY_REF, _DUMMY_ACTION, _DUMMY_NEXT_STATE,
+            _DUMMY_STATE,
+            _DUMMY_REF,
+            _DUMMY_ACTION,
+            _DUMMY_NEXT_STATE,
             {"syops": 100},
         )
         assert m.compute()["total_spikes"] == 0.0
@@ -218,7 +221,10 @@ class TestSynapticOps:
         m = SynapticOps()
         m.reset()
         m.update(
-            _DUMMY_STATE, _DUMMY_REF, _DUMMY_ACTION, _DUMMY_NEXT_STATE,
+            _DUMMY_STATE,
+            _DUMMY_REF,
+            _DUMMY_ACTION,
+            _DUMMY_NEXT_STATE,
             _make_controller_info(syops=200),
         )
         assert m.compute()["total_syops"] == 200.0
@@ -257,7 +263,10 @@ class TestActivationSparsity:
         m = ActivationSparsity()
         m.reset()
         m.update(
-            _DUMMY_STATE, _DUMMY_REF, _DUMMY_ACTION, _DUMMY_NEXT_STATE,
+            _DUMMY_STATE,
+            _DUMMY_REF,
+            _DUMMY_ACTION,
+            _DUMMY_NEXT_STATE,
             _make_controller_info(sparsity=0.5),
         )
         assert m.compute()["mean_sparsity"] == pytest.approx(0.5)
@@ -407,9 +416,9 @@ class TestBenchmarkConfig:
         m_a = summary_a.scenario_results[0].metrics
         m_b = summary_b.scenario_results[0].metrics
         for key in ("mae_i_q", "max_error_i_q", "rms_i_q"):
-            assert m_a.get(key, 0.0) == pytest.approx(m_b.get(key, 0.0)), (
-                f"Mismatch on {key}: {m_a.get(key)} vs {m_b.get(key)}"
-            )
+            assert m_a.get(key, 0.0) == pytest.approx(
+                m_b.get(key, 0.0)
+            ), f"Mismatch on {key}: {m_a.get(key)} vs {m_b.get(key)}"
 
     def test_import_from_top_level(self):
         """BenchmarkConfig is importable from the top-level benchmark package."""
