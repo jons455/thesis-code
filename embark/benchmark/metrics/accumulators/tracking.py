@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass, field
 
 from embark.benchmark.interfaces import (
@@ -101,6 +102,120 @@ class TrackingITAE(MetricAccumulator):
 
     def compute(self) -> dict[str, float]:
         return {f"itae_{key}": self._sum_itae[key] for key in self.tracked_keys}
+
+
+@dataclass
+class MultiStepITAE(MetricAccumulator):
+    """
+    ITAE for multi-step profiles with both global and per-step reporting.
+
+    For each tracked axis:
+    - Global ITAE integrates over the full episode:
+      ``integral t * |e(t)| dt``
+    - Per-step ITAE resets local time at each detected reference transition:
+      ``integral (t - t_step_start) * |e(t)| dt``
+
+    Output keys (for tracked key ``i_q``)::
+        multi_step_itae_i_q_global
+        multi_step_itae_i_q_per_step_mean
+        multi_step_itae_i_q_per_step_worst
+        multi_step_itae_i_q_per_step_std
+        multi_step_itae_i_q_num_steps
+    """
+
+    tracked_keys: list[str]
+    time_key: str = "time"
+    step_epsilon: float = 1e-12
+    _prev_time: float | None = field(default=None, init=False, repr=False)
+    _global_itae: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _prev_refs: dict[str, float | None] = field(default_factory=dict, init=False, repr=False)
+    _step_start_time: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _active_step_itae: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _per_step_itaes: dict[str, list[float]] = field(default_factory=dict, init=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        return "multi_step_itae"
+
+    def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        self._prev_time = None
+        self._global_itae = {key: 0.0 for key in self.tracked_keys}
+        self._prev_refs = {key: None for key in self.tracked_keys}
+        self._step_start_time = {key: 0.0 for key in self.tracked_keys}
+        self._active_step_itae = {key: 0.0 for key in self.tracked_keys}
+        self._per_step_itaes = {key: [] for key in self.tracked_keys}
+
+    def _finalize_step(self, key: str) -> None:
+        self._per_step_itaes[key].append(self._active_step_itae[key])
+        self._active_step_itae[key] = 0.0
+
+    def update(
+        self,
+        state: StateDict,
+        reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
+    ) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        parsed_time = validate_state_reference(
+            state,
+            reference,
+            self.tracked_keys,
+            self.name,
+            time_key=self.time_key,
+        )
+        assert parsed_time is not None
+        time = parsed_time
+        dt = 0.0 if self._prev_time is None else time - self._prev_time
+        if dt < 0.0:
+            raise ValueError(
+                f"{self.name}: non-monotonic time detected (dt={dt}). "
+                "State time must be non-decreasing."
+            )
+
+        for key in self.tracked_keys:
+            ref_key = f"{key}_ref"
+            ref = float(reference[ref_key])
+            error = abs(ref - float(state[key]))
+            prev_ref = self._prev_refs[key]
+
+            if prev_ref is None:
+                self._prev_refs[key] = ref
+                self._step_start_time[key] = time
+            elif abs(ref - prev_ref) > self.step_epsilon:
+                self._finalize_step(key)
+                self._step_start_time[key] = time
+                self._prev_refs[key] = ref
+
+            self._global_itae[key] += error * time * dt
+            local_t = max(0.0, time - self._step_start_time[key])
+            self._active_step_itae[key] += error * local_t * dt
+
+        self._prev_time = time
+
+    def compute(self) -> dict[str, float]:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        result: dict[str, float] = {}
+        for key in self.tracked_keys:
+            # Final active step
+            self._finalize_step(key)
+            values = self._per_step_itaes[key]
+            count = len(values)
+            result[f"multi_step_itae_{key}_global"] = self._global_itae[key]
+            result[f"multi_step_itae_{key}_num_steps"] = float(count)
+            if count == 0:
+                result[f"multi_step_itae_{key}_per_step_mean"] = 0.0
+                result[f"multi_step_itae_{key}_per_step_worst"] = 0.0
+                result[f"multi_step_itae_{key}_per_step_std"] = 0.0
+                continue
+            result[f"multi_step_itae_{key}_per_step_mean"] = statistics.mean(values)
+            result[f"multi_step_itae_{key}_per_step_worst"] = max(values)
+            result[f"multi_step_itae_{key}_per_step_std"] = (
+                statistics.pstdev(values) if count >= 2 else 0.0
+            )
+        return result
 
 
 @dataclass
@@ -217,10 +332,116 @@ class SteadyStateRMS(MetricAccumulator):
 
     def compute(self) -> dict[str, float]:
         results: dict[str, float] = {}
-        n = max(self._count, 1)
-        for key in self.tracked_keys:
-            results[f"rms_{key}"] = math.sqrt(self._sum_sq.get(key, 0.0) / n)
+        if self._count == 0:
+            # No samples in steady-state window (e.g. episode ended before transient_s)
+            for key in self.tracked_keys:
+                results[f"rms_{key}"] = float("nan")
+        else:
+            for key in self.tracked_keys:
+                results[f"rms_{key}"] = math.sqrt(
+                    self._sum_sq.get(key, 0.0) / self._count
+                )
         return results
+
+
+@dataclass
+class MultiStepRMS(MetricAccumulator):
+    """
+    RMS error for multi-step profiles with global and per-step reporting.
+
+    For each tracked axis:
+    - Global RMS is computed over the entire episode.
+    - Per-step RMS is computed within each detected reference segment and then
+      summarized (mean/worst/std).
+
+    Output keys (for tracked key ``i_q``)::
+        multi_step_rms_i_q_global
+        multi_step_rms_i_q_per_step_mean
+        multi_step_rms_i_q_per_step_worst
+        multi_step_rms_i_q_per_step_std
+        multi_step_rms_i_q_num_steps
+    """
+
+    tracked_keys: list[str]
+    step_epsilon: float = 1e-12
+    _global_sum_sq: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _global_count: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _prev_refs: dict[str, float | None] = field(default_factory=dict, init=False, repr=False)
+    _step_sum_sq: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _step_count: dict[str, int] = field(default_factory=dict, init=False, repr=False)
+    _per_step_rms: dict[str, list[float]] = field(default_factory=dict, init=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        return "multi_step_rms"
+
+    def reset(self) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        self._global_sum_sq = {key: 0.0 for key in self.tracked_keys}
+        self._global_count = {key: 0 for key in self.tracked_keys}
+        self._prev_refs = {key: None for key in self.tracked_keys}
+        self._step_sum_sq = {key: 0.0 for key in self.tracked_keys}
+        self._step_count = {key: 0 for key in self.tracked_keys}
+        self._per_step_rms = {key: [] for key in self.tracked_keys}
+
+    def _finalize_step(self, key: str) -> None:
+        count = self._step_count[key]
+        if count <= 0:
+            return
+        rms = math.sqrt(self._step_sum_sq[key] / count)
+        self._per_step_rms[key].append(rms)
+        self._step_sum_sq[key] = 0.0
+        self._step_count[key] = 0
+
+    def update(
+        self,
+        state: StateDict,
+        reference: ReferenceDict,
+        _action: ActionDict,
+        _next_state: StateDict,
+        _controller_info: dict | None = None,
+    ) -> None:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        validate_state_reference(state, reference, self.tracked_keys, self.name)
+        for key in self.tracked_keys:
+            ref_key = f"{key}_ref"
+            ref = float(reference[ref_key])
+            error = ref - float(state[key])
+            prev_ref = self._prev_refs[key]
+
+            if prev_ref is None:
+                self._prev_refs[key] = ref
+            elif abs(ref - prev_ref) > self.step_epsilon:
+                self._finalize_step(key)
+                self._prev_refs[key] = ref
+
+            self._global_sum_sq[key] += error * error
+            self._global_count[key] += 1
+            self._step_sum_sq[key] += error * error
+            self._step_count[key] += 1
+
+    def compute(self) -> dict[str, float]:
+        _validate_tracked_keys(self.tracked_keys, self.name)
+        result: dict[str, float] = {}
+        for key in self.tracked_keys:
+            self._finalize_step(key)
+            global_count = max(self._global_count[key], 1)
+            global_rms = math.sqrt(self._global_sum_sq[key] / global_count)
+            values = self._per_step_rms[key]
+            count = len(values)
+            result[f"multi_step_rms_{key}_global"] = global_rms
+            result[f"multi_step_rms_{key}_num_steps"] = float(count)
+            if count == 0:
+                result[f"multi_step_rms_{key}_per_step_mean"] = 0.0
+                result[f"multi_step_rms_{key}_per_step_worst"] = 0.0
+                result[f"multi_step_rms_{key}_per_step_std"] = 0.0
+                continue
+            result[f"multi_step_rms_{key}_per_step_mean"] = statistics.mean(values)
+            result[f"multi_step_rms_{key}_per_step_worst"] = max(values)
+            result[f"multi_step_rms_{key}_per_step_std"] = (
+                statistics.pstdev(values) if count >= 2 else 0.0
+            )
+        return result
 
 
 # ---------------------------------------------------------------------------

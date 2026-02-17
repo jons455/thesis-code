@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -492,25 +493,38 @@ class BenchmarkSuite:
             lines.append(f"  Options: {', '.join(opts)}")
         lines.append("")
 
-        # Per-scenario table
+        # Per-scenario table (control + neuromorphic in one table)
         header = (
             f"{'Scenario':<22} {'RMS_iq':>9} {'MaxErr_iq':>10} "
-            f"{'Settle[s]':>10} {'Status':>8}"
+            f"{'Settle[s]':>10} {'MAE_iq':>9} {'SyOps':>12} {'Sparsity':>8}"
         )
         lines.append(header)
         lines.append("-" * 80)
 
         for r in summary.scenario_results:
             m = r.metrics
-            status = "FAIL" if r.safety_terminated else "OK"
-            settle = m.get("settling_time_i_q", float("inf"))
+            settle = m.get(
+                "multi_step_settling_time_i_q_worst",
+                m.get("settling_time_i_q", float("inf")),
+            )
             settle_str = f"{settle:.4f}" if settle < float("inf") else "N/A"
+            rms_val = m.get("rms_i_q", 0.0)
+            rms_str = (
+                "N/A"
+                if isinstance(rms_val, float) and math.isnan(rms_val)
+                else f"{rms_val:.4f}"
+            )
+            mae = m.get("mae_i_q", 0.0)
+            syops = m.get("total_syops", 0.0)
+            sparsity = m.get("mean_sparsity", 0.0)
             lines.append(
                 f"{r.scenario_name:<22} "
-                f"{m.get('rms_i_q', 0.0):>9.4f} "
+                f"{rms_str:>9} "
                 f"{m.get('max_error_i_q', 0.0):>10.4f} "
                 f"{settle_str:>10} "
-                f"{status:>8}"
+                f"{mae:>9.4f} "
+                f"{syops:>12.0f} "
+                f"{sparsity:>8.4f}"
             )
 
         # Aggregate
@@ -519,37 +533,9 @@ class BenchmarkSuite:
             f"{'AGGREGATE':<22} "
             f"{'':>9} "
             f"{summary.worst_max_error_iq:>10.4f} "
-            f"{'':>10} {'':>8}"
+            f"{'':>10} {'':>9} {'':>12} {'':>8}"
         )
         lines.append("")
-
-        # ── Neuromorphic metrics (only when SNN data is present) ─────────
-        has_neuro = any(
-            r.metrics.get("total_spikes", 0.0) > 0.0 for r in summary.scenario_results
-        )
-        if has_neuro:
-            lines.append("  Neuromorphic Metrics")
-            lines.append("  " + "-" * 76)
-            neuro_header = (
-                f"  {'Scenario':<22} {'Spikes':>10} {'Spk/step':>10} "
-                f"{'SyOps':>12} {'Sparsity':>10}"
-            )
-            lines.append(neuro_header)
-            lines.append("  " + "-" * 76)
-            for r in summary.scenario_results:
-                m = r.metrics
-                spikes = m.get("total_spikes", 0.0)
-                spk_step = m.get("spikes_per_step", 0.0)
-                syops = m.get("total_syops", 0.0)
-                sparsity = m.get("mean_sparsity", 0.0)
-                lines.append(
-                    f"  {r.scenario_name:<22} "
-                    f"{spikes:>10.0f} "
-                    f"{spk_step:>10.1f} "
-                    f"{syops:>12.0f} "
-                    f"{sparsity:>10.4f}"
-                )
-            lines.append("")
 
         return "\n".join(lines)
 
@@ -558,5 +544,11 @@ class BenchmarkSuite:
         """Save results to a JSON file."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _json_default(obj: Any) -> Any:
+            if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+                return None
+            return str(obj)
+
         with open(path, "w") as f:
-            json.dump(summary.to_dict(), f, indent=2, default=str)
+            json.dump(summary.to_dict(), f, indent=2, default=_json_default)

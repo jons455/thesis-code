@@ -36,6 +36,10 @@ def test_create_metrics_without_controller_returns_control_only():
     names = {metric.name for metric in metrics}
     assert "tracking_mae" in names
     assert "tracking_itae" in names
+    assert "multi_step_itae" in names
+    assert "multi_step_rms" in names
+    assert "multi_step_settling_time" in names
+    assert "multi_step_overshoot" in names
     assert all("nb_" not in name for name in names)
 
 

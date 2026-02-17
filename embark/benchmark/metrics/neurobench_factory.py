@@ -12,12 +12,19 @@ from embark.benchmark.metrics.accumulators import (
     ActivationSparsity,
     InferenceLatency,
     MaximumError,
+    MultiStepITAE,
+    MultiStepRMS,
     SpikeCount,
     SynapticOps,
     TrackingITAE,
     TrackingMAE,
 )
-from embark.benchmark.metrics.accumulators.dynamics import Overshoot, SettlingTime
+from embark.benchmark.metrics.accumulators.dynamics import (
+    MultiStepOvershoot,
+    MultiStepSettlingTime,
+    Overshoot,
+    SettlingTime,
+)
 from embark.benchmark.metrics.accumulators.tracking import SteadyStateRMS
 
 
@@ -46,10 +53,14 @@ def _control_metrics() -> list[MetricAccumulator]:
     Included metrics:
     - ``TrackingMAE``: mean absolute error over full episode (i_q, i_d)
     - ``TrackingITAE``: transient accuracy over first 50 ms (i_q, i_d)
+    - ``MultiStepITAE``: global and per-step ITAE summary (i_q, i_d)
     - ``MaximumError``: worst-case peak error (i_q, i_d)
     - ``SettlingTime``: time to enter and stay within 2% band for ≥1 ms (i_q)
     - ``Overshoot``: peak overshoot relative to step size (i_q)
+    - ``MultiStepSettlingTime``: worst/mean/std across all detected steps (i_q)
+    - ``MultiStepOvershoot``: worst/mean/std across all detected steps (i_q)
     - ``SteadyStateRMS``: RMS of steady-state error after 50 ms (i_q, i_d)
+    - ``MultiStepRMS``: global and per-step RMS summary (i_q, i_d)
     - ``InferenceLatency``: round-trip and chip-level timing (all controllers)
     - ``SpikeCount``: total spikes emitted by SNN layers (silent for non-SNN)
     - ``SynapticOps``: synaptic operations (silent for non-SNN)
@@ -59,10 +70,14 @@ def _control_metrics() -> list[MetricAccumulator]:
     return [
         TrackingMAE(tracked_keys=["i_q", "i_d"]),
         TrackingITAE(tracked_keys=["i_q", "i_d"], window_s=0.05),
+        MultiStepITAE(tracked_keys=["i_q", "i_d"]),
         MaximumError(tracked_keys=["i_q", "i_d"]),
         SettlingTime(tracked_key="i_q", band_fraction=0.02, dwell_s=0.001),
         Overshoot(tracked_key="i_q"),
+        MultiStepSettlingTime(tracked_key="i_q", band_fraction=0.02, dwell_s=0.001),
+        MultiStepOvershoot(tracked_key="i_q"),
         SteadyStateRMS(tracked_keys=["i_q", "i_d"], transient_s=0.05),
+        MultiStepRMS(tracked_keys=["i_q", "i_d"]),
         InferenceLatency(),
         # Neuromorphic metrics — safe for non-SNN controllers (return zeros)
         SpikeCount(),

@@ -77,7 +77,9 @@ class ClosedLoopMetricExporter:
 
         """
         control_metrics = {
-            k: v for k, v in harness_results.items() if k in self._CONTROL_KEYS
+            k: v
+            for k, v in harness_results.items()
+            if k in self._CONTROL_KEYS or k.startswith("multi_step_")
         }
         workload_metrics = {
             k: v for k, v in harness_results.items() if k in self._WORKLOAD_KEYS

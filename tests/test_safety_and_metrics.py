@@ -7,9 +7,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from embark.benchmark.interfaces import ActionDict, ReferenceDict, StateDict
-from embark.benchmark.metrics.accumulators.dynamics import Overshoot, SettlingTime
+from embark.benchmark.metrics.accumulators.dynamics import (
+    MultiStepOvershoot,
+    MultiStepSettlingTime,
+    Overshoot,
+    SettlingTime,
+)
 from embark.benchmark.metrics.accumulators.tracking import (
     MaximumError,
+    MultiStepITAE,
+    MultiStepRMS,
     TrackingITAE,
     TrackingMAE,
 )
@@ -376,3 +383,146 @@ class TestDynamicMetrics:
 
         overshoot = metric.compute()
         assert overshoot == pytest.approx(50.0, abs=1e-6)
+
+    def test_multi_step_settling_time_reports_worst_and_consistency(self):
+        """MultiStepSettlingTime tracks each transition independently."""
+        metric = MultiStepSettlingTime(
+            tracked_key="val", band_fraction=0.02, dwell_s=0.001, time_key="time"
+        )
+        metric.reset()
+
+        samples = [
+            # Step 1: 0 -> 2 settles quickly at 0.001
+            (0.000, 0.0, 0.0),
+            (0.001, 2.0, 1.99),  # in-band entry
+            (0.003, 2.0, 2.00),  # dwell satisfied
+            # Step 2: 2 -> -2 never settles (always outside 2% of 4A => 0.08A)
+            (0.010, -2.0, -1.60),
+            (0.012, -2.0, -1.70),
+            # Step 3: -2 -> 1 settles at 0.020
+            (0.020, 1.0, 0.95),  # in-band entry (band=0.06)
+            (0.022, 1.0, 1.00),  # dwell satisfied
+        ]
+        for t, ref, meas in samples:
+            metric.update(
+                state={"val": meas, "time": t},
+                reference={"val_ref": ref},
+                _action={},
+                _next_state={},
+                _controller_info={},
+            )
+
+        result = metric.compute()
+        assert result["multi_step_settling_time_val_num_steps"] == pytest.approx(3.0)
+        assert result["multi_step_settling_time_val_num_settled"] == pytest.approx(2.0)
+        assert result["multi_step_settling_time_val_worst"] == float("inf")
+        assert result["multi_step_settling_time_val_mean"] == pytest.approx(
+            (0.001 + 0.020) / 2.0, abs=1e-9
+        )
+        assert result["multi_step_settling_time_val_std"] == pytest.approx(
+            0.0095, abs=1e-9
+        )
+
+    def test_multi_step_overshoot_reports_worst_and_mean(self):
+        """MultiStepOvershoot computes per-step overshoot statistics."""
+        metric = MultiStepOvershoot(tracked_key="val")
+        metric.reset()
+
+        samples = [
+            # Step 1: 0 -> 2, peak at 2.4 => 20%
+            (0.000, 0.0, 0.0),
+            (0.001, 2.0, 2.4),
+            (0.002, 2.0, 2.1),
+            # Step 2: 2 -> -2, peak negative overshoot at -2.8 => 20%
+            (0.010, -2.0, -2.8),
+            (0.011, -2.0, -2.1),
+            # Step 3: -2 -> 1, no overshoot
+            (0.020, 1.0, 0.9),
+            (0.021, 1.0, 1.0),
+        ]
+        for t, ref, meas in samples:
+            metric.update(
+                state={"val": meas, "time": t},
+                reference={"val_ref": ref},
+                _action={},
+                _next_state={},
+                _controller_info={},
+            )
+
+        result = metric.compute()
+        assert result["multi_step_overshoot_val_num_steps"] == pytest.approx(3.0)
+        assert result["multi_step_overshoot_val_worst"] == pytest.approx(20.0, abs=1e-9)
+        assert result["multi_step_overshoot_val_mean"] == pytest.approx(
+            40.0 / 3.0, abs=1e-9
+        )
+
+
+class TestMultiStepTrackingMetrics:
+    """Tests for multi-step ITAE and RMS tracking metrics."""
+
+    def test_multi_step_itae_global_and_per_step(self):
+        metric = MultiStepITAE(tracked_keys=["val"], time_key="time")
+        metric.reset()
+
+        # Two steps:
+        # step1 (ref=1): t=0.0 -> 0.1, error 0.5
+        # step2 (ref=2): t=0.2 -> 0.3, error 1.0
+        samples = [
+            (0.0, 1.0, 0.5),
+            (0.1, 1.0, 0.5),
+            (0.2, 2.0, 1.0),
+            (0.3, 2.0, 1.0),
+        ]
+        for t, ref, meas in samples:
+            metric.update(
+                state={"val": meas, "time": t},
+                reference={"val_ref": ref},
+                _action={},
+                _next_state={},
+                _controller_info={},
+            )
+
+        result = metric.compute()
+        # Global ITAE: 0.5*0.1*0.1 + 1.0*0.2*0.1 + 1.0*0.3*0.1 = 0.055
+        assert result["multi_step_itae_val_global"] == pytest.approx(0.055, abs=1e-9)
+        assert result["multi_step_itae_val_num_steps"] == pytest.approx(2.0)
+        # Per-step ITAE values: [0.005, 0.01]
+        assert result["multi_step_itae_val_per_step_mean"] == pytest.approx(
+            0.0075, abs=1e-9
+        )
+        assert result["multi_step_itae_val_per_step_worst"] == pytest.approx(
+            0.01, abs=1e-9
+        )
+
+    def test_multi_step_rms_global_and_per_step(self):
+        metric = MultiStepRMS(tracked_keys=["val"])
+        metric.reset()
+
+        # Two steps:
+        # step1 errors = [1,1] => RMS=1
+        # step2 errors = [2,2] => RMS=2
+        samples = [
+            (0.0, 1.0, 0.0),
+            (0.1, 1.0, 0.0),
+            (0.2, 2.0, 0.0),
+            (0.3, 2.0, 0.0),
+        ]
+        for t, ref, meas in samples:
+            metric.update(
+                state={"val": meas, "time": t},
+                reference={"val_ref": ref},
+                _action={},
+                _next_state={},
+                _controller_info={},
+            )
+
+        result = metric.compute()
+        # Global RMS = sqrt((1^2+1^2+2^2+2^2)/4) = sqrt(2.5)
+        assert result["multi_step_rms_val_global"] == pytest.approx(
+            2.5**0.5, abs=1e-9
+        )
+        assert result["multi_step_rms_val_num_steps"] == pytest.approx(2.0)
+        assert result["multi_step_rms_val_per_step_mean"] == pytest.approx(1.5, abs=1e-9)
+        assert result["multi_step_rms_val_per_step_worst"] == pytest.approx(
+            2.0, abs=1e-9
+        )
