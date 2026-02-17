@@ -10,8 +10,8 @@ The `embark.benchmark` module provides a modular closed-loop benchmark framework
 
 ### Getting Started
 
-1. **[README.md](../benchmark/README.md)** - Quick start guide with basic examples
-2. **[ARCHITECTURE.md](../benchmark/ARCHITECTURE.md)** - Architecture overview and design principles
+1. **[README.md](../../embark/benchmark/README.md)** - Quick start guide with basic examples
+2. **[ARCHITECTURE.md](../../embark/benchmark/ARCHITECTURE.md)** - Architecture overview and design principles
 3. **[Quick Reference](BENCHMARK_QUICK_REFERENCE.md)** - Cheat sheet for common operations
 
 ### Detailed Guides
@@ -31,21 +31,21 @@ The `embark.benchmark` module provides a modular closed-loop benchmark framework
 
 ### Specialized Documentation
 
-6. **[Metrics Reference](METRICS.md)** - Metric definitions:
+6. **[Metrics Reference](../reference/METRICS.md)** - Metric definitions:
    - Control metrics (MAE, ITAE, SettlingTime, etc.)
    - Latency metrics
    - Neuromorphic metrics (SyOps, Sparsity, etc.)
    - Output formats
 
-7. **[SNN Controller Comparison](SNN_CONTROLLER_COMPARISON.md)** - Comparison of SNN coding schemes:
+7. **[SNN Controller Comparison](../analysis/SNN_CONTROLLER_COMPARISON.md)** - Comparison of SNN coding schemes:
    - Population Analog Readout (v5)
    - Pulse-Based Switching (v9)
    - Input features and preprocessing requirements
    - Implementation guide for temporal state processor
 
-8. **[Normalization Analysis](NORMALIZATION_ANALYSIS.md)** - Analysis of normalization strategies
+8. **[Normalization Analysis](../analysis/NORMALIZATION_ANALYSIS.md)** - Analysis of normalization strategies
 
-9. **[PWM Analysis Summary](PWM_ANALYSIS_SUMMARY.md)** - PWM conversion and dead-time compensation
+9. **[PWM Analysis Summary](../analysis/PWM_ANALYSIS_SUMMARY.md)** - PWM conversion and dead-time compensation
 
 ## Quick Navigation
 
@@ -56,7 +56,7 @@ The `embark.benchmark` module provides a modular closed-loop benchmark framework
 - **Run a benchmark** → [User Guide: Quick Start](BENCHMARK_USER_GUIDE.md#quick-start)
 - **Set up an SNN controller** → [User Guide: Controller Setup](BENCHMARK_USER_GUIDE.md#controller-setup)
 - **Create custom metrics** → [User Guide: Custom Metrics](BENCHMARK_USER_GUIDE.md#custom-metrics)
-- **Understand the architecture** → [ARCHITECTURE.md](../benchmark/ARCHITECTURE.md)
+- **Understand the architecture** → [ARCHITECTURE.md](../../embark/benchmark/ARCHITECTURE.md)
 - **Look up an API** → [API Reference](BENCHMARK_API.md)
 - **Find a code example** → [Quick Reference](BENCHMARK_QUICK_REFERENCE.md)
 
@@ -66,7 +66,7 @@ The `embark.benchmark` module provides a modular closed-loop benchmark framework
 - **Tasks** → [API: Tasks](BENCHMARK_API.md#tasks)
 - **Controllers** → [API: Controllers](BENCHMARK_API.md#controllers)
 - **Processors** → [API: Processors](BENCHMARK_API.md#processors)
-- **Metrics** → [API: Metrics](BENCHMARK_API.md#metrics), [Metrics Reference](METRICS.md)
+- **Metrics** → [API: Metrics](BENCHMARK_API.md#metrics), [Metrics Reference](../reference/METRICS.md)
 - **Physics** → [API: Physics](BENCHMARK_API.md#physics)
 
 ## Key Concepts
@@ -137,15 +137,16 @@ controller.configure(task.physics_engine.config, task)
 
 ## Standard Scenarios
 
-The framework includes predefined scenarios:
+The framework includes 6 predefined scenarios (see `STANDARD_SCENARIOS`):
 
-- `step_low_load` - Low torque step response
-- `step_mid_load` - Medium torque step response
-- `step_high_load` - High torque step response
-- `step_high_speed` - High speed operation
-- `sinusoidal_tracking` - Dynamic tracking performance
-- `flux_weakening` - Field-weakening region
+- `step_low_speed_500rpm_2A` - Low speed (500 RPM) step response
+- `step_mid_speed_1500rpm_2A` ⭐ - **Primary reference** scenario (1500 RPM)
+- `step_high_speed_2500rpm_2A` - High speed (2500 RPM) step response
+- `multi_step_bidirectional_1500rpm` - Multi-step bidirectional tracking
+- `four_quadrant_transition_1500rpm` - Four-quadrant transition (regenerative braking)
+- `field_weakening_2500rpm` - Field-weakening operation
 
+For detailed scenario specifications, see [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md).  
 See [User Guide: Custom Scenarios](BENCHMARK_USER_GUIDE.md#custom-scenarios) for creating custom scenarios.
 
 ## Standard Metrics
@@ -157,7 +158,7 @@ Default metrics include:
 - **Latency**: Mean, P95, P99, Max latency
 - **Neuromorphic**: SyOps, Activation Sparsity, Footprint (when controller.model exists)
 
-See [Metrics Reference](METRICS.md) for complete list.
+See [Metrics Reference](../reference/METRICS.md) for complete list.
 
 ## Extension Points
 
@@ -173,15 +174,18 @@ See [User Guide: Extending the Framework](BENCHMARK_USER_GUIDE.md#extending-the-
 
 ## Related Documentation
 
-- **[Technical Architecture](../../docs/technical/architecture/ARCHITECTURE.md)** - Overall system architecture
-- **[Training Guide](../../docs/technical/training/TRAINING_GUIDE.md)** - Model training procedures
-- **[Evaluation Pipeline](../../docs/thesis/methodology/EVALUATION_PIPELINE.md)** - Evaluation methodology
+> **Note:** The following documentation paths are planned but not yet available:
+> - Technical Architecture documentation
+> - Training Guide
+> - Evaluation Pipeline documentation
+> 
+> For now, see the [User Guide](BENCHMARK_USER_GUIDE.md) and [API Reference](BENCHMARK_API.md) for implementation details.
 
 ## Examples
 
 See the following for complete examples:
 
-- **[README.md](../benchmark/README.md)** - Basic examples
+- **[README.md](../../embark/benchmark/README.md)** - Basic examples
 - **[User Guide](BENCHMARK_USER_GUIDE.md)** - Comprehensive examples
 - **[Quick Reference](BENCHMARK_QUICK_REFERENCE.md)** - Code snippets
 
@@ -191,4 +195,4 @@ For issues or questions:
 
 1. Check [Troubleshooting](BENCHMARK_USER_GUIDE.md#troubleshooting)
 2. Review [API Reference](BENCHMARK_API.md) for method signatures
-3. Check [ARCHITECTURE.md](../benchmark/ARCHITECTURE.md) for design rationale
+3. Check [ARCHITECTURE.md](../../embark/benchmark/ARCHITECTURE.md) for design rationale

@@ -2,6 +2,17 @@
 
 Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control) documentation.
 
+## Documentation layout
+
+| Folder | Contents |
+|--------|----------|
+| **[benchmark/](benchmark/)** | API reference, user guide, quick references, scenarios, validation template, plan |
+| **[scenarios/](scenarios/)** | Scenario timelines and scientific rationale |
+| **[analysis/](analysis/)** | PWM, normalization, and SNN controller analysis |
+| **[reference/](reference/)** | Metrics, error handling, future work |
+
+---
+
 ## Getting Started
 
 ### Quick Start
@@ -13,7 +24,7 @@ Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and 
 
 ### First Steps
 1. Read the [README](../README.md) for installation and basic usage
-2. Review [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md) for scenario overview
+2. Review [BENCHMARK_SUITE_QUICK_REFERENCE.md](benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md) for scenario overview
 3. Run your first benchmark using the quick start example
 
 ---
@@ -21,14 +32,14 @@ Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and 
 ## Core Documentation
 
 ### API Documentation
-- **[BENCHMARK_API.md](BENCHMARK_API.md)** - Complete API reference
+- **[BENCHMARK_API.md](benchmark/BENCHMARK_API.md)** - Complete API reference
   - Task interface
   - Controller interface
   - Metric interface
   - Harness usage
 
 ### Rate-SNN Specific Guide
-- **[RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-encoding SNN integration guide
+- **[RATE_SNN_BENCHMARK_INTERFACE.md](benchmark/RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-encoding SNN integration guide
   - State processor configuration
   - Action processor configuration
   - Feature engineering
@@ -39,14 +50,14 @@ Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and 
 ## Benchmark Scenarios (NEW)
 
 ### Quick Reference
-- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference guide
+- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference guide
   - Scenario summary table
   - Usage examples
   - Performance targets
   - Interpretation tips
 
 ### Comprehensive Guide
-- **[BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md)** - Detailed scenario specifications
+- **[BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md)** - Detailed scenario specifications
   - Design philosophy
   - Scenario specifications (all 6 scenarios)
   - Coverage matrix
@@ -55,14 +66,14 @@ Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and 
   - Best practices
 
 ### Visual Reference
-- **[SCENARIO_TIMELINES.md](SCENARIO_TIMELINES.md)** - Visual timeline diagrams
+- **[SCENARIO_TIMELINES.md](scenarios/SCENARIO_TIMELINES.md)** - Visual timeline diagrams
   - ASCII timeline diagrams for each scenario
   - Operating point coverage visualization
   - Difficulty ranking
   - Design rationale
 
 ### Scientific Background
-- **[SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md)** - Research-backed rationale
+- **[SCENARIO_SCIENTIFIC_RATIONALE.md](scenarios/SCENARIO_SCIENTIFIC_RATIONALE.md)** - Research-backed rationale
   - Literature references
   - Design principles
   - Coverage analysis
@@ -77,23 +88,23 @@ Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and 
 
 #### **New Users** (First Time Using EMBARK)
 1. [README.md](../README.md) - Installation and quick start
-2. [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md) - Scenario overview
-3. [RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md) - Configure your SNN
+2. [BENCHMARK_SUITE_QUICK_REFERENCE.md](benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md) - Scenario overview
+3. [RATE_SNN_BENCHMARK_INTERFACE.md](benchmark/RATE_SNN_BENCHMARK_INTERFACE.md) - Configure your SNN
 
 #### **Developers** (Implementing Controllers)
-1. [BENCHMARK_API.md](BENCHMARK_API.md) - API reference
-2. [RATE_SNN_BENCHMARK_INTERFACE.md](RATE_SNN_BENCHMARK_INTERFACE.md) - SNN integration
-3. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Understand what you're tested on
+1. [BENCHMARK_API.md](benchmark/BENCHMARK_API.md) - API reference
+2. [RATE_SNN_BENCHMARK_INTERFACE.md](benchmark/RATE_SNN_BENCHMARK_INTERFACE.md) - SNN integration
+3. [BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md) - Understand what you're tested on
 
 #### **Researchers** (Publishing Results)
-1. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Scenario specifications
-2. [SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md) - Scientific background
-3. [SCENARIO_TIMELINES.md](SCENARIO_TIMELINES.md) - Visualization for papers
+1. [BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md) - Scenario specifications
+2. [SCENARIO_SCIENTIFIC_RATIONALE.md](scenarios/SCENARIO_SCIENTIFIC_RATIONALE.md) - Scientific background
+3. [SCENARIO_TIMELINES.md](scenarios/SCENARIO_TIMELINES.md) - Visualization for papers
 
 #### **Contributors** (Extending EMBARK)
-1. [BENCHMARK_API.md](BENCHMARK_API.md) - Architecture overview
-2. [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md) - Design patterns
-3. [SCENARIO_SCIENTIFIC_RATIONALE.md](SCENARIO_SCIENTIFIC_RATIONALE.md) - Extension guidelines
+1. [BENCHMARK_API.md](benchmark/BENCHMARK_API.md) - Architecture overview
+2. [BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md) - Design patterns
+3. [SCENARIO_SCIENTIFIC_RATIONALE.md](scenarios/SCENARIO_SCIENTIFIC_RATIONALE.md) - Extension guidelines
 
 ---
 
@@ -178,7 +189,7 @@ results = [suite.run(controller, name=f"MySNN-seed{i}") for i in range(5)]
 
 ### How do I interpret the results?
 
-See [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md#interpretation-guide) for detailed guidance.
+See [BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md#interpretation-guide) for detailed guidance.
 
 **Quick check**:
 - ✅ MAE within 10% of PI baseline
@@ -188,17 +199,17 @@ See [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md#interpretation-guide) for de
 
 ### How do I add custom scenarios?
 
-See [BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md#custom-scenarios) or [BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md#extending-the-suite).
+See [BENCHMARK_SUITE_QUICK_REFERENCE.md](benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md#custom-scenarios) or [BENCHMARK_SCENARIOS.md](benchmark/BENCHMARK_SCENARIOS.md#extending-the-suite).
 
 ### What's the difference between the documentation files?
 
 | File | Audience | Content | Length |
 |------|----------|---------|--------|
 | [README.md](../README.md) | Everyone | Quick start, basic usage | Medium |
-| [QUICK_REFERENCE](BENCHMARK_SUITE_QUICK_REFERENCE.md) | Developers | Usage patterns, quick lookup | Short |
-| [BENCHMARK_SCENARIOS](BENCHMARK_SCENARIOS.md) | Researchers | Complete specifications | Long |
-| [TIMELINES](SCENARIO_TIMELINES.md) | Visual learners | Diagrams, visualizations | Medium |
-| [SCIENTIFIC_RATIONALE](SCENARIO_SCIENTIFIC_RATIONALE.md) | Academics | Research background | Long |
+| [QUICK_REFERENCE](benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md) | Developers | Usage patterns, quick lookup | Short |
+| [BENCHMARK_SCENARIOS](benchmark/BENCHMARK_SCENARIOS.md) | Researchers | Complete specifications | Long |
+| [TIMELINES](scenarios/SCENARIO_TIMELINES.md) | Visual learners | Diagrams, visualizations | Medium |
+| [SCIENTIFIC_RATIONALE](scenarios/SCENARIO_SCIENTIFIC_RATIONALE.md) | Academics | Research background | Long |
 
 ---
 

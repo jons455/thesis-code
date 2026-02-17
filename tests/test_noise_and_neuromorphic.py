@@ -297,9 +297,9 @@ class TestMetricFactory:
         assert "activation_sparsity" in names
 
     def test_total_metric_count(self):
-        """Sanity: 7 control + 3 neuromorphic = 10 metrics without NeuroBench."""
+        """Sanity: 11 control + 3 neuromorphic = 14 metrics without NeuroBench."""
         metrics = _control_metrics()
-        assert len(metrics) == 10
+        assert len(metrics) == 14
 
 
 # ============================================================================

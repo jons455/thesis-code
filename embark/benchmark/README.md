@@ -5,10 +5,10 @@ NeuroBench-aligned closed-loop benchmark framework for neuromorphic PMSM current
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed architecture and design principles
-- **[API Reference](../docs/BENCHMARK_API.md)** - Complete API documentation
-- **[User Guide](../docs/BENCHMARK_USER_GUIDE.md)** - Usage examples and tutorials
-- **[Quick Reference](../docs/BENCHMARK_QUICK_REFERENCE.md)** - Cheat sheet for common operations
-- **[Metrics Reference](../docs/METRICS.md)** - Metric definitions and output formats
+- **[API Reference](../docs/benchmark/BENCHMARK_API.md)** - Complete API documentation
+- **[User Guide](../docs/benchmark/BENCHMARK_USER_GUIDE.md)** - Usage examples and tutorials
+- **[Quick Reference](../docs/benchmark/BENCHMARK_QUICK_REFERENCE.md)** - Cheat sheet for common operations
+- **[Metrics Reference](../docs/reference/METRICS.md)** - Metric definitions and output formats
 
 ## Architecture
 
@@ -56,7 +56,7 @@ dependencies. All protocols, the harness, physics, processors, and metrics live 
 **Contrib** (`embark/benchmark/contrib/neurobench/`) provides optional adapters for
 NeuroBench interop: exposing controllers in the format NeuroBench tools expect
 (`.net` property for hook registration) and reformatting results into NeuroBench-compatible
-dicts. See [`NEUROBENCH_INTEGRATION_ROADMAP.md`](../../docs/NEUROBENCH_INTEGRATION_ROADMAP.md)
+dicts. See [`NEUROBENCH_INTEGRATION_ROADMAP.md`](../../docs/reference/NEUROBENCH_INTEGRATION_ROADMAP.md)
 for the phased integration plan.
 
 ## Quick Start

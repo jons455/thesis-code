@@ -262,6 +262,6 @@ Step timings chosen to allow:
 
 ## See Also
 
-- **[BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md)** - Comprehensive scenario guide
-- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference guide
+- **[BENCHMARK_SCENARIOS.md](../benchmark/BENCHMARK_SCENARIOS.md)** - Comprehensive scenario guide
+- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](../benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference guide
 - **[README.md](../README.md)** - Main documentation

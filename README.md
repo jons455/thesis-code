@@ -201,7 +201,7 @@ These 6 scenarios comprehensively test:
 | d-q decoupling | Scenario 6 |
 | Voltage saturation | Scenarios 3, 6 |
 
-For detailed information about scenario design, implementation, and interpretation, see **[BENCHMARK_SCENARIOS.md](docs/BENCHMARK_SCENARIOS.md)**.
+For detailed information about scenario design, implementation, and interpretation, see **[BENCHMARK_SCENARIOS.md](docs/benchmark/BENCHMARK_SCENARIOS.md)**.
 
 ---
 
@@ -448,9 +448,9 @@ For rate-encoding SNNs, the **Controller** is a `TensorControllerAdapter` that w
 
 ## 📚 Documentation
 
-- **[BENCHMARK_API.md](docs/BENCHMARK_API.md)** - Complete API reference
-- **[BENCHMARK_SCENARIOS.md](docs/BENCHMARK_SCENARIOS.md)** - Scenario design, coverage, and interpretation guide
-- **[RATE_SNN_BENCHMARK_INTERFACE.md](docs/RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-SNN specific guide
+- **[BENCHMARK_API.md](docs/benchmark/BENCHMARK_API.md)** - Complete API reference
+- **[BENCHMARK_SCENARIOS.md](docs/benchmark/BENCHMARK_SCENARIOS.md)** - Scenario design, coverage, and interpretation guide
+- **[RATE_SNN_BENCHMARK_INTERFACE.md](docs/benchmark/RATE_SNN_BENCHMARK_INTERFACE.md)** - Rate-SNN specific guide
 - **[Examples](examples/benchmark_example.py)** - Full working examples (PI, SNN, custom scenarios, manual loop)
 
 ---
@@ -475,7 +475,7 @@ space. The following constraints apply to the current release:
 | **Power metrics** | Not included | THD, copper losses, switching losses, energy consumption |
 
 These are deliberate scope choices, not bugs. See
-**[FUTURE_WORK.md](docs/FUTURE_WORK.md)** for the roadmap to relax these
+**[FUTURE_WORK.md](docs/reference/FUTURE_WORK.md)** for the roadmap to relax these
 constraints.
 
 ---

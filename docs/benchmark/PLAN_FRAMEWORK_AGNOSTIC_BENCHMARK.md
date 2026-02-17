@@ -1,5 +1,10 @@
 # Plan: Framework-Agnostic Benchmark Interface
 
+> **⚠️ STATUS: PLANNING DOCUMENT — NOT YET IMPLEMENTED**  
+> This document describes a planned refactoring to make the benchmark framework-agnostic.  
+> **Current state:** The benchmark still uses PyTorch (`torch.Tensor`) in `TensorControllerAdapter` and processors.  
+> **Last updated:** See verification checklist at bottom — items are unchecked, indicating this plan has not been implemented.
+
 ## Motivation
 
 Right now, to benchmark an SNN (or any neural controller) with EMBARK, you
@@ -701,9 +706,9 @@ wrapped = TorchModelWrapper(model=model, device=device)
 ### Step 10: Update Documentation
 
 **Files to modify:**
-- `docs/BENCHMARK_USER_GUIDE.md` — add "Using non-PyTorch models" section
-- `docs/RATE_SNN_BENCHMARK_INTERFACE.md` — update type references
-- `docs/FUTURE_WORK.md` — mark Section 2 (Multi-Framework Support) as
+- `docs/benchmark/BENCHMARK_USER_GUIDE.md` — add "Using non-PyTorch models" section
+- `docs/benchmark/RATE_SNN_BENCHMARK_INTERFACE.md` — update type references
+- `docs/reference/FUTURE_WORK.md` — mark Section 2 (Multi-Framework Support) as
   "done" for the core numpy adapter; update remaining items
 - `README.md` — mention framework-agnostic support in features list
 - `docs/MIGRATION_V2.md` (new) — migration guide for existing users

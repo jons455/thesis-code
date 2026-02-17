@@ -10,10 +10,10 @@ Welcome
 This documentation is auto-generated from code docstrings using Sphinx.
 
 For markdown guides and tutorials, see the `../` directory:
-- `BENCHMARK_USER_GUIDE.md` - Usage guide with examples
-- `BENCHMARK_QUICK_REFERENCE.md` - Quick reference cheat sheet
-- `BENCHMARK_API.md` - Complete API reference (markdown version)
-- `METRICS.md` - Metric definitions
+- `benchmark/BENCHMARK_USER_GUIDE.md` - Usage guide with examples
+- `benchmark/BENCHMARK_QUICK_REFERENCE.md` - Quick reference cheat sheet
+- `benchmark/BENCHMARK_API.md` - Complete API reference (markdown version)
+- `reference/METRICS.md` - Metric definitions
 
 Quick Start
 -----------

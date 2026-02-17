@@ -170,6 +170,6 @@ To build docs in CI:
 
 ## Related Documentation
 
-- **[BENCHMARK_USER_GUIDE.md](BENCHMARK_USER_GUIDE.md)** - Usage guide (markdown)
-- **[BENCHMARK_API.md](BENCHMARK_API.md)** - API reference (markdown)
-- **[BENCHMARK_QUICK_REFERENCE.md](BENCHMARK_QUICK_REFERENCE.md)** - Quick reference
+- **[BENCHMARK_USER_GUIDE.md](benchmark/BENCHMARK_USER_GUIDE.md)** - Usage guide (markdown)
+- **[BENCHMARK_API.md](benchmark/BENCHMARK_API.md)** - API reference (markdown)
+- **[BENCHMARK_QUICK_REFERENCE.md](benchmark/BENCHMARK_QUICK_REFERENCE.md)** - Quick reference

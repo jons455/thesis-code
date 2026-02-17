@@ -15,7 +15,7 @@ Output follows the NeuroBench style: ``run()`` returns a ``BenchmarkSummary``
 prints to stdout.  Callers format and print the summary or save to file.
 
 For detailed information about scenario design, coverage, and interpretation,
-see ``docs/BENCHMARK_SCENARIOS.md``.
+see ``docs/benchmark/BENCHMARK_SCENARIOS.md``.
 
 Usage::
 

@@ -416,6 +416,6 @@ This is the **minimum necessary coverage** to claim comprehensive benchmarking w
 
 ## See Also
 
-- **[BENCHMARK_SCENARIOS.md](BENCHMARK_SCENARIOS.md)** - Comprehensive scenario guide
+- **[BENCHMARK_SCENARIOS.md](../benchmark/BENCHMARK_SCENARIOS.md)** - Comprehensive scenario guide
 - **[SCENARIO_TIMELINES.md](SCENARIO_TIMELINES.md)** - Visual timeline diagrams
-- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference
+- **[BENCHMARK_SUITE_QUICK_REFERENCE.md](../benchmark/BENCHMARK_SUITE_QUICK_REFERENCE.md)** - Quick reference
