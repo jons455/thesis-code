@@ -14,6 +14,8 @@ This document defines a minimal but complete benchmark interface for **all rate-
 
 **Extension path:** For other frameworks (JAX, TensorFlow, Keras), implement the `Controller` protocol directly instead of using `TensorController` + adapter pattern. See `RemoteAkidaPolicy` as reference.
 
+**Numerical precision:** The benchmark uses **float32** for observations, actions, and internal tensors. State and action processors return `torch.float32`; the remote Akida TCP protocol is float32-only. Controllers receive float32 and should return float32-compatible actions. Using float64 in your own training or simulation is fine; convert at the benchmark boundary if needed.
+
 ---
 
 ## Design Principles

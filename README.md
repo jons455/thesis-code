@@ -33,6 +33,10 @@ The benchmark returns:
 
 Results are provided per-scenario with aggregate statistics across all test cases.
 
+### Numerical precision
+
+The benchmark uses **float32** for observations, actions, and internal tensors (state processors, action processors, physics outputs). The remote Akida TCP protocol is **float32 only** (length-prefixed binary). There is no requirement that your own model use float32, but the benchmark will pass float32 tensors to your controller and expect float32-compatible actions. Using float64 elsewhere (e.g. in training or simulation) is fine; convert to float32 at the benchmark boundary if needed.
+
 ---
 
 ## 🚀 Quick Start Example

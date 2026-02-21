@@ -25,6 +25,10 @@ class RemoteAkidaPolicy(TensorController):
     _socket: socket.socket | None = field(default=None, init=False, repr=False)
     _latencies: list[float] = field(default_factory=list, init=False, repr=False)
     _chip_latencies: list[float] = field(default_factory=list, init=False, repr=False)
+    # Neuromorphic metrics
+    _spikes: list[int] = field(default_factory=list, init=False, repr=False)
+    _syops: list[int] = field(default_factory=list, init=False, repr=False)
+    _sparsity: list[float] = field(default_factory=list, init=False, repr=False)
 
     def reset(self) -> None:
         """Reconnect to ensure a clean session."""
@@ -32,6 +36,9 @@ class RemoteAkidaPolicy(TensorController):
         self._connect()
         self._latencies.clear()
         self._chip_latencies.clear()
+        self._spikes.clear()
+        self._syops.clear()
+        self._sparsity.clear()
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Serialize observation, send to server, return action tensor."""
@@ -56,17 +63,34 @@ class RemoteAkidaPolicy(TensorController):
         t1 = time.perf_counter()
         self._latencies.append(t1 - t0)
 
-        # Server appends 1 extra float32 with on-chip inference time.
-        # Split: all-but-last float32 = action, last float32 = chip time.
+        # Server now appends: [action..., chip_time, spikes, operations, sparsity]
+        # All are float32
         all_floats = np.frombuffer(response_data, dtype=np.float32).copy()
+        
         if len(all_floats) > 0 and self.output_shape is not None:
             expected_action_elems = int(np.prod(self.output_shape))
-            if len(all_floats) == expected_action_elems + 1:
+            # New protocol: action + 1 (chip_time) + 3 (neuro metrics) = action + 4
+            expected_total = expected_action_elems + 4
+            
+            if len(all_floats) == expected_total:
+                # Parse: [action..., chip_time, spikes, operations, sparsity]
+                action_np = all_floats[:expected_action_elems]
+                chip_time = float(all_floats[expected_action_elems])
+                spikes = int(all_floats[expected_action_elems + 1])
+                syops = int(all_floats[expected_action_elems + 2])
+                sparsity = float(all_floats[expected_action_elems + 3])
+                
+                self._chip_latencies.append(chip_time)
+                self._spikes.append(spikes)
+                self._syops.append(syops)
+                self._sparsity.append(sparsity)
+            elif len(all_floats) == expected_action_elems + 1:
+                # Old protocol: [action..., chip_time] - backward compatibility
                 chip_time = float(all_floats[-1])
                 action_np = all_floats[:-1]
                 self._chip_latencies.append(chip_time)
             else:
-                # Fallback: no chip timing appended (old server)
+                # Fallback: no extra data
                 action_np = all_floats
         else:
             action_np = all_floats
@@ -78,12 +102,18 @@ class RemoteAkidaPolicy(TensorController):
 
     @property
     def last_info(self) -> dict[str, Any] | None:
-        """Return timing info from the most recent forward() call."""
+        """Return timing and neuromorphic info from the most recent forward() call."""
         if not self._latencies:
             return None
         info: dict[str, Any] = {"inference_latency_s": self._latencies[-1]}
         if self._chip_latencies:
             info["chip_inference_time_s"] = self._chip_latencies[-1]
+        if self._spikes:
+            info["total_spikes"] = self._spikes[-1]
+        if self._syops:
+            info["syops"] = self._syops[-1]
+        if self._sparsity:
+            info["sparsity"] = self._sparsity[-1]
         return info
 
     @property
@@ -95,6 +125,21 @@ class RemoteAkidaPolicy(TensorController):
     def chip_latencies(self) -> list[float]:
         """Full history of per-step on-chip inference times in seconds."""
         return list(self._chip_latencies)
+
+    @property
+    def spikes(self) -> list[int]:
+        """Full history of per-step spike counts."""
+        return list(self._spikes)
+
+    @property
+    def syops(self) -> list[int]:
+        """Full history of per-step synaptic operation counts."""
+        return list(self._syops)
+
+    @property
+    def sparsity_values(self) -> list[float]:
+        """Full history of per-step sparsity values (0-1)."""
+        return list(self._sparsity)
 
     def get_state(self) -> dict[str, Any]:
         """Serialize minimal state for checkpointing."""

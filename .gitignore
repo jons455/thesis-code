@@ -37,6 +37,7 @@ checkpoints/
 *.pth
 *.csv
 /export
+thesis/
 
 # Explicitly ignore epoch checkpoints
 epoch_*.keras
