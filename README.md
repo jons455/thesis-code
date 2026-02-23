@@ -1,6 +1,6 @@
 # EMBARK: Neuromorphic Motor Control Benchmark
 
-**EMBARK** (Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control) is a standardized benchmark suite for evaluating spiking neural network (SNN) controllers on permanent magnet synchronous motor (PMSM) current control tasks.
+**EMBARK** (Efficient Motor Benchmark for Adaptive Rate-encoding and Key metrics) is a standardized benchmark suite for evaluating spiking neural network (SNN) controllers on permanent magnet synchronous motor (PMSM) current control tasks.
 
 ## 🎯 What is This?
 
@@ -36,6 +36,10 @@ Results are provided per-scenario with aggregate statistics across all test case
 ### Numerical precision
 
 The benchmark uses **float32** for observations, actions, and internal tensors (state processors, action processors, physics outputs). The remote Akida TCP protocol is **float32 only** (length-prefixed binary). There is no requirement that your own model use float32, but the benchmark will pass float32 tensors to your controller and expect float32-compatible actions. Using float64 elsewhere (e.g. in training or simulation) is fine; convert to float32 at the benchmark boundary if needed.
+
+### Reproducibility
+
+Runs are **reproducible by default** without passing a seed. Default config uses **no measurement noise** (`noise_current_std=0`, `noise_speed_std=0`), reference trajectories are deterministic (same scenario → same references), and the physics step is deterministic. So the same controller on the same scenario yields the same metrics across runs. When you enable noise (e.g. for robustness evaluation), pass a seed to `task.reset(seed=42)` or to the physics engine’s `reset(seed=...)` for reproducible noisy runs.
 
 ---
 

@@ -1,6 +1,6 @@
 # EMBARK Documentation Index
 
-Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control) documentation.
+Welcome to the EMBARK (Efficient Motor Benchmark for Adaptive Rate-encoding and Key metrics) documentation.
 
 ## Documentation layout
 
@@ -245,7 +245,7 @@ If you use EMBARK in your research, please cite:
 
 ```bibtex
 @software{embark2025,
-  title={EMBARK: Efficient Motor Benchmark for Adaptive Rate-encoding and Kinetic control},
+  title={EMBARK: Efficient Motor Benchmark for Adaptive Rate-encoding and Key metrics},
   author={[Your Name]},
   year={2025},
   url={https://github.com/[your-repo]/embark}
