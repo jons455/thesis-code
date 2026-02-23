@@ -36,7 +36,10 @@ class TrackingITAE(MetricAccumulator):
 
     Integrates ``t * |e(t)| * dt`` over the first ``window_s`` seconds
     after episode start, which captures only the transient response and
-    avoids polluting the score with steady-state drift.
+    avoids polluting the score with steady-state drift. The time ``t`` is
+    absolute (from episode start); this metric therefore assumes the step
+    occurs at t=0. For multiple step changes in one episode, use
+    :class:`MultiStepITAE`, which uses time elapsed since each step start.
 
     Formula (per axis)::
 

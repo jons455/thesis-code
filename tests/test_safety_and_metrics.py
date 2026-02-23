@@ -384,6 +384,31 @@ class TestDynamicMetrics:
         overshoot = metric.compute()
         assert overshoot == pytest.approx(50.0, abs=1e-6)
 
+    def test_overshoot_negative_step_directionality(self):
+        """Overshoot for negative step: deviation below target (undershoot) as % of |step|."""
+        metric = Overshoot(tracked_key="val")
+        metric.reset()
+
+        # Step down to reference -1.0 with undershoot to -1.4
+        metric.update(
+            state={"val": 0.0},
+            reference={"val_ref": -1.0},
+            _action={},
+            _next_state={},
+            _controller_info={},
+        )
+        metric.update(
+            state={"val": -1.4},
+            reference={"val_ref": -1.0},
+            _action={},
+            _next_state={},
+            _controller_info={},
+        )
+
+        overshoot = metric.compute()
+        # (step_ref - trough) / |step_ref| * 100 = (-1 - (-1.4)) / 1 * 100 = 40%
+        assert overshoot == pytest.approx(40.0, abs=1e-6)
+
     def test_multi_step_settling_time_reports_worst_and_consistency(self):
         """MultiStepSettlingTime tracks each transition independently."""
         metric = MultiStepSettlingTime(

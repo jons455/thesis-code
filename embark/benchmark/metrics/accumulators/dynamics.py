@@ -116,14 +116,21 @@ class SettlingTime(MetricAccumulator):
 @dataclass
 class Overshoot(MetricAccumulator):
     """
-    Percent overshoot relative to the commanded step size.
+    Percent overshoot relative to the commanded step size (direction-aware).
 
-    Tracks the peak value of the measured signal and computes::
+    For a positive step (target > 0), tracks the maximum of the measured signal
+    and computes overshoot as (peak - step_ref) / |step_ref| * 100.
+    For a negative step (target < 0), tracks the minimum and computes
+    (step_ref - trough) / |step_ref| * 100, so that overshoot is the
+    absolute deviation beyond the target in the direction of the step,
+    normalised by the step magnitude.
 
-        overshoot (%) = max(0, (peak - step_ref) / |step_ref| * 100)
+    Formula (robust for either sign)::
 
-    where ``step_ref`` is the first non-zero reference (the step target).
-    Returns 0.0 when there is no step or no overshoot.
+        overshoot (%) = max(0, deviation_in_step_direction / |step_ref| * 100)
+
+    where deviation is (peak - step_ref) for step_ref > 0 and
+    (step_ref - trough) for step_ref < 0. Returns 0.0 when no step or no overshoot.
 
     Output key: ``overshoot``
     Units: %
@@ -133,6 +140,7 @@ class Overshoot(MetricAccumulator):
     tracked_key: str
     _step_ref: float | None = field(default=None, init=False, repr=False)
     _peak: float | None = field(default=None, init=False, repr=False)
+    _trough: float | None = field(default=None, init=False, repr=False)
 
     @property
     def name(self) -> str:
@@ -141,6 +149,7 @@ class Overshoot(MetricAccumulator):
     def reset(self) -> None:
         self._step_ref = None
         self._peak = None
+        self._trough = None
 
     def update(
         self,
@@ -154,19 +163,31 @@ class Overshoot(MetricAccumulator):
         ref = float(reference[ref_key])
         meas = float(state[self.tracked_key])
 
-        # Latch step reference
+        # Latch step reference (single step from 0 to ref; step magnitude = |ref|)
         if self._step_ref is None and ref != 0.0:
             self._step_ref = ref
 
-        # Track peak magnitude in the direction of the step
+        # Track extreme in the direction of the step: peak above target or trough below
         if self._step_ref is not None:
-            if self._peak is None or meas > self._peak:
-                self._peak = meas
+            if self._step_ref > 0.0:
+                if self._peak is None or meas > self._peak:
+                    self._peak = meas
+            else:
+                if self._trough is None or meas < self._trough:
+                    self._trough = meas
 
     def compute(self) -> float:
-        if self._peak is None or self._step_ref is None or self._step_ref == 0.0:
+        if self._step_ref is None or self._step_ref == 0.0:
             return 0.0
-        return max(0.0, (self._peak - self._step_ref) / abs(self._step_ref) * 100.0)
+        step_mag = abs(self._step_ref)
+        if self._step_ref > 0.0:
+            if self._peak is None:
+                return 0.0
+            return max(0.0, (self._peak - self._step_ref) / step_mag * 100.0)
+        else:
+            if self._trough is None:
+                return 0.0
+            return max(0.0, (self._step_ref - self._trough) / step_mag * 100.0)
 
 
 @dataclass

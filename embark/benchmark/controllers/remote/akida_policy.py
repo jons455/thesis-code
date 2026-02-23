@@ -159,6 +159,10 @@ class RemoteAkidaPolicy(TensorController):
         sock.connect((self.host, self.port))
         self._socket = sock
 
+    def close(self) -> None:
+        """Close the TCP connection so the server can accept the next client (e.g. for PVP Phase 5 R13)."""
+        self._close()
+
     def _close(self) -> None:
         if self._socket is not None:
             try:
